@@ -1,0 +1,141 @@
+// Pardon Simulator - Database Schema
+// PostgreSQL database for game state, scoring, and leaderboards
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id              String    @id @default(cuid())
+  walletAddress   String    @unique
+  username        String    // Auto-generated from wallet
+  totalScore      Int       @default(0)
+  createdAt       DateTime  @default(now())
+  
+  sessions        Session[]
+  scores          Score[]
+  leaderboardEntries LeaderboardEntry[]
+}
+
+model Session {
+  id              String    @id @default(cuid())
+  userId          String
+  coralSessionId  String    // Coral Server session ID
+  currentScore    Int       @default(0)
+  startTime       DateTime  @default(now())
+  endTime         DateTime?
+  weekId          String    // Format: "2024-W45"
+  
+  user            User      @relation(fields: [userId], references: [id])
+  threads         Thread[]
+  scores          Score[]
+  
+  @@unique([userId, weekId])  // ✅ Prevent duplicate sessions for same user+week
+  @@index([coralSessionId])
+}
+
+model Thread {
+  id              String    @id @default(cuid())
+  sessionId       String
+  coralThreadId   String    // Coral Server thread ID
+  agentId         String    // donald-trump, cz, etc.
+  createdAt       DateTime  @default(now())
+  
+  session         Session   @relation(fields: [sessionId], references: [id])
+  messages        Message[]
+  scores          Score[]
+  
+  @@index([sessionId, agentId])
+  @@index([coralThreadId])
+}
+
+model Message {
+  id              String    @id @default(cuid())
+  threadId        String
+  senderId        String    // Agent ID or "sbf"
+  content         String    @db.Text
+  timestamp       DateTime  @default(now())
+  mentions        String[]  // Array of agent IDs
+  isIntermediary  Boolean   @default(false)
+  
+  thread          Thread    @relation(fields: [threadId], references: [id])
+  
+  @@index([threadId, timestamp])
+}
+
+model Score {
+  id              String    @id @default(cuid())
+  userId          String
+  sessionId       String
+  threadId        String?
+  delta           Int       // +5, +10, +20, etc. (can be negative for penalties)
+  currentScore    Int       // Score after this delta
+  reason          String    // "Payment to CZ: +10" or "Insulted agent: -15"
+  category        String    // "payment", "negotiation", "milestone", "penalty"
+  subcategory     String?   // "insult", "quality_message", "combo", "spam", etc.
+  agentId         String?   // Which agent awarded/deducted points
+  messageId       String?   // Which message triggered this score change
+  timestamp       DateTime  @default(now())
+  
+  user            User      @relation(fields: [userId], references: [id])
+  session         Session   @relation(fields: [sessionId], references: [id])
+  thread          Thread?   @relation(fields: [threadId], references: [id])
+  
+  @@index([userId, timestamp])
+  @@index([sessionId, timestamp])
+  @@index([category])
+  @@index([agentId])
+}
+
+model LeaderboardEntry {
+  id              String    @id @default(cuid())
+  userId          String
+  weekId          String    // "2024-W45"
+  finalScore      Int
+  rank            Int
+  prizeAmount     Decimal?  @db.Decimal(10, 4)
+  createdAt       DateTime  @default(now())
+  
+  user            User      @relation(fields: [userId], references: [id])
+  
+  @@unique([userId, weekId])
+  @@index([weekId, rank])
+}
+
+model Payment {
+  id              String    @id @default(cuid())
+  fromUserId      String?   // null for user payments
+  fromWallet      String
+  toAgent         String
+  toWallet        String
+  amount          Decimal   @db.Decimal(10, 4)
+  currency        String    // "SOL" or "PARDON"
+  signature       String    @unique
+  serviceType     String    // "insider_info", etc.
+  paymentId       String?   // x402 payment ID
+  verified        Boolean   @default(false)
+  verifiedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  
+  // x402 Facilitator Integration
+  x402Registered  Boolean   @default(false)
+  x402ScanUrl     String?   // e.g., "https://www.x402scan.com/tx/2ji2s2X..."
+  x402ScanId      String?   // CDP facilitator's transaction ID
+  x402RegisteredAt DateTime?
+  x402Error       String?   // Store any registration errors for debugging
+  
+  // Payment Context
+  isAgentToAgent  Boolean   @default(false)
+  initiatedBy     String?   // User wallet if user initiated the agent-to-agent payment
+  
+  @@index([fromWallet, createdAt])
+  @@index([toWallet, createdAt])
+  @@index([signature])
+  @@index([x402Registered])
+}
+

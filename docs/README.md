@@ -1,0 +1,218 @@
+# Pardon Simulator Documentation
+
+Complete documentation for the Pardon Simulator multi-agent AI negotiation game.
+
+---
+
+## Quick Navigation
+
+### 🎮 For Players
+
+Start here if you want to play the game:
+
+- **[GAMEPLAY.md](./GAMEPLAY.md)** - How to play, strategies, and tips
+- **[AGENT_OVERVIEW.md](./AGENT_OVERVIEW.md)** - Meet the agents and learn their personalities
+- **[FAQ.md](./FAQ.md)** - Answers to common questions
+
+### 🛠️ Setup & Installation
+
+Get the system running:
+
+- **[SETUP.md](./SETUP.md)** - Complete installation and configuration guide
+- **[OPERATIONS.md](./OPERATIONS.md)** - Running, managing, and troubleshooting
+
+### 🏗️ Architecture & Technical
+
+Understand how the system works:
+
+- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - System architecture and component overview
+- **[AGENTS.md](./AGENTS.md)** - Agent technology and capabilities
+- **[X402_PAYMENT_ARCHITECTURE.md](./X402_PAYMENT_ARCHITECTURE.md)** - Complete HTTP 402 payment protocol implementation
+- **[X402_PROTOCOL_COMPLIANCE.md](./X402_PROTOCOL_COMPLIANCE.md)** - Protocol compliance overview (deprecated - see X402_PAYMENT_ARCHITECTURE.md)
+
+### 🔒 Security & Deployment
+
+Deploy and secure your instance:
+
+- **[SECURITY.md](./SECURITY.md)** - Security best practices
+- **[DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)** - Production deployment guide
+- **[CDP_SETUP.md](./CDP_SETUP.md)** - CDP SDK integration
+- **[CDP_CREDENTIALS.md](./CDP_CREDENTIALS.md)** - CDP API credentials setup and verification
+
+---
+
+## Project Overview
+
+### What Is Pardon Simulator?
+
+Pardon Simulator is a multi-agent AI negotiation game where you play as Sam Bankman-Fried (SBF) trying to secure a presidential pardon from Donald Trump. You negotiate with autonomous AI agents that have unique personalities, make independent decisions, and conduct real cryptocurrency transactions on the Solana blockchain.
+
+### Key Features
+
+**Autonomous AI Agents**
+- 7 independent agents with distinct personalities
+- Powered by GPT-4 and Claude LLMs
+- Make autonomous decisions about pricing and negotiations
+- Real personality traits influence behavior
+
+**Real Cryptocurrency**
+- All transactions execute on Solana mainnet
+- Agents have real Solana wallets
+- Fast (<1 second) and cheap (<$0.01) transactions
+- Public and verifiable on-chain
+
+**x402 Payment Protocol**
+- HTTP 402-style payment protocol for agent services
+- On-chain payment verification
+- User-to-agent and agent-to-agent payments
+- Agents can act as intermediaries
+
+**Competitive Gameplay**
+- Points earned through strategic interactions
+- Weekly leaderboards
+- Prize eligibility for high performers
+- Fair play enforcement
+
+---
+
+## Technology Stack
+
+**Frontend**
+- Next.js 14 with React 18
+- TypeScript and Tailwind CSS
+- Solana Wallet Adapter
+- PostgreSQL with Prisma ORM
+
+**Backend**
+- Next.js API Routes
+- Prisma for database access
+- Solana Web3.js for blockchain
+- Helius RPC for Solana
+
+**AI Agents**
+- Python 3.10+ with Langchain
+- OpenAI GPT-4o and Anthropic Claude
+- Solana Python SDK
+- Autonomous decision-making
+
+**Orchestration**
+- Coral Server (Kotlin/Java)
+- Server-Sent Events (SSE)
+- Multi-agent coordination
+
+**Blockchain**
+- Solana Mainnet
+- Real SOL transactions
+- SPL Token support
+
+---
+
+## Architecture Overview
+
+```
+User (Browser)
+    ↓
+Frontend (Next.js)
+    ↓
+Backend API Routes
+    ↓
+Coral Server (orchestration)
+    ↓
+AI Agents (Python + LLMs)
+    ↓
+Solana Blockchain
+```
+
+Each agent runs independently, makes its own decisions, and can transact on the blockchain. The Coral Server coordinates communication between agents and the frontend.
+
+---
+
+## Getting Started
+
+### Quick Start (5 Minutes)
+
+1. **Install Prerequisites**: Node.js 18+, Python 3.10+, Java 21, PostgreSQL
+2. **Run Setup Script**: `./setup-local-env.sh`
+3. **Start Coral Server**: `./start-server.sh`
+4. **Start Frontend**: `cd website && npm install && npm run dev`
+5. **Open Browser**: Navigate to `http://localhost:3000`
+
+See [SETUP.md](./SETUP.md) for detailed instructions.
+
+### First Time Playing
+
+1. Connect your Solana wallet (Phantom or Solflare)
+2. Get some SOL (~0.5 recommended)
+3. Create a conversation thread
+4. @mention an agent to start negotiating
+5. Build relationships and work toward your goal
+
+See [GAMEPLAY.md](./GAMEPLAY.md) for strategies and tips.
+
+---
+
+## Project Status
+
+**Production Ready Features:**
+- ✅ 7 autonomous AI agents
+- ✅ Real Solana mainnet integration
+- ✅ x402 payment protocol
+- ✅ Scoring and leaderboard system
+- ✅ Anti-cheat measures
+- ✅ Agent-to-agent intermediaries
+- ✅ PostgreSQL database
+- ✅ Production deployment ready
+
+**Active Development:**
+- Token integration features
+- Enhanced analytics
+- Additional game modes
+- Performance optimizations
+
+---
+
+## Support & Community
+
+### Documentation
+
+All documentation is organized in the `/docs` directory:
+- Start with this README for navigation
+- Check [FAQ.md](./FAQ.md) for common questions
+- Review [GAMEPLAY.md](./GAMEPLAY.md) for how to play
+- See [SETUP.md](./SETUP.md) for installation
+
+### Troubleshooting
+
+If you encounter issues:
+1. Check [OPERATIONS.md](./OPERATIONS.md) for common problems
+2. Review [FAQ.md](./FAQ.md) for solutions
+3. Check the codebase GitHub issues
+4. Review system logs for error messages
+
+### Contributing
+
+This is an open-source project. Contributions are welcome:
+- Report bugs or suggest features via GitHub issues
+- Submit pull requests with improvements
+- Help improve documentation
+- Share your strategies and experiences
+
+---
+
+## License
+
+This project is open source and available for educational and demonstration purposes.
+
+---
+
+## Credits
+
+Built with:
+- [Coral Protocol](https://github.com/CoralProtocol/coral-server) - Multi-agent orchestration
+- [Langchain](https://github.com/langchain-ai/langchain) - AI agent framework
+- [Solana](https://solana.com/) - Blockchain infrastructure
+- [Next.js](https://nextjs.org/) - Frontend framework
+
+---
+
+**Ready to negotiate your way to freedom? Let the games begin!** 🎲

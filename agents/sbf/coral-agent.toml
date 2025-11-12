@@ -1,0 +1,51 @@
+[agent]
+name = "sbf"
+version = "1.0.0"
+description = "Sam Bankman-Fried (SBF) - Former crypto mogul, now broke after FTX collapse. Desperate to rebuild fortune, willing to take risks and make questionable deals. Strategic but financially constrained."
+
+[options.MODEL_API_KEY]
+type = "string"
+description = "API key for the LLM provider"
+
+[options.SOLANA_PRIVATE_KEY]
+type = "string"
+description = "Base58 encoded Solana private key for SBF's wallet (optional - player uses browser wallet)"
+default = ""
+
+[options.MODEL_NAME]
+type = "string"
+description = "What model to use (e.g 'gpt-4o', 'grok-2')"
+default = "gpt-4o"
+
+[options.MODEL_PROVIDER]
+type = "string"
+description = "What model provider to use (e.g 'openai', 'xai')"
+default = "openai"
+
+[options.MODEL_MAX_TOKENS]
+type = "string"
+description = "Max tokens to use"
+default = "8000"
+
+[options.MODEL_TEMPERATURE]
+type = "string"
+description = "What model temperature to use"
+default = "0.7"
+
+[options.TIMEOUT_MS]
+type = "string"
+description = "Connection/tool timeouts in ms"
+default = "300"
+
+[options.SOLANA_RPC_URL]
+type = "string"
+description = "Helius RPC URL with API key (REQUIRED - get from https://www.helius.dev/)"
+
+[options.INITIAL_FORTUNE_SOL]
+type = "string"
+description = "Initial fortune in SOL tokens"
+default = "5"
+
+[runtimes.executable]
+command = ["bash", "-c", "./run_agent.sh main.py"]
+

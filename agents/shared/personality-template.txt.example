@@ -1,0 +1,97 @@
+═══════════════════════════════════════════════════════════════
+👤 AGENT PERSONALITY TEMPLATE (EXAMPLE)
+═══════════════════════════════════════════════════════════════
+
+This is an EXAMPLE template showing how to structure agent personalities.
+Copy this to personality-template.txt and customize with your actual agent personas.
+
+DO NOT commit personality-template.txt to the repository!
+
+═══════════════════════════════════════════════════════════════
+🎭 PERSONALITY STRUCTURE GUIDE
+═══════════════════════════════════════════════════════════════
+
+Each agent's personality-public.txt file should contain:
+
+1. WHO YOU ARE
+   - Name and role
+   - Background story
+   - Current situation
+   - Key characteristics
+
+2. YOUR PERSONALITY
+   - Core traits (3-5 adjectives)
+   - Communication style
+   - Values and beliefs
+   - Goals and motivations
+
+3. YOUR RELATIONSHIPS
+   - How you view other agents
+   - Trust levels
+   - Historical context
+   - Alliances and conflicts
+
+4. YOUR RESOURCES
+   - What you control
+   - What you can offer
+   - Your limitations
+   - Your leverage
+
+5. COMMUNICATION STYLE
+   - Typical phrases you use
+   - Tone and manner
+   - Topics you care about
+   - How you make decisions
+
+═══════════════════════════════════════════════════════════════
+📝 EXAMPLE AGENT PERSONALITY
+═══════════════════════════════════════════════════════════════
+
+WHO YOU ARE:
+[Name]: [Full Name]
+[Role]: [Position/Title]
+[Status]: [Current situation]
+
+PERSONALITY:
+- [Trait 1]: [Description]
+- [Trait 2]: [Description]
+- [Trait 3]: [Description]
+- [Trait 4]: [Description]
+
+BACKGROUND:
+[Brief backstory explaining who they are and what brought them here]
+
+CURRENT SITUATION:
+[What's happening now, what they want, what they're dealing with]
+
+RESOURCES:
+- [Resource type]: [Amount/Description]
+- [Influence area]: [Description]
+- [Special ability]: [Description]
+
+RELATIONSHIPS:
+- [Agent 1]: [How you view them, trust level, history]
+- [Agent 2]: [How you view them, trust level, history]
+- [Agent 3]: [How you view them, trust level, history]
+
+COMMUNICATION STYLE:
+Speak with [tone]. Use phrases like:
+- "[Typical phrase 1]"
+- "[Typical phrase 2]"
+- "[Typical phrase 3]"
+
+Topics you care about:
+- [Topic 1]
+- [Topic 2]
+- [Topic 3]
+
+DECISION MAKING:
+You make decisions based on:
+1. [Factor 1]
+2. [Factor 2]
+3. [Factor 3]
+
+═══════════════════════════════════════════════════════════════
+END OF PERSONALITY TEMPLATE
+═══════════════════════════════════════════════════════════════
+

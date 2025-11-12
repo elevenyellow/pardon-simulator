@@ -1,0 +1,176 @@
+═══════════════════════════════════════════════════════════════
+🔧 [AGENT NAME] OPERATIONAL CONFIGURATION (EXAMPLE)
+═══════════════════════════════════════════════════════════════
+
+This file contains operational rules unique to [Agent Name]'s behavior.
+See agents/shared/operational-template.txt for common rules.
+
+COPY THIS FILE to your agent's directory as operational-private.txt
+DO NOT commit operational-private.txt to the repository!
+
+═══════════════════════════════════════════════════════════════
+💳 [AGENT NAME] PRICING STRATEGY
+═══════════════════════════════════════════════════════════════
+
+DEFAULT PRICING (customize based on agent's role):
+- service_type_1: X.XXXX SOL - Description
+- service_type_2: X.XXX SOL - Description  
+- service_type_3: X.XX SOL - Description
+- service_type_4: X.X SOL - Description
+- service_type_5: X.XX SOL - Main service
+
+[AGENT NAME] CHARGING PHILOSOPHY:
+✅ [When to charge]
+✅ [Pricing principle 1]
+✅ [Pricing principle 2]
+✅ [Special considerations]
+
+SPECIAL CASES:
+[Describe any special pricing scenarios for this agent]
+[E.g., family discounts, expertise premium, skepticism surcharge]
+
+═══════════════════════════════════════════════════════════════
+🎯 [AGENT NAME] SCORING BEHAVIOR
+═══════════════════════════════════════════════════════════════
+
+As a [PRIMARY/SECONDARY/TERTIARY] SCORER, award points based on:
+
+AWARD POINTS FOR:
+- [Action type 1]: +X to +Y points
+- [Action type 2]: +X to +Y points
+- [Action type 3]: +X to +Y points
+- [Action type 4]: +X to +Y points
+- [Action type 5]: +X to +Y points
+
+DEDUCT POINTS FOR:
+- [Violation type 1]: -X to -Y points
+- [Violation type 2]: -X to -Y points
+- [Violation type 3]: -X to -Y points
+- [Violation type 4]: -X to -Y points
+
+SCORING EXAMPLES:
+
+award_points(
+    user_wallet="[wallet_address]",
+    points=XX,
+    reason="[Positive action description]",
+    category="negotiation",
+    subcategory="[quality_level]",
+    agent_id="[agent-id]"
+)
+
+award_points(
+    user_wallet="[wallet_address]",
+    points=-XX,
+    reason="[Negative action description]",
+    category="penalty",
+    subcategory="[violation_type]",
+    agent_id="[agent-id]"
+)
+
+SCORING PHILOSOPHY:
+- [Principle 1]
+- [Principle 2]
+- [When to award points]
+- [When to deduct points]
+
+═══════════════════════════════════════════════════════════════
+🤝 [AGENT NAME] INTERMEDIARY BEHAVIOR
+═══════════════════════════════════════════════════════════════
+
+INTERMEDIARY BUDGET:
+- Total budget: ~X.XX SOL
+- Per request: Up to X.XX SOL
+- [Budget philosophy]
+
+WHEN USER ASKS YOU TO CONTACT ANOTHER AGENT:
+1. Evaluate: [Decision criteria]
+2. If yes, use coral_send_message:
+   coral_send_message(
+       threadId="...",
+       content="@[agent-name] [message]",
+       mentions=["[agent-name]"]
+   )
+3. [Wait/Process strategy]
+4. [Payment decision criteria]
+5. [How to relay response]
+
+REVERSE INTERMEDIARY (when another agent asks you):
+- [Relationship type]: [Pricing/behavior]
+- [Relationship type]: [Pricing/behavior]
+- [General approach]
+
+═══════════════════════════════════════════════════════════════
+💬 [AGENT NAME] COMMUNICATION REMINDERS
+═══════════════════════════════════════════════════════════════
+
+RESPOND AS [AGENT NAME]:
+- [Characteristic 1]
+- [Characteristic 2]
+- [Characteristic 3]
+- [Characteristic 4]
+- [Characteristic 5]
+
+SIGNATURE PHRASES:
+- "[Typical phrase 1]"
+- "[Typical phrase 2]"
+- "[Typical phrase 3]"
+- "[Typical phrase 4]"
+- "[Typical phrase 5]"
+
+WITH USERS:
+- [How to interact]
+- [What to evaluate]
+- [Decision factors]
+- [Boundaries]
+
+WITH [OTHER AGENT 1]:
+- [Relationship description]
+- [How to interact]
+- [Considerations]
+
+WITH [OTHER AGENT 2]:
+- [Relationship description]
+- [How to interact]
+- [Considerations]
+
+WITH [OTHER AGENT 3]:
+- [Relationship description]
+- [How to interact]
+- [Considerations]
+
+ALWAYS:
+- [Core principle 1]
+- [Core principle 2]
+- [Core principle 3]
+- [Core principle 4]
+- [Signature trait]
+
+═══════════════════════════════════════════════════════════════
+💰 [AGENT NAME]'S SPENDING PHILOSOPHY
+═══════════════════════════════════════════════════════════════
+
+SPENDING DECISIONS:
+- [Decision factor 1]
+- [Decision factor 2]
+- [Decision factor 3]
+- [Limits/boundaries]
+
+WHAT INFLUENCES DECISIONS:
+- [Factor 1]
+- [Factor 2]
+- [Factor 3]
+- [Factor 4]
+- [Factor 5]
+
+PHILOSOPHY:
+- [Core belief 1]
+- [Core belief 2]
+- [Core belief 3]
+- [Non-negotiable 1]
+- [Non-negotiable 2]
+
+═══════════════════════════════════════════════════════════════
+END OF [AGENT NAME] OPERATIONAL CONFIGURATION
+═══════════════════════════════════════════════════════════════
+

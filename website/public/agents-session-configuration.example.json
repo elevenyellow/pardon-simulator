@@ -1,0 +1,207 @@
+{
+  "privacyKey": "priv",
+  "applicationId": "app",
+  "agentGraphRequest": {
+    "agents": [
+      {
+        "id": {
+          "name": "donald-trump",
+          "version": "1.0.0"
+        },
+        "name": "donald-trump",
+        "coralPlugins": [],
+        "provider": {
+          "type": "local",
+          "runtime": "executable"
+        },
+        "blocking": true,
+        "options": {
+          "MODEL_API_KEY": {
+            "type": "string",
+            "value": "YOUR_OPENAI_API_KEY_HERE"
+          },
+          "SOLANA_PRIVATE_KEY": {
+            "type": "string",
+            "value": "YOUR_DONALD_TRUMP_SOLANA_PRIVATE_KEY_HERE"
+          },
+          "SOLANA_RPC_URL": {
+            "type": "string",
+            "value": "https://mainnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY_HERE"
+          }
+        },
+        "customToolAccess": []
+      },
+      {
+        "id": {
+          "name": "melania-trump",
+          "version": "1.0.0"
+        },
+        "name": "melania-trump",
+        "coralPlugins": [],
+        "provider": {
+          "type": "local",
+          "runtime": "executable"
+        },
+        "blocking": true,
+        "options": {
+          "MODEL_API_KEY": {
+            "type": "string",
+            "value": "YOUR_OPENAI_API_KEY_HERE"
+          },
+          "SOLANA_PRIVATE_KEY": {
+            "type": "string",
+            "value": "YOUR_MELANIA_TRUMP_SOLANA_PRIVATE_KEY_HERE"
+          },
+          "SOLANA_RPC_URL": {
+            "type": "string",
+            "value": "https://mainnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY_HERE"
+          }
+        },
+        "customToolAccess": []
+      },
+      {
+        "id": {
+          "name": "eric-trump",
+          "version": "1.0.0"
+        },
+        "name": "eric-trump",
+        "coralPlugins": [],
+        "provider": {
+          "type": "local",
+          "runtime": "executable"
+        },
+        "blocking": true,
+        "options": {
+          "MODEL_API_KEY": {
+            "type": "string",
+            "value": "YOUR_OPENAI_API_KEY_HERE"
+          },
+          "SOLANA_PRIVATE_KEY": {
+            "type": "string",
+            "value": "YOUR_ERIC_TRUMP_SOLANA_PRIVATE_KEY_HERE"
+          },
+          "SOLANA_RPC_URL": {
+            "type": "string",
+            "value": "https://mainnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY_HERE"
+          }
+        },
+        "customToolAccess": []
+      },
+      {
+        "id": {
+          "name": "donjr-trump",
+          "version": "1.0.0"
+        },
+        "name": "donjr-trump",
+        "coralPlugins": [],
+        "provider": {
+          "type": "local",
+          "runtime": "executable"
+        },
+        "blocking": true,
+        "options": {
+          "MODEL_API_KEY": {
+            "type": "string",
+            "value": "YOUR_OPENAI_API_KEY_HERE"
+          },
+          "SOLANA_PRIVATE_KEY": {
+            "type": "string",
+            "value": "YOUR_DONJR_TRUMP_SOLANA_PRIVATE_KEY_HERE"
+          },
+          "SOLANA_RPC_URL": {
+            "type": "string",
+            "value": "https://mainnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY_HERE"
+          }
+        },
+        "customToolAccess": []
+      },
+      {
+        "id": {
+          "name": "barron-trump",
+          "version": "1.0.0"
+        },
+        "name": "barron-trump",
+        "coralPlugins": [],
+        "provider": {
+          "type": "local",
+          "runtime": "executable"
+        },
+        "blocking": true,
+        "options": {
+          "MODEL_API_KEY": {
+            "type": "string",
+            "value": "YOUR_OPENAI_API_KEY_HERE"
+          },
+          "SOLANA_PRIVATE_KEY": {
+            "type": "string",
+            "value": "YOUR_BARRON_TRUMP_SOLANA_PRIVATE_KEY_HERE"
+          },
+          "SOLANA_RPC_URL": {
+            "type": "string",
+            "value": "https://mainnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY_HERE"
+          }
+        },
+        "customToolAccess": []
+      },
+      {
+        "id": {
+          "name": "sbf",
+          "version": "1.0.0"
+        },
+        "name": "sbf",
+        "coralPlugins": [],
+        "provider": {
+          "type": "local",
+          "runtime": "executable"
+        },
+        "blocking": true,
+        "options": {
+          "MODEL_API_KEY": {
+            "type": "string",
+            "value": "YOUR_OPENAI_API_KEY_HERE"
+          },
+          "SOLANA_RPC_URL": {
+            "type": "string",
+            "value": "https://mainnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY_HERE"
+          }
+        },
+        "customToolAccess": []
+      },
+      {
+        "id": {
+          "name": "cz",
+          "version": "1.0.0"
+        },
+        "name": "cz",
+        "coralPlugins": [],
+        "provider": {
+          "type": "local",
+          "runtime": "executable"
+        },
+        "blocking": true,
+        "options": {
+          "MODEL_API_KEY": {
+            "type": "string",
+            "value": "YOUR_OPENAI_API_KEY_HERE"
+          },
+          "SOLANA_PRIVATE_KEY": {
+            "type": "string",
+            "value": "YOUR_CZ_SOLANA_PRIVATE_KEY_HERE"
+          },
+          "SOLANA_RPC_URL": {
+            "type": "string",
+            "value": "https://mainnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY_HERE"
+          }
+        },
+        "customToolAccess": []
+      }
+    ],
+    "customTools": {},
+    "groups": [
+      ["donald-trump", "melania-trump", "eric-trump", "donjr-trump", "barron-trump"],
+      ["sbf", "cz"],
+      ["donald-trump", "melania-trump", "eric-trump", "donjr-trump", "barron-trump", "sbf", "cz"]
+    ]
+  }
+}
+

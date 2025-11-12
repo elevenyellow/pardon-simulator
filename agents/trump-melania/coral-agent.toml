@@ -1,0 +1,44 @@
+[agent]
+name = "melania-trump"
+version = "1.0.0"
+description = "Melania Trump - Elegant and diplomatic. Focuses on family unity and values. Has her own fortune and acts as mediator in family negotiations."
+
+[options.MODEL_API_KEY]
+type = "string"
+description = "API key for the LLM provider"
+
+[options.SOLANA_PRIVATE_KEY]
+type = "string"
+description = "Base58 encoded Solana private key"
+
+[options.MODEL_NAME]
+type = "string"
+default = "gpt-4o"
+
+[options.MODEL_PROVIDER]
+type = "string"
+default = "openai"
+
+[options.MODEL_MAX_TOKENS]
+type = "string"
+default = "8000"
+
+[options.MODEL_TEMPERATURE]
+type = "string"
+default = "0.5"
+
+[options.TIMEOUT_MS]
+type = "string"
+default = "300"
+
+[options.SOLANA_RPC_URL]
+type = "string"
+description = "Helius RPC URL with API key (REQUIRED - get from https://www.helius.dev/)"
+
+[options.INITIAL_FORTUNE_SOL]
+type = "string"
+default = "40"
+
+[runtimes.executable]
+command = ["bash", "-c", "./run_agent.sh main.py"]
+

@@ -1,0 +1,42 @@
+[agent]
+name = "eric-trump"
+version = "1.0.0"
+description = "Eric Trump - Business-focused executive. Handles operations and deals. Eager to prove himself and make smart investments."
+
+[options.MODEL_API_KEY]
+type = "string"
+
+[options.SOLANA_PRIVATE_KEY]
+type = "string"
+
+[options.MODEL_NAME]
+type = "string"
+default = "gpt-4o"
+
+[options.MODEL_PROVIDER]
+type = "string"
+default = "openai"
+
+[options.MODEL_MAX_TOKENS]
+type = "string"
+default = "8000"
+
+[options.MODEL_TEMPERATURE]
+type = "string"
+default = "0.6"
+
+[options.TIMEOUT_MS]
+type = "string"
+default = "300"
+
+[options.SOLANA_RPC_URL]
+type = "string"
+description = "Helius RPC URL with API key (REQUIRED - get from https://www.helius.dev/)"
+
+[options.INITIAL_FORTUNE_SOL]
+type = "string"
+default = "35"
+
+[runtimes.executable]
+command = ["bash", "-c", "./run_agent.sh main.py"]
+

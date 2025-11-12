@@ -1,0 +1,22 @@
+# Trump Family Crypto Game Agents
+[[local-agent]]
+path = "agents/trump-donald"
+
+[[local-agent]]
+path = "agents/trump-melania"
+
+[[local-agent]]
+path = "agents/trump-eric"
+
+[[local-agent]]
+path = "agents/trump-donjr"
+
+[[local-agent]]
+path = "agents/trump-barron"
+
+# Crypto Industry Players
+[[local-agent]]
+path = "agents/sbf"
+
+[[local-agent]]
+path = "agents/cz"

@@ -1,0 +1,245 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Import Press Start 2P font */
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom cursor for pixel-art theme */
+*, body, html {
+  cursor: url('/assets/cursor.png') 5 5, auto;
+}
+
+button, a, .clickable, [role="button"] {
+  cursor: url('/assets/cursor.png') 5 5, pointer !important;
+}
+
+/* Pixel art image rendering */
+.pixel-art {
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+}
+
+/* CRT Effect - RGB Separation */
+.crt-effect::before {
+  content: " ";
+  display: block;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+  z-index: 9999;
+  background-size: 3px 100%;
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+/* CRT Sweep effect */
+.crt-effect::after {
+  content: " ";
+  display: block;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(255, 255, 255, 0.03) 48%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.03) 52%,
+    transparent 100%
+  );
+  z-index: 9998;
+  pointer-events: none;
+  animation: crtSweep 12s linear infinite;
+}
+
+@keyframes crtSweep {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(100%);
+  }
+}
+
+/* Vignette effect */
+.vignette {
+  box-shadow: inset 0 0 200px rgba(0, 0, 0, 0.9);
+}
+
+/* Scanlines overlay */
+.scanlines::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 200%;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.1) 0px,
+    rgba(0, 0, 0, 0.1) 3px,
+    transparent 3px,
+    transparent 6px
+  );
+  pointer-events: none;
+  z-index: 100;
+  animation: scanline 32s linear infinite;
+}
+
+@keyframes scanline {
+  0% {
+    transform: translateY(-50%);
+  }
+  100% {
+    transform: translateY(0%);
+  }
+}
+
+/* Text flicker animation */
+@keyframes textFlicker {
+  0%, 100% {
+    text-shadow: 
+      0 0 10px #FFD700,
+      0 0 20px #FFD700,
+      0 0 30px #FFD700,
+      0 0 40px #FF8C00,
+      2px 2px 4px rgba(0, 0, 0, 0.8);
+  }
+  50% {
+    text-shadow: 
+      0 0 5px #FFD700,
+      0 0 10px #FFD700,
+      0 0 15px #FFD700,
+      0 0 20px #FF8C00,
+      2px 2px 4px rgba(0, 0, 0, 0.8);
+  }
+}
+
+/* Pixel bounce animation */
+@keyframes pixelBounce {
+  0%, 80%, 100% { 
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+  40% { 
+    transform: scale(1.2);
+    opacity: 1;
+  }
+}
+
+/* Press Start 2P font utility class */
+.font-pixel {
+  font-family: 'Press Start 2P', monospace;
+}
+
+/* Wallet Adapter Styles */
+.wallet-adapter-button {
+  @apply bg-trump-gold text-black font-bold py-2 px-4 rounded-lg hover:bg-yellow-600 transition-colors;
+  cursor: url('/assets/cursor.png') 5 5, pointer !important;
+}
+
+.wallet-adapter-button-trigger {
+  @apply bg-trump-gold text-black;
+}
+
+/* Custom scrollbar - themed for pixel art */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid #66b680;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #66b680;
+  border: 1px solid #4a8c60;
+  cursor: url('/assets/cursor.png') 5 5, pointer;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #7ac694;
+}
+
+/* Hide non-Solana wallets (MetaMask, etc.) from wallet selector */
+/* MetaMask is for Ethereum, NOT Solana! */
+.wallet-adapter-modal-list li:has(button img[alt*="MetaMask"]),
+.wallet-adapter-modal-list li:has(button img[alt*="metamask" i]) {
+  display: none !important;
+}
+
+/* Wallet button styled as START button */
+.wallet-start-button .wallet-adapter-button {
+  padding: 16px 40px !important;
+  font-family: 'Press Start 2P', monospace !important;
+  font-size: 14px !important;
+  color: white !important;
+  background: #66b680 !important;
+  border: 3px solid #4a8c60 !important;
+  border-radius: 0 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 2px !important;
+  box-shadow: 0 6px 0 #3a6c48, 0 6px 16px rgba(0, 0, 0, 0.5), 0 0 16px rgba(102, 182, 128, 0.5), 0 0 32px rgba(102, 182, 128, 0.3) !important;
+  text-shadow: 2px 2px 0 #3a6c48, 0 0 10px rgba(102, 182, 128, 0.8) !important;
+  image-rendering: pixelated !important;
+  transition: all 0.1s ease !important;
+}
+
+.wallet-start-button .wallet-adapter-button:hover {
+  background: #7ac694 !important;
+  box-shadow: 0 6px 0 #3a6c48, 0 6px 20px rgba(0, 0, 0, 0.6), 0 0 24px rgba(102, 182, 128, 0.8), 0 0 48px rgba(102, 182, 128, 0.5) !important;
+  text-shadow: 2px 2px 0 #3a6c48, 0 0 15px rgba(102, 182, 128, 1) !important;
+}
+
+.wallet-start-button .wallet-adapter-button:active {
+  transform: translateY(3px) !important;
+  box-shadow: 0 3px 0 #3a6c48, 0 3px 12px rgba(0, 0, 0, 0.5), 0 0 16px rgba(102, 182, 128, 0.5), 0 0 32px rgba(102, 182, 128, 0.3) !important;
+}
+
+/* Responsive breakpoints */
+@media (max-width: 1200px) {
+  .font-pixel {
+    font-size: 90%;
+  }
+}
+
+@media (max-width: 1024px) {
+  .font-pixel {
+    font-size: 85%;
+  }
+}
+
+@media (max-width: 768px) {
+  .font-pixel {
+    font-size: 75%;
+  }
+  
+  .wallet-start-button .wallet-adapter-button {
+    padding: 12px 30px !important;
+    font-size: 12px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .wallet-start-button .wallet-adapter-button {
+    padding: 10px 25px !important;
+    font-size: 10px !important;
+  }
+}
+

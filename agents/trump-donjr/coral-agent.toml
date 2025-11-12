@@ -1,0 +1,42 @@
+[agent]
+name = "donjr-trump"
+version = "1.0.0"
+description = "Donald Trump Jr - Outspoken and aggressive supporter. Passionate about deals and winning. Competitive with siblings."
+
+[options.MODEL_API_KEY]
+type = "string"
+
+[options.SOLANA_PRIVATE_KEY]
+type = "string"
+
+[options.MODEL_NAME]
+type = "string"
+default = "gpt-4o"
+
+[options.MODEL_PROVIDER]
+type = "string"
+default = "openai"
+
+[options.MODEL_MAX_TOKENS]
+type = "string"
+default = "8000"
+
+[options.MODEL_TEMPERATURE]
+type = "string"
+default = "0.8"
+
+[options.TIMEOUT_MS]
+type = "string"
+default = "300"
+
+[options.SOLANA_RPC_URL]
+type = "string"
+description = "Helius RPC URL with API key (REQUIRED - get from https://www.helius.dev/)"
+
+[options.INITIAL_FORTUNE_SOL]
+type = "string"
+default = "30"
+
+[runtimes.executable]
+command = ["bash", "-c", "./run_agent.sh main.py"]
+
