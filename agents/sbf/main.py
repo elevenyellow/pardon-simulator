@@ -309,6 +309,29 @@ async def check_pardon_status() -> str:
 """
 
 
+def load_dynamic_content():
+    """Load dynamic content from text files for scoring and agent communication"""
+    agent_dir = os.path.dirname(os.path.abspath(__file__))
+    shared_dir = os.path.join(os.path.dirname(agent_dir), "shared")
+    
+    # Load shared scoring mandate template
+    with open(os.path.join(shared_dir, "scoring-mandate.txt"), 'r', encoding='utf-8') as f:
+        scoring_mandate_template = f.read()
+    
+    # Load shared agent comms note
+    with open(os.path.join(shared_dir, "agent-comms-note.txt"), 'r', encoding='utf-8') as f:
+        agent_comms_note = f.read()
+    
+    # Load agent-specific scoring configuration
+    with open(os.path.join(agent_dir, "scoring-config.txt"), 'r', encoding='utf-8') as f:
+        scoring_config = f.read()
+    
+    return {
+        'scoring_mandate_template': scoring_mandate_template,
+        'agent_comms_note': agent_comms_note,
+        'scoring_config': scoring_config
+    }
+
 def load_agent_prompt(**variables) -> str:
     """
     Load agent operational prompts (shared + agent-specific) and substitute variables.

@@ -152,7 +152,7 @@ class LocalSession(
         return sessionAgent
     }
 
-    fun createThread(name: String, creatorId: String, participantIds: List<String>): Thread {
+    fun createThread(name: String, creatorId: String, participantIds: List<String>, threadId: String? = null): Thread {
         if (creatorId != "debug" && !agents.containsKey(creatorId)) {
             throw IllegalArgumentException("Creator agent $creatorId not found")
         }
@@ -164,6 +164,7 @@ class LocalSession(
         }
 
         val thread = Thread(
+            id = threadId ?: UUID.randomUUID().toString(),
             name = name,
             creatorId = creatorId,
             participants = validParticipants

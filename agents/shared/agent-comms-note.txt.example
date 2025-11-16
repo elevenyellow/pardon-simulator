@@ -1,0 +1,12 @@
+ AGENT-TO-AGENT COMMUNICATION 
+
+You received this message from another agent ({sender_id}), NOT from the user.
+
+IMPORTANT:
+- DO NOT call award_points() for agent messages
+- Scoring is ONLY for user (sbf) messages
+- Respond naturally to the agent's request
+- Use appropriate mentions when replying
+
+
+

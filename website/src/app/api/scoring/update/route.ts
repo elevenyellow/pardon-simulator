@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { scoringRepository, ScoreCategory } from '@/lib/scoring/repository';
-import { getCurrentWeekId } from '@/lib/utils/week';
-import { withRetry } from '@/lib/db-retry';
-import { strictRateLimiter } from '@/lib/middleware/rate-limit';
-import { sanitizeScoringRequest } from '@/lib/security/sanitize';
-import { getClientIP, logSuspiciousActivity } from '@/lib/security/monitoring';
+import { NextRequest, NextResponse } from'next/server';
+import { scoringRepository, ScoreCategory } from'@/lib/scoring/repository';
+import { getCurrentWeekId } from'@/lib/utils/week';
+import { withRetry } from'@/lib/db-retry';
+import { strictRateLimiter } from'@/lib/middleware/rate-limit';
+import { sanitizeScoringRequest } from'@/lib/security/sanitize';
+import { getClientIP, logSuspiciousActivity } from'@/lib/security/monitoring';
 
 async function handlePOST(request: NextRequest) {
   try {
@@ -13,14 +13,14 @@ async function handlePOST(request: NextRequest) {
     // Sanitize and validate input (SECURITY: Prevent XSS and injection)
     const sanitizationResult = sanitizeScoringRequest(rawBody);
     if (!sanitizationResult.valid) {
-      console.warn(`⚠️ Scoring request validation failed: ${sanitizationResult.error}`);
+      console.warn(`[scoring] Validation failed: ${sanitizationResult.error}`);
       
       // Log suspicious activity
       const ip = getClientIP(request.headers);
       logSuspiciousActivity(
         ip,
-        '/api/scoring/update',
-        `Invalid scoring request: ${sanitizationResult.error}`,
+'/api/scoring/update',
+`Invalid scoring request: ${sanitizationResult.error}`,
         { rawBody: JSON.stringify(rawBody).substring(0, 200) }
       );
       
@@ -40,11 +40,29 @@ async function handlePOST(request: NextRequest) {
       messageId,
     } = sanitizationResult.sanitized!;
     
-    // Extract additional fields not sanitized
+    // Extract additional fields (some not sanitized)
     const { coralSessionId, threadId } = rawBody;
     
-    console.log(`📥 Scoring API received (sanitized): userWallet="${userWallet}", delta=${delta}, reason="${reason}"`);
-    console.log(`✅ Using wallet for scoring: "${userWallet.substring(0, 8)}...${userWallet.substring(userWallet.length - 8)}"`);
+    // Extract and validate evaluation score and premium service payment
+    let evaluationScore = 2.0;
+    if (rawBody.evaluationScore !== undefined) {
+      evaluationScore = parseFloat(rawBody.evaluationScore);
+      if (isNaN(evaluationScore) || evaluationScore < 1.0 || evaluationScore > 3.0) {
+        console.warn(`[scoring] Invalid evaluation score ${rawBody.evaluationScore}, clamping to range`);
+        evaluationScore = Math.max(1.0, Math.min(3.0, evaluationScore));
+      }
+    }
+    
+    let premiumServicePayment = 0;
+    if (rawBody.premiumServicePayment !== undefined) {
+      premiumServicePayment = parseFloat(rawBody.premiumServicePayment);
+      if (isNaN(premiumServicePayment) || premiumServicePayment < 0) {
+        premiumServicePayment = 0;
+      }
+    }
+    
+    console.log(`Scoring API received (sanitized): userWallet="${userWallet}", delta=${delta}, reason="${reason}"`);
+    console.log(`[scoring] Using wallet: ${userWallet.substring(0, 8)}...${userWallet.substring(userWallet.length - 8)}`);
     
     // Get or create user and session for current week (with retry logic)
     const weekId = getCurrentWeekId();
@@ -54,7 +72,7 @@ async function handlePOST(request: NextRequest) {
         weekId,
         coralSessionId || undefined
       ),
-      { maxRetries: 3, initialDelay: 300 }
+      { maxRetries: 2, initialDelay: 200 }
     );
     
     // Add score with new fields (with retry logic)
@@ -68,15 +86,17 @@ async function handlePOST(request: NextRequest) {
         subcategory: subcategory || undefined,
         agentId: agentId || undefined,
         messageId: messageId || undefined,
+        evaluationScore,
+        premiumServicePayment,
       }),
-      { maxRetries: 3, initialDelay: 300 }
-    );
-    
-    // Get user rank (with retry logic)
-    const rank = await withRetry(
-      () => scoringRepository.getUserRank(userId, weekId),
       { maxRetries: 2, initialDelay: 200 }
     );
+    
+    // Get user rank (with retry logic, non-blocking)
+    const rank = await withRetry(
+      () => scoringRepository.getUserRank(userId, weekId),
+      { maxRetries: 1, initialDelay: 100 }
+    ).catch(() => null); // Don't fail if rank calculation fails
     
     // Generate contextual feedback
     const feedback = generateFeedback(result.newScore, delta);
@@ -98,28 +118,27 @@ async function handlePOST(request: NextRequest) {
     });
     
   } catch (error: any) {
-    console.error('❌ Scoring error:', error);
+    console.error('Scoring error:', error);
     
     // Graceful degradation: If database is down, still return success but warn
-    if (error.code === 'P1001' || error.code === 'P1017' || error.message?.includes('database') || error.message?.includes('connection')) {
-      console.warn('⚠️  Database unavailable, score update not persisted');
+    if (error.code ==='P1001'|| error.code ==='P1017'|| error.message?.includes('database') || error.message?.includes('connection')) {
+      console.warn('Database unavailable, score update not persisted');
       return NextResponse.json({
         success: true,
         newScore: 0,
         oldScore: 0,
         delta: 0,
-        reason: 'Database unavailable',
-        category: 'penalty',
+        reason:'Database unavailable',
+        category:'penalty',
         subcategory: null,
         agentId: null,
         rank: null,
-        feedback: 'Database temporarily unavailable - score not persisted',
-        warning: 'Database temporarily unavailable - score not persisted'
-      });
+        feedback:'Database temporarily unavailable - score not persisted',
+        warning:'Database temporarily unavailable - score not persisted'      });
     }
     
     return NextResponse.json(
-      { error: 'Internal server error', message: error.message },
+      { error:'Internal server error', message: error.message },
       { status: 500 }
     );
   }
@@ -140,7 +159,7 @@ async function handleGET(request: NextRequest) {
     
     if (!userWallet) {
       return NextResponse.json(
-        { error: 'Missing userWallet parameter' },
+        { error:'Missing userWallet parameter'},
         { status: 400 }
       );
     }
@@ -172,23 +191,22 @@ async function handleGET(request: NextRequest) {
     });
     
   } catch (error: any) {
-    console.error('❌ Error fetching score:', error);
+    console.error('Error fetching score:', error);
     
     // Graceful degradation: Return default values if database is down
-    if (error.code === 'P1001' || error.code === 'P1017' || error.message?.includes('database') || error.message?.includes('connection')) {
-      console.warn('⚠️  Database unavailable, returning default score');
+    if (error.code ==='P1001'|| error.code ==='P1017'|| error.message?.includes('database') || error.message?.includes('connection')) {
+      console.warn('Database unavailable, returning default score');
       return NextResponse.json({
         success: true,
         currentScore: 0,
         rank: null,
         weekId: getCurrentWeekId(),
         scoreHistory: [],
-        warning: 'Database temporarily unavailable - score may not be up to date'
-      });
+        warning:'Database temporarily unavailable - score may not be up to date'      });
     }
     
     return NextResponse.json(
-      { error: 'Internal server error', message: error.message },
+      { error:'Internal server error', message: error.message },
       { status: 500 }
     );
   }
@@ -203,17 +221,20 @@ export async function GET(request: NextRequest) {
  * Generate contextual feedback based on score
  */
 function generateFeedback(score: number, delta: number): string {
-  if (score >= 80) {
-    return "🏆 Excellent progress! You're in the prize zone. Keep pushing for 100!";
+  if (score >= 90) {
+    return"Qualified for prizes! You've reached 90+ points. Keep pushing for the top spot!";
+  } else if (score >= 80) {
+    const pointsNeeded = 90 - score;
+    return`Almost there! ${pointsNeeded} more points to qualify for prizes.`;
   } else if (score >= 60) {
-    const pointsNeeded = 80 - score;
-    return `💪 Good work! ${pointsNeeded} more points to qualify for prizes.`;
+    const pointsNeeded = 90 - score;
+    return`Good work! ${pointsNeeded} more points to qualify for prizes.`;
   } else if (score >= 40) {
-    return "📈 Making progress. Try different strategies—maybe use intermediaries?";
+    return"Making progress. Try different strategies—maybe use intermediaries?";
   } else if (score >= 20) {
-    return "🎯 Slow start. Consider paying for intel or introductions to build momentum.";
+    return"Slow start. Consider paying for intel or introductions to build momentum.";
   } else {
-    return "🔄 You need a new strategy. Talk to Melania first, then approach Trump with leverage.";
+    return"You need a new strategy. Talk to Melania first, then approach Trump with leverage.";
   }
 }
 

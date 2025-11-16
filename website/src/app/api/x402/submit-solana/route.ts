@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { settle, verify } from 'x402/facilitator';
-import { createSigner } from 'x402/types';
-import type { PaymentPayload, PaymentRequirements } from 'x402/types';
+import { NextRequest, NextResponse } from'next/server';
+import { settle, verify } from'x402/facilitator';
+import { createSigner } from'x402/types';
+import type { PaymentPayload, PaymentRequirements } from'x402/types';
 
 /**
- * ✅ FULLY x402 COMPLIANT SOLANA TRANSACTION SUBMISSION
+ *  FULLY x402 COMPLIANT SOLANA TRANSACTION SUBMISSION
  * 
  * This endpoint uses the official CDP facilitator API to achieve maximum
  * x402 compliance for Solana transactions.
@@ -32,7 +32,7 @@ if (!SOLANA_RPC_URL) {
 }
 
 if (!FACILITATOR_PRIVATE_KEY) {
-  console.warn('⚠️  FACILITATOR_SOLANA_PRIVATE_KEY not set - facilitator wallet required');
+  console.warn('FACILITATOR_SOLANA_PRIVATE_KEY not set - facilitator wallet required');
 }
 
 export async function POST(request: NextRequest) {
@@ -41,26 +41,24 @@ export async function POST(request: NextRequest) {
 
     if (!paymentPayload || !paymentRequirements) {
       return NextResponse.json(
-        { error: 'Missing paymentPayload or paymentRequirements' },
+        { error:'Missing paymentPayload or paymentRequirements'},
         { status: 400 }
       );
     }
 
     console.log('\n🏦 CDP FACILITATOR x402 SUBMISSION');
-    console.log('====================================');
-    console.log('📋 Payment Details:');
-    console.log(`   Network: ${paymentRequirements.network}`);
-    console.log(`   Scheme: ${paymentRequirements.scheme}`);
-    console.log(`   Amount: ${paymentRequirements.maxAmountRequired}`);
-    console.log(`   Asset: ${paymentRequirements.asset}`);
-    console.log(`   Pay To: ${paymentRequirements.payTo}`);
-    console.log(`   Resource: ${paymentRequirements.resource}`);
-    console.log('');
+    console.log('Payment Details:');
+    console.log(`Network: ${paymentRequirements.network}`);
+    console.log(`Scheme: ${paymentRequirements.scheme}`);
+    console.log(`Amount: ${paymentRequirements.maxAmountRequired}`);
+    console.log(`Asset: ${paymentRequirements.asset}`);
+    console.log(`Pay To: ${paymentRequirements.payTo}`);
+    console.log(`Resource: ${paymentRequirements.resource}`);
 
     // Validate network
-    if (!['solana', 'solana-devnet'].includes(paymentRequirements.network)) {
+    if (!['solana','solana-devnet'].includes(paymentRequirements.network)) {
       return NextResponse.json(
-        { error: `Unsupported network: ${paymentRequirements.network}` },
+        { error:`Unsupported network: ${paymentRequirements.network}`},
         { status: 400 }
       );
     }
@@ -79,12 +77,12 @@ export async function POST(request: NextRequest) {
         paymentRequirements.network,
         FACILITATOR_PRIVATE_KEY
       );
-      console.log('✅ Facilitator signer created');
+      console.log('Facilitator signer created');
     } catch (error: any) {
-      console.error('❌ Failed to create facilitator signer:', error.message);
+      console.error('Failed to create facilitator signer:', error.message);
       return NextResponse.json(
         { 
-          error: 'Facilitator configuration error',
+          error:'Facilitator configuration error',
           details: error.message 
         },
         { status: 500 }
@@ -99,8 +97,8 @@ export async function POST(request: NextRequest) {
     };
 
     // Step 1: Verify the payment payload
-    console.log('\n📋 Step 1: Verifying payment payload...');
-    console.log('   Using CDP facilitator verification');
+    console.log('\n Step 1: Verifying payment payload...');
+    console.log('Using CDP facilitator verification');
     
     let verifyResponse;
     try {
@@ -110,11 +108,11 @@ export async function POST(request: NextRequest) {
         paymentRequirements as PaymentRequirements
       );
     } catch (error: any) {
-      console.error('❌ Verification failed:', error.message);
+      console.error('Verification failed:', error.message);
       return NextResponse.json(
         {
           success: false,
-          error: 'Payment verification failed',
+          error:'Payment verification failed',
           reason: error.message,
         },
         { status: 400 }
@@ -122,29 +120,28 @@ export async function POST(request: NextRequest) {
     }
 
     if (!verifyResponse.isValid) {
-      console.error('❌ Payment invalid:', verifyResponse.invalidReason);
+      console.error('Payment invalid:', verifyResponse.invalidReason);
       return NextResponse.json(
         {
           success: false,
-          error: 'Payment verification failed',
+          error:'Payment verification failed',
           reason: verifyResponse.invalidReason,
         },
         { status: 400 }
       );
     }
 
-    console.log('✅ Payment verified successfully');
-    console.log(`   Payer: ${verifyResponse.payer}`);
-    console.log(`   All checks passed`);
+    console.log('Payment verified successfully');
+    console.log(`Payer: ${verifyResponse.payer}`);
+    console.log(`All checks passed`);
 
     // Step 2: Settle the payment via CDP facilitator
-    console.log('\n📤 Step 2: Settling payment via CDP facilitator...');
-    console.log('   CDP will:');
-    console.log('   - Simulate the transaction');
-    console.log('   - Submit to Solana RPC');
-    console.log('   - Confirm the transaction');
-    console.log('   - Register with x402scan');
-    console.log('');
+    console.log('\n Step 2: Settling payment via CDP facilitator...');
+    console.log('CDP will:');
+    console.log('- Simulate the transaction');
+    console.log('- Submit to Solana RPC');
+    console.log('- Confirm the transaction');
+    console.log('- Register with x402scan');
     
     let settleResponse;
     try {
@@ -154,12 +151,12 @@ export async function POST(request: NextRequest) {
         paymentRequirements as PaymentRequirements
       );
     } catch (error: any) {
-      console.error('❌ Settlement failed:', error.message);
-      console.error('   Stack:', error.stack);
+      console.error('Settlement failed:', error.message);
+      console.error('Stack:', error.stack);
       return NextResponse.json(
         {
           success: false,
-          error: 'Payment settlement failed',
+          error:'Payment settlement failed',
           reason: error.message,
         },
         { status: 500 }
@@ -167,56 +164,51 @@ export async function POST(request: NextRequest) {
     }
 
     if (!settleResponse.success) {
-      console.error('❌ Payment settlement failed:', settleResponse.errorReason);
+      console.error('Payment settlement failed:', settleResponse.errorReason);
       return NextResponse.json(
         {
           success: false,
-          error: 'Payment settlement failed',
+          error:'Payment settlement failed',
           reason: settleResponse.errorReason,
         },
         { status: 400 }
       );
     }
 
-    console.log('✅ Payment settled successfully!');
-    console.log('');
-    console.log('📊 Settlement Result:');
-    console.log(`   Transaction: ${settleResponse.transaction}`);
-    console.log(`   Network: ${settleResponse.network}`);
-    console.log(`   Payer: ${settleResponse.payer}`);
-    console.log('');
-    console.log('🎉 SUCCESS!');
-    console.log('   ✅ Submitted via CDP facilitator');
-    console.log('   ✅ x402 compliant');
-    console.log('   ✅ Automatically registered with x402scan');
-    console.log('   ✅ Transaction confirmed on-chain');
-    console.log('');
+    console.log('Payment settled successfully!');
+    console.log('[x402] Settlement Result:');
+    console.log(`Transaction: ${settleResponse.transaction}`);
+    console.log(`Network: ${settleResponse.network}`);
+    console.log(`Payer: ${settleResponse.payer}`);
+    console.log("[SUCCESS]");
+    console.log('Submitted via CDP facilitator');
+    console.log('x402 compliant');
+    console.log('Automatically registered with x402scan');
+    console.log('Transaction confirmed on-chain');
 
-    const x402ScanUrl = `https://www.x402scan.com/tx/${settleResponse.transaction}?chain=solana`;
-    console.log(`🔍 View on x402scan: ${x402ScanUrl}`);
-    console.log('');
+    const x402ScanUrl =`https://www.x402scan.com/tx/${settleResponse.transaction}?chain=solana`;
+    console.log(`View on x402scan: ${x402ScanUrl}`);
 
     return NextResponse.json({
       success: true,
       x402Compliant: true,
       submittedViaFacilitator: true,
-      facilitator: 'CDP (Coinbase Developer Platform)',
+      facilitator:'CDP (Coinbase Developer Platform)',
       transaction: settleResponse.transaction,
       network: settleResponse.network,
       payer: settleResponse.payer,
       x402ScanUrl,
-      solanaExplorer: `https://explorer.solana.com/tx/${settleResponse.transaction}${
-        paymentRequirements.network === 'solana-devnet' ? '?cluster=devnet' : ''
-      }`,
+      solanaExplorer:`https://explorer.solana.com/tx/${settleResponse.transaction}${
+        paymentRequirements.network ==='solana-devnet'?'?cluster=devnet':''      }`,
     });
   } catch (error: any) {
-    console.error('\n❌ CDP facilitator submission error:', error);
-    console.error('   Message:', error.message);
-    console.error('   Stack:', error.stack);
+    console.error('\n CDP facilitator submission error:', error);
+    console.error('Message:', error.message);
+    console.error('Stack:', error.stack);
     return NextResponse.json(
       {
         success: false,
-        error: 'Facilitator submission failed',
+        error:'Facilitator submission failed',
         details: error.message,
       },
       { status: 500 }

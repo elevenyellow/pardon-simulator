@@ -8,7 +8,8 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class CreateThreadInput(
     val threadName: String,
-    val participantIds: List<String>
+    val participantIds: List<String>,
+    val threadId: String? = null
 )
 
 /**

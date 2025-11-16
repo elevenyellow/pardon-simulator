@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server';
-import { scoringRepository } from '@/lib/scoring/repository';
-import { getCurrentWeekId, formatWeekId } from '@/lib/utils/week';
+import { NextResponse } from'next/server';
+import { scoringRepository } from'@/lib/scoring/repository';
+import { getCurrentWeekId, formatWeekId } from'@/lib/utils/week';
 
 export async function GET() {
   try {
@@ -12,7 +12,7 @@ export async function GET() {
       username: session.user.username,
       walletAddress: session.user.walletAddress,
       score: session.currentScore,
-      prizeEligible: session.currentScore >= 80,
+      prizeEligible: session.currentScore >= 90,
     }));
     
     return NextResponse.json({
@@ -25,9 +25,9 @@ export async function GET() {
     });
     
   } catch (error: any) {
-    console.error('❌ Leaderboard error:', error);
+    console.error('Leaderboard error:', error);
     return NextResponse.json(
-      { error: 'Internal server error', message: error.message },
+      { error:'Internal server error', message: error.message },
       { status: 500 }
     );
   }

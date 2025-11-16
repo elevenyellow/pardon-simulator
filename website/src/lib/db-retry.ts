@@ -44,10 +44,10 @@ export async function withRetry<T>(
 
       // Log retry attempt
       console.warn(
-        `⚠️ Database operation failed (attempt ${attempt + 1}/${opts.maxRetries + 1}):`,
+`Database operation failed (attempt ${attempt + 1}/${opts.maxRetries + 1}):`,
         error.message || error
       );
-      console.warn(`   Retrying in ${delay}ms...`);
+      console.warn(`Retrying in ${delay}ms...`);
 
       // Wait before retrying
       await sleep(delay);
@@ -66,15 +66,15 @@ export async function withRetry<T>(
 function isRetryableError(error: any): boolean {
   if (!error) return false;
 
-  const errorMessage = error.message?.toLowerCase() || '';
+  const errorMessage = error.message?.toLowerCase() ||'';
   const errorCode = error.code;
 
   // Prisma error codes that are retryable
   const retryablePrismaCodes = [
-    'P1001', // Can't reach database server
-    'P1008', // Operations timed out
-    'P1017', // Server has closed the connection
-    'P2024', // Timed out fetching a new connection
+'P1001', // Can't reach database server
+'P1008', // Operations timed out
+'P1017', // Server has closed the connection
+'P2024', // Timed out fetching a new connection
   ];
 
   if (retryablePrismaCodes.includes(errorCode)) {
@@ -83,15 +83,15 @@ function isRetryableError(error: any): boolean {
 
   // Network-related errors
   const retryableMessages = [
-    'econnrefused',
-    'econnreset',
-    'etimedout',
-    'connection timeout',
-    'connection closed',
-    'server has closed',
-    "can't reach database",
-    'connection terminated',
-    'connection lost',
+'econnrefused',
+'econnreset',
+'etimedout',
+'connection timeout',
+'connection closed',
+'server has closed',
+"can't reach database",
+'connection terminated',
+'connection lost',
   ];
 
   return retryableMessages.some(msg => errorMessage.includes(msg));
@@ -112,7 +112,7 @@ export async function checkDatabaseHealth(prisma: any): Promise<boolean> {
     await prisma.$queryRaw`SELECT 1`;
     return true;
   } catch (error) {
-    console.error('❌ Database health check failed:', error);
+    console.error('Database health check failed:', error);
     return false;
   }
 }

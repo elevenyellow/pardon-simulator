@@ -1,17 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { Connection } from '@solana/web3.js';
+import { NextRequest, NextResponse } from'next/server';
+import { Connection } from'@solana/web3.js';
 
 // NOTE: This endpoint is for LEGACY flow (direct transaction submission).
 // x402-compliant payments are processed server-side by agents via CDP facilitator.
 // This endpoint remains for backward compatibility only.
 
-// ✅ Backend-only RPC URL (API key stays private, never exposed to browser)
-const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL || '';
+//  Backend-only RPC URL (API key stays private, never exposed to browser)
+const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL ||'';
 if (!SOLANA_RPC_URL) {
   throw new Error('SOLANA_RPC_URL environment variable is required. Get your Helius API key from https://www.helius.dev/');
 }
-
-console.log('🔐 Payment verification using PRIVATE Solana RPC (API key hidden)');
 
 /**
  * POST /api/payments/verify
@@ -25,20 +23,20 @@ export async function POST(request: NextRequest) {
 
     if (!signature || !expectedRecipient || !expectedAmount) {
       return NextResponse.json(
-        { error: 'Missing required fields: signature, expectedRecipient, expectedAmount' },
+        { error:'Missing required fields: signature, expectedRecipient, expectedAmount'},
         { status: 400 }
       );
     }
 
-    console.log('🔍 Verifying payment:');
-    console.log('  Signature:', signature);
-    console.log('  Expected recipient:', expectedRecipient);
-    console.log('  Expected amount:', expectedAmount, 'SOL');
+    console.log('Verifying payment:');
+    console.log('Signature:', signature);
+    console.log('Expected recipient:', expectedRecipient);
+    console.log('Expected amount:', expectedAmount,'SOL');
 
-    const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
+    const connection = new Connection(SOLANA_RPC_URL,'confirmed');
 
     // Wait for transaction confirmation (with retries)
-    console.log('⏳ Waiting for transaction confirmation...');
+    console.log('Waiting for transaction confirmation...');
     let tx = null;
     const maxAttempts = 30; // 30 attempts
     const delayMs = 1000; // 1 second between attempts
@@ -47,20 +45,20 @@ export async function POST(request: NextRequest) {
       try {
         tx = await connection.getTransaction(signature, {
           maxSupportedTransactionVersion: 0,
-          commitment: 'confirmed',
+          commitment:'confirmed',
         });
         
         if (tx) {
-          console.log(`✅ Transaction found after ${attempt} attempt(s)`);
+          console.log(`[verify] Transaction found after ${attempt} attempt(s)`);
           break;
         }
         
         if (attempt < maxAttempts) {
-          console.log(`⏳ Attempt ${attempt}/${maxAttempts}: Transaction not yet confirmed, waiting ${delayMs}ms...`);
+          console.log(`Attempt ${attempt}/${maxAttempts}: Transaction not yet confirmed, waiting ${delayMs}ms...`);
           await new Promise(resolve => setTimeout(resolve, delayMs));
         }
       } catch (error) {
-        console.error(`❌ Error fetching transaction (attempt ${attempt}):`, error);
+        console.error(`[verify] Error fetching transaction (attempt ${attempt}):`, error);
         if (attempt === maxAttempts) throw error;
         await new Promise(resolve => setTimeout(resolve, delayMs));
       }
@@ -70,9 +68,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { 
           valid: false, 
-          error: `Transaction not found after ${maxAttempts} seconds. Please check the signature and try again.`,
-          hint: 'The transaction may have failed or the signature may be incorrect.'
-        },
+          error:`Transaction not found after ${maxAttempts} seconds. Please check the signature and try again.`,
+          hint:'The transaction may have failed or the signature may be incorrect.'        },
         { status: 404 }
       );
     }
@@ -82,7 +79,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { 
           valid: false, 
-          error: 'Transaction failed on-chain',
+          error:'Transaction failed on-chain',
           details: tx.meta.err,
         },
         { status: 400 }
@@ -94,14 +91,14 @@ export async function POST(request: NextRequest) {
     const accountKeys = tx.transaction.message.getAccountKeys();
 
     let transferAmount = 0;
-    let fromAddress = '';
-    let toAddress = '';
+    let fromAddress ='';
+    let toAddress ='';
     let recipientFound = false;
 
     // Find balance changes
     for (let i = 0; i < preBalances.length; i++) {
       const balanceChange = postBalances[i] - preBalances[i];
-      const address = accountKeys.get(i)?.toString() || '';
+      const address = accountKeys.get(i)?.toString() ||'';
       
       if (balanceChange > 0) {
         // This account received SOL
@@ -120,8 +117,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { 
           valid: false, 
-          error: `Payment not sent to expected recipient ${expectedRecipient}` 
-        },
+          error:`Payment not sent to expected recipient ${expectedRecipient}`        },
         { status: 400 }
       );
     }
@@ -134,16 +130,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { 
           valid: false, 
-          error: `Wrong amount. Expected ${expectedAmount} SOL, got ${transferAmount} SOL` 
-        },
+          error:`Wrong amount. Expected ${expectedAmount} SOL, got ${transferAmount} SOL`        },
         { status: 400 }
       );
     }
 
-    console.log('✅ Payment verified successfully!');
-    console.log('  From:', fromAddress);
-    console.log('  To:', toAddress);
-    console.log('  Amount:', transferAmount, 'SOL');
+    console.log('Payment verified successfully!');
+    console.log('From:', fromAddress);
+    console.log('To:', toAddress);
+    console.log('Amount:', transferAmount,'SOL');
 
     return NextResponse.json({
       valid: true,
@@ -156,14 +151,13 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('❌ Payment verification error:', error);
+    console.error('Payment verification error:', error);
     // Security: Don't expose detailed error messages to clients
     return NextResponse.json(
       { 
         valid: false, 
-        error: 'Verification failed',
-        message: 'An error occurred during payment verification. Please try again.'
-      },
+        error:'Verification failed',
+        message:'An error occurred during payment verification. Please try again.'      },
       { status: 500 }
     );
   }

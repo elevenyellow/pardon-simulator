@@ -5,8 +5,8 @@
  * For production with multiple servers, consider Redis-backed solution.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { logRateLimitExceeded, getClientIP as getIP } from '@/lib/security/monitoring';
+import { NextRequest, NextResponse } from'next/server';
+import { logRateLimitExceeded, getClientIP as getIP } from'@/lib/security/monitoring';
 
 interface RateLimitEntry {
   requests: number[];
@@ -38,8 +38,7 @@ export function createRateLimiter(config: RateLimitConfig) {
     maxRequests,
     keyGenerator,
     skipSuccessfulRequests = false,
-    message = 'Too many requests, please try again later'
-  } = config;
+    message ='Too many requests, please try again later'  } = config;
 
   return async (
     req: NextRequest,
@@ -51,7 +50,7 @@ export function createRateLimiter(config: RateLimitConfig) {
     if (!key) {
       // If no key can be generated (e.g., no IP or wallet), allow the request
       // but log a warning
-      console.warn('⚠️ Rate limiting: Could not generate key for request');
+      console.warn('Rate limiting: Could not generate key for request');
       return handler(req);
     }
 
@@ -74,17 +73,17 @@ export function createRateLimiter(config: RateLimitConfig) {
 
       return NextResponse.json(
         { 
-          error: 'rate_limit_exceeded',
+          error:'rate_limit_exceeded',
           message,
           retryAfter 
         },
         { 
           status: 429,
           headers: {
-            'Retry-After': retryAfter.toString(),
-            'X-RateLimit-Limit': maxRequests.toString(),
-            'X-RateLimit-Remaining': '0',
-            'X-RateLimit-Reset': new Date(oldestRequest + windowMs).toISOString()
+'Retry-After': retryAfter.toString(),
+'X-RateLimit-Limit': maxRequests.toString(),
+'X-RateLimit-Remaining':'0',
+'X-RateLimit-Reset': new Date(oldestRequest + windowMs).toISOString()
           }
         }
       );
@@ -158,7 +157,7 @@ function getDefaultKey(req: NextRequest): string | null {
     return null;
   }
   
-  return `ip:${ip}:${path}`;
+  return`ip:${ip}:${path}`;
 }
 
 /**
@@ -178,7 +177,7 @@ function getClientIP(req: NextRequest): string | null {
 
   // Note: req.ip is not available in Edge runtime
   // For production, ensure your proxy/CDN sets x-forwarded-for
-  return 'unknown';
+  return'unknown';
 }
 
 /**
@@ -231,28 +230,25 @@ export function getWalletKey(req: NextRequest): string | null {
 export const strictRateLimiter = createRateLimiter({
   windowMs: 60 * 1000,      // 1 minute
   maxRequests: 10,           // 10 requests per minute
-  message: 'Too many requests to this endpoint. Please wait a moment.'
-});
+  message:'Too many requests to this endpoint. Please wait a moment.'});
 
 // Standard rate limit for general API endpoints
 export const standardRateLimiter = createRateLimiter({
   windowMs: 60 * 1000,      // 1 minute
   maxRequests: 30,           // 30 requests per minute
-  message: 'Too many requests. Please slow down.'
-});
+  message:'Too many requests. Please slow down.'});
 
 // Relaxed rate limit for read-only endpoints
 export const relaxedRateLimiter = createRateLimiter({
   windowMs: 60 * 1000,      // 1 minute
   maxRequests: 60,           // 60 requests per minute
-  message: 'Too many requests. Please try again shortly.'
-});
+  message:'Too many requests. Please try again shortly.'});
 
 // Very strict rate limit for payment/transaction endpoints
 export const paymentRateLimiter = createRateLimiter({
   windowMs: 5 * 60 * 1000,  // 5 minutes
   maxRequests: 5,            // 5 requests per 5 minutes
-  message: 'Payment rate limit exceeded. Please wait before submitting another transaction.',
+  message:'Payment rate limit exceeded. Please wait before submitting another transaction.',
   skipSuccessfulRequests: false
 });
 

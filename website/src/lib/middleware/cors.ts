@@ -5,7 +5,7 @@
  * This helps prevent CSRF attacks and unauthorized access from other origins.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from'next/server';
 
 interface CORSConfig {
   allowedOrigins?: string[];
@@ -19,23 +19,23 @@ interface CORSConfig {
 const defaultConfig: CORSConfig = {
   // In production, replace with your actual frontend domain(s)
   allowedOrigins: [
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'http://127.0.0.1:3000',
+'http://localhost:3000',
+'http://localhost:3001',
+'http://127.0.0.1:3000',
   ],
-  allowedMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedMethods: ['GET','POST','PUT','DELETE','OPTIONS','PATCH'],
   allowedHeaders: [
-    'Content-Type',
-    'Authorization',
-    'X-Requested-With',
-    'Accept',
-    'Origin',
+'Content-Type',
+'Authorization',
+'X-Requested-With',
+'Accept',
+'Origin',
   ],
   exposedHeaders: [
-    'X-RateLimit-Limit',
-    'X-RateLimit-Remaining',
-    'X-RateLimit-Reset',
-    'Retry-After',
+'X-RateLimit-Limit',
+'X-RateLimit-Remaining',
+'X-RateLimit-Reset',
+'Retry-After',
   ],
   credentials: true,
   maxAge: 86400, // 24 hours
@@ -59,27 +59,27 @@ export function applyCORSHeaders(
 
   // Set other CORS headers
   if (mergedConfig.credentials) {
-    response.headers.set('Access-Control-Allow-Credentials', 'true');
+    response.headers.set('Access-Control-Allow-Credentials','true');
   }
 
   if (mergedConfig.allowedMethods) {
     response.headers.set(
-      'Access-Control-Allow-Methods',
-      mergedConfig.allowedMethods.join(', ')
+'Access-Control-Allow-Methods',
+      mergedConfig.allowedMethods.join(',')
     );
   }
 
   if (mergedConfig.allowedHeaders) {
     response.headers.set(
-      'Access-Control-Allow-Headers',
-      mergedConfig.allowedHeaders.join(', ')
+'Access-Control-Allow-Headers',
+      mergedConfig.allowedHeaders.join(',')
     );
   }
 
   if (mergedConfig.exposedHeaders && mergedConfig.exposedHeaders.length > 0) {
     response.headers.set(
-      'Access-Control-Expose-Headers',
-      mergedConfig.exposedHeaders.join(', ')
+'Access-Control-Expose-Headers',
+      mergedConfig.exposedHeaders.join(',')
     );
   }
 
@@ -107,7 +107,7 @@ function isOriginAllowed(origin: string, allowedOrigins: string[]): boolean {
   // Check wildcard patterns (e.g., *.example.com)
   return allowedOrigins.some(allowed => {
     if (allowed.includes('*')) {
-      const pattern = allowed.replace(/\*/g, '.*');
+      const pattern = allowed.replace(/\*/g,'.*');
       const regex = new RegExp(`^${pattern}$`);
       return regex.test(origin);
     }
@@ -132,7 +132,7 @@ export function withCORS(
 ) {
   return async (req: NextRequest) => {
     // Handle preflight requests
-    if (req.method === 'OPTIONS') {
+    if (req.method ==='OPTIONS') {
       return handleCORSPreflight(req, config);
     }
 
@@ -148,22 +148,22 @@ export function withCORS(
 export const productionCORSConfig: CORSConfig = {
   // Replace with your actual production domain(s)
   allowedOrigins: [
-    'https://your-production-domain.com',
-    'https://www.your-production-domain.com',
+'https://your-production-domain.com',
+'https://www.your-production-domain.com',
     // Add staging domains if needed
   ],
-  allowedMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedMethods: ['GET','POST','PUT','DELETE','OPTIONS'],
   allowedHeaders: [
-    'Content-Type',
-    'Authorization',
-    'X-Requested-With',
-    'Accept',
-    'Origin',
+'Content-Type',
+'Authorization',
+'X-Requested-With',
+'Accept',
+'Origin',
   ],
   exposedHeaders: [
-    'X-RateLimit-Limit',
-    'X-RateLimit-Remaining',
-    'X-RateLimit-Reset',
+'X-RateLimit-Limit',
+'X-RateLimit-Remaining',
+'X-RateLimit-Reset',
   ],
   credentials: true,
   maxAge: 86400,
@@ -175,7 +175,7 @@ export const productionCORSConfig: CORSConfig = {
 export function getCORSConfig(): CORSConfig {
   const nodeEnv = process.env.NODE_ENV;
   
-  if (nodeEnv === 'production') {
+  if (nodeEnv ==='production') {
     // In production, use environment variable for allowed origins
     const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
     return {

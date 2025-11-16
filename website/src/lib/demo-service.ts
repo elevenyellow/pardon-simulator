@@ -54,7 +54,7 @@ const messageIndices: Record<string, number> = {};
 
 // Check if demo mode is enabled
 export function isDemoMode(): boolean {
-  return process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
+  return process.env.NEXT_PUBLIC_DEMO_MODE ==='true';
 }
 
 // Load demo script from JSON
@@ -71,7 +71,7 @@ export async function loadDemoScript(): Promise<DemoScript> {
       throw new Error('Failed to load demo script');
     }
     cachedScript = await response.json();
-    return cachedScript;
+    return cachedScript!;
   } catch (error) {
     console.error('Error loading demo script:', error);
     // Return empty script as fallback
@@ -117,16 +117,15 @@ export function createMockX402Payload(
 ): X402Payload {
   return {
     x402Version: 1,
-    scheme: 'exact',
-    network: 'solana',
+    scheme:'exact',
+    network:'solana',
     payment_id: paymentRequest.payment_id,
     from: userWallet,
     to: paymentRequest.recipient_address,
     amount: paymentRequest.amount_usdc,
-    currency: 'USDC',
+    currency:'USDC',
     timestamp: Date.now(),
-    message: `Payment for ${paymentRequest.reason}`
-  };
+    message:`Payment for ${paymentRequest.reason}`  };
 }
 
 // Mock payment submission with delay
@@ -145,15 +144,14 @@ export async function mockPaymentSubmission(signedPayload: any): Promise<{
   return {
     success: true,
     transaction: mockSignature,
-    x402ScanUrl: `https://www.x402scan.com/tx/${mockSignature}?chain=solana`,
-    solanaExplorer: `https://explorer.solana.com/tx/${mockSignature}`
-  };
+    x402ScanUrl:`https://www.x402scan.com/tx/${mockSignature}?chain=solana`,
+    solanaExplorer:`https://explorer.solana.com/tx/${mockSignature}`  };
 }
 
 // Generate realistic-looking Solana transaction signature
 function generateMockSignature(): string {
-  const chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-  let signature = '';
+  const chars ='123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+  let signature ='';
   for (let i = 0; i < 88; i++) {
     signature += chars.charAt(Math.floor(Math.random() * chars.length));
   }
@@ -199,8 +197,8 @@ function generateRandomScores(count: number, min: number, max: number): number[]
 
 // Generate fake but realistic-looking Solana address (44 characters, base58)
 function generateFakeSolanaAddress(): string {
-  const chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-  let address = '';
+  const chars ='123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+  let address ='';
   for (let i = 0; i < 44; i++) {
     address += chars.charAt(Math.floor(Math.random() * chars.length));
   }

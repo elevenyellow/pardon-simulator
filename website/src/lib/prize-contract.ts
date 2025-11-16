@@ -3,9 +3,9 @@
  * Interfaces with the Solana smart contract for distributing weekly prizes
  */
 
-import { Connection, PublicKey, SystemProgram } from '@solana/web3.js';
-import { Program, AnchorProvider, web3 } from '@coral-xyz/anchor';
-import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { Connection, PublicKey, SystemProgram } from'@solana/web3.js';
+import { Program, AnchorProvider, web3 } from'@coral-xyz/anchor';
+import { TOKEN_PROGRAM_ID } from'@solana/spl-token';
 
 // This will be populated after contract deployment
 const PRIZE_PROGRAM_ID = new PublicKey('Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS');
@@ -61,7 +61,7 @@ export async function initializePrizePool(
   //   })
   //   .rpc();
   
-  return 'placeholder-signature';
+  return'placeholder-signature';
 }
 
 /**
@@ -77,15 +77,14 @@ export async function distributePrizes(
   pardonMint: PublicKey
 ): Promise<PrizeDistributionResult> {
   try {
-    console.log(`🏆 Distributing prizes for ${weekId}`);
-    console.log(`   Winners: ${winners.length}`);
+    console.log(`Distributing prizes for ${weekId}`);
+    console.log(`Winners: ${winners.length}`);
     
     if (winners.length === 0) {
       return {
         success: true,
         winners: 0,
-        error: 'No winners to distribute prizes to'
-      };
+        error:'No winners to distribute prizes to'      };
     }
 
     // Validate winners
@@ -123,17 +122,17 @@ export async function distributePrizes(
     //   .signers([authorityKeypair])
     //   .rpc();
 
-    console.log(`✅ Prize distribution complete`);
+    console.log('[prize] Distribution complete');
 
     return {
       success: true,
-      signature: 'placeholder-signature',
+      signature:'placeholder-signature',
       winners: winners.length,
       totalDistributed: 10000, // Placeholder
     };
 
   } catch (error: any) {
-    console.error('❌ Prize distribution failed:', error);
+    console.error('Prize distribution failed:', error);
     return {
       success: false,
       error: error.message,

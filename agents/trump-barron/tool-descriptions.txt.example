@@ -1,0 +1,15 @@
+# Tool Descriptions for Agent
+
+## check_fortune_status
+Check fortune status and portfolio
+
+Returns: Agent's Portfolio: {balance} SOL | Wallet: {wallet_address} | Focus: [Agent-specific focus]
+
+## evaluate_deal
+Evaluate a deal or proposal using agent's analytical mindset
+
+Args:
+    offer_description: Description of the deal being proposed
+
+Returns: Analysis with thoughts on the proposal
+

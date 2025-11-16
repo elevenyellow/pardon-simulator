@@ -1,18 +1,19 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import dynamic from 'next/dynamic';
-import { useWallet } from '@solana/wallet-adapter-react';
-import AgentSelector from '@/components/AgentSelector';
-import ChatInterface from '@/components/ChatInterface';
+import { useState, useEffect, useRef, useCallback } from'react';
+import dynamic from'next/dynamic';
+import { useWallet } from'@solana/wallet-adapter-react';
+import AgentSelector from'@/components/AgentSelector';
+import ChatInterface from'@/components/ChatInterface';
+import'@/lib/console-filter';  // Suppress excessive wallet SDK and CSS logging
 
-// ✅ Fix hydration error: Load wallet button only on client-side
+//  Fix hydration error: Load wallet button only on client-side
 const WalletMultiButton = dynamic(
   async () => (await import('@solana/wallet-adapter-react-ui')).WalletMultiButton,
   { ssr: false }
 );
 
-type GameScreen = 'initial' | 'loading' | 'game';
+type GameScreen ='initial'|'loading'|'game';
 
 export default function Home() {
   const { publicKey, connected, disconnect } = useWallet();
@@ -38,7 +39,7 @@ export default function Home() {
 
   // Initialize audio on mount
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !=='undefined') {
       bgMusicRef.current = new Audio('/assets/main_title_song.mp3');
       bgMusicRef.current.loop = true;
       bgMusicRef.current.volume = 0.35;
@@ -132,7 +133,7 @@ export default function Home() {
   // Watch for wallet connection on initial screen to automatically proceed
   useEffect(() => {
     // If we're on initial screen and wallet just connected, proceed to game
-    if (currentScreen === 'initial' && connected) {
+    if (currentScreen ==='initial'&& connected) {
       // Small delay to ensure user sees connection success
       const timer = setTimeout(() => {
         startGameFlow();
@@ -172,31 +173,26 @@ export default function Home() {
   const MuteButton = () => (
     <button
       onClick={toggleMute}
-      className="fixed top-5 left-5 w-11 h-11 bg-black/60 border-2 border-white/30 rounded-md flex items-center justify-center transition-all hover:bg-black/80 hover:scale-105 active:scale-95 z-[10000]"
-      aria-label="Mute/Unmute"
-    >
-      <div className={`w-6 h-6 relative ${isMuted ? 'opacity-50' : ''}`}>
+      className="fixed top-5 left-5 w-11 h-11 bg-black/60 border-2 border-white/30 rounded-md flex items-center justify-center transition-all hover:bg-black/80 hover:scale-105 active:scale-95 z-[10000]"      aria-label="Mute/Unmute"    >
+      <div className={`w-6 h-6 relative ${isMuted ?'opacity-50':''}`}>
         {isMuted ? (
           <>
-            <div className="absolute inset-0 bg-gray-600" style={{
-              background: 'linear-gradient(to right, transparent 0%, transparent 12.5%, #666 12.5%, #666 87.5%, transparent 87.5%)',
-              backgroundSize: '100% 25%',
-              backgroundPosition: '0 37.5%',
-              backgroundRepeat: 'no-repeat'
-            }} />
-            <div className="absolute top-1/2 left-0 w-full h-0.5 bg-red-500 transform -translate-y-1/2 rotate-[-45deg]" />
+            <div className="absolute inset-0 bg-gray-600"style={{
+              background:'linear-gradient(to right, transparent 0%, transparent 12.5%, #666 12.5%, #666 87.5%, transparent 87.5%)',
+              backgroundSize:'100% 25%',
+              backgroundPosition:'0 37.5%',
+              backgroundRepeat:'no-repeat'            }} />
+            <div className="absolute top-1/2 left-0 w-full h-0.5 bg-red-500 transform -translate-y-1/2 rotate-[-45deg]"/>
           </>
         ) : (
-          <div className="w-full h-full" style={{
-            background: `
-              linear-gradient(to right, transparent 0%, transparent 12.5%, #ff6b6b 12.5%, #ff6b6b 87.5%, transparent 87.5%),
+          <div className="w-full h-full"style={{
+            background:`              linear-gradient(to right, transparent 0%, transparent 12.5%, #ff6b6b 12.5%, #ff6b6b 87.5%, transparent 87.5%),
               linear-gradient(to right, transparent 0%, transparent 25%, #ff6b6b 25%, #ff6b6b 75%, transparent 75%),
               linear-gradient(to right, transparent 0%, transparent 37.5%, #ff6b6b 37.5%, #ff6b6b 62.5%, transparent 62.5%)
-            `,
-            backgroundSize: '100% 25%, 100% 25%, 100% 50%',
-            backgroundPosition: '0 0, 0 25%, 0 50%',
-            backgroundRepeat: 'no-repeat'
-          }} />
+`,
+            backgroundSize:'100% 25%, 100% 25%, 100% 50%',
+            backgroundPosition:'0 0, 0 25%, 0 50%',
+            backgroundRepeat:'no-repeat'          }} />
         )}
       </div>
     </button>
@@ -206,86 +202,74 @@ export default function Home() {
   const LeaderboardButton = () => (
     <button
       onClick={() => setShowLeaderboard(true)}
-      className="fixed top-5 left-[75px] w-11 h-11 bg-black/60 border-2 border-white/30 rounded-md flex items-center justify-center transition-all hover:bg-black/80 hover:scale-105 active:scale-95 z-[10001]"
-      aria-label="Open Leaderboard"
-    >
-      <div className="w-6 h-6 relative" style={{
-        background: `
-          linear-gradient(to right, transparent 25%, #FFD700 25%, #FFD700 75%, transparent 75%),
+      className="fixed top-5 left-[75px] w-11 h-11 bg-black/60 border-2 border-white/30 rounded-md flex items-center justify-center transition-all hover:bg-black/80 hover:scale-105 active:scale-95 z-[10001]"      aria-label="Open Leaderboard"    >
+      <div className="w-6 h-6 relative"style={{
+        background:`          linear-gradient(to right, transparent 25%, #FFD700 25%, #FFD700 75%, transparent 75%),
           linear-gradient(to right, transparent 20%, #FFD700 20%, #FFD700 80%, transparent 80%),
           linear-gradient(to right, transparent 20%, #FFD700 20%, #FFD700 80%, transparent 80%),
           linear-gradient(to right, transparent 20%, #FFD700 20%, #FFD700 80%, transparent 80%),
           linear-gradient(to right, transparent 25%, #FFD700 25%, #FFD700 75%, transparent 75%),
           linear-gradient(to right, transparent 40%, #FFD700 40%, #FFD700 60%, transparent 60%),
           linear-gradient(to right, transparent 20%, #FFD700 20%, #FFD700 80%, transparent 80%)
-        `,
-        backgroundSize: '100% 12.5%, 100% 12.5%, 100% 12.5%, 100% 12.5%, 100% 12.5%, 100% 12.5%, 100% 12.5%',
-        backgroundPosition: '0 0, 0 12.5%, 0 25%, 0 37.5%, 0 50%, 0 62.5%, 0 75%',
-        backgroundRepeat: 'no-repeat'
-      }} />
+`,
+        backgroundSize:'100% 12.5%, 100% 12.5%, 100% 12.5%, 100% 12.5%, 100% 12.5%, 100% 12.5%, 100% 12.5%',
+        backgroundPosition:'0 0, 0 12.5%, 0 25%, 0 37.5%, 0 50%, 0 62.5%, 0 75%',
+        backgroundRepeat:'no-repeat'      }} />
     </button>
   );
 
   // Initial Screen
-  if (currentScreen === 'initial') {
+  if (currentScreen ==='initial') {
     return (
       <div className="relative min-h-screen overflow-hidden crt-effect vignette">
         <MuteButton />
         
         {/* Background */}
         <div 
-          className="fixed inset-0 bg-cover bg-center"
-          style={{ backgroundImage: "url('/assets/main_title_bg.png')" }}
+          className="fixed inset-0 bg-cover bg-center"          style={{ backgroundImage:"url('/assets/main_title_bg.png')"}}
         />
 
         {/* Scanlines */}
-        <div className="fixed inset-0 scanlines pointer-events-none" />
+        <div className="fixed inset-0 scanlines pointer-events-none"/>
 
         {/* Content Container */}
         <div className="relative z-10 flex flex-col items-center justify-between min-h-screen p-8 pb-5">
           {/* Logo */}
           <div className="flex-shrink-0 mt-8">
             <img 
-              src="/assets/logo.png" 
-              alt="Pardon Simulator" 
-              className="w-full max-w-[800px] h-auto pixel-art"
-              style={{
-                filter: 'drop-shadow(0 0 25px rgba(255, 255, 255, 0.9)) drop-shadow(0 0 50px rgba(102, 182, 128, 0.7)) drop-shadow(0 0 75px rgba(102, 182, 128, 0.5))'
-              }}
+              src="/assets/logo.png"              alt="Pardon Simulator"              className="w-full max-w-[800px] h-auto pixel-art"              style={{
+                filter:'drop-shadow(0 0 25px rgba(255, 255, 255, 0.9)) drop-shadow(0 0 50px rgba(102, 182, 128, 0.7)) drop-shadow(0 0 75px rgba(102, 182, 128, 0.5))'              }}
             />
           </div>
 
           {/* START Button - shows wallet connect when not connected */}
           <div className="flex-shrink-0">
-            <div className={!connected ? 'wallet-start-button' : ''}>
+            <div className={!connected ?'wallet-start-button':''}>
               {!connected ? (
                 <WalletMultiButton 
                   style={{
-                    padding: '16px 40px',
-                    fontFamily: "'Press Start 2P', monospace",
-                    fontSize: '14px',
-                    color: 'white',
-                    background: '#66b680',
-                    border: '3px solid #4a8c60',
-                    borderRadius: '0',
-                    textTransform: 'uppercase',
-                    letterSpacing: '2px',
-                    boxShadow: '0 6px 0 #3a6c48, 0 6px 16px rgba(0, 0, 0, 0.5), 0 0 16px rgba(102, 182, 128, 0.5), 0 0 32px rgba(102, 182, 128, 0.3)',
-                    textShadow: '2px 2px 0 #3a6c48, 0 0 10px rgba(102, 182, 128, 0.8)',
-                    imageRendering: 'pixelated',
-                    transition: 'all 0.1s ease'
-                  }}
+                    padding:'16px 40px',
+                    fontFamily:"'Press Start 2P', monospace",
+                    fontSize:'14px',
+                    color:'white',
+                    background:'#66b680',
+                    border:'3px solid #4a8c60',
+                    borderRadius:'0',
+                    textTransform:'uppercase',
+                    letterSpacing:'2px',
+                    boxShadow:'0 6px 0 #3a6c48, 0 6px 16px rgba(0, 0, 0, 0.5), 0 0 16px rgba(102, 182, 128, 0.5), 0 0 32px rgba(102, 182, 128, 0.3)',
+                    textShadow:'2px 2px 0 #3a6c48, 0 0 10px rgba(102, 182, 128, 0.8)',
+                    imageRendering:'pixelated',
+                    transition:'all 0.1s ease'                  }}
                 >
                   START
                 </WalletMultiButton>
               ) : (
                 <button
                   onClick={handleStartClick}
-                  className="px-10 py-4 font-pixel text-sm text-white bg-[#66b680] border-[3px] border-[#4a8c60] uppercase tracking-wider transition-all hover:bg-[#7ac694] active:translate-y-1 pixel-art"
-                  style={{
-                    boxShadow: '0 6px 0 #3a6c48, 0 6px 16px rgba(0, 0, 0, 0.5), 0 0 16px rgba(102, 182, 128, 0.5), 0 0 32px rgba(102, 182, 128, 0.3)',
-                    textShadow: '2px 2px 0 #3a6c48, 0 0 10px rgba(102, 182, 128, 0.8)'
-                  }}
+                  className="px-10 py-4 font-pixel text-sm text-white bg-[#66b680] border-[3px] border-[#4a8c60] uppercase tracking-wider transition-all hover:bg-[#7ac694] active:translate-y-1 pixel-art"                  style={{
+                    boxShadow:'0 6px 0 #3a6c48, 0 6px 16px rgba(0, 0, 0, 0.5), 0 0 16px rgba(102, 182, 128, 0.5), 0 0 32px rgba(102, 182, 128, 0.3)',
+                    textShadow:'2px 2px 0 #3a6c48, 0 0 10px rgba(102, 182, 128, 0.8)'                  }}
                 >
                   Start
                 </button>
@@ -297,11 +281,9 @@ export default function Home() {
           <div className="flex-shrink-1 min-h-0 w-full max-w-[75vw] flex flex-col items-center gap-4">
             {/* Rules Container */}
             <div 
-              className="w-full max-h-[30vh] overflow-y-auto p-8 bg-black/85 border-4 border-[#66b680] pixel-art"
-              style={{
-                boxShadow: '0 0 20px rgba(102, 182, 128, 0.5), 0 0 40px rgba(102, 182, 128, 0.3), inset 0 0 30px rgba(0, 0, 0, 0.5), 8px 8px 0 rgba(0, 0, 0, 0.3)',
-                background: 'repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.85) 0px, rgba(0, 0, 0, 0.85) 2px, rgba(0, 0, 0, 0.88) 2px, rgba(0, 0, 0, 0.88) 4px)'
-              }}
+              className="w-full max-h-[30vh] overflow-y-auto p-8 bg-black/85 border-4 border-[#66b680] pixel-art"              style={{
+                boxShadow:'0 0 20px rgba(102, 182, 128, 0.5), 0 0 40px rgba(102, 182, 128, 0.3), inset 0 0 30px rgba(0, 0, 0, 0.5), 8px 8px 0 rgba(0, 0, 0, 0.3)',
+                background:'repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.85) 0px, rgba(0, 0, 0, 0.85) 2px, rgba(0, 0, 0, 0.88) 2px, rgba(0, 0, 0, 0.88) 4px)'              }}
             >
               <p className="font-pixel text-xs leading-relaxed mb-2 text-white uppercase">
                 <strong className="text-[#66b680]">IT'S 2025. CRIME IS LEGAL.</strong>
@@ -346,31 +328,26 @@ export default function Home() {
   }
 
   // Loading Screen
-  if (currentScreen === 'loading') {
+  if (currentScreen ==='loading') {
     return (
       <div className="relative min-h-screen overflow-hidden bg-black crt-effect">
         <MuteButton />
         
         {/* Scanlines */}
-        <div className="fixed inset-0 scanlines pointer-events-none" />
+        <div className="fixed inset-0 scanlines pointer-events-none"/>
 
         {/* Content */}
         <div className="relative z-10 flex items-center justify-center min-h-screen pt-[10vh]">
           <div className="text-center max-w-[90%]">
             <div 
-              className="font-pixel text-[#FFD700] text-sm leading-[1.8] text-center mb-5"
-              style={{
-                textShadow: '0 0 10px #FFD700, 0 0 20px #FFD700, 0 0 30px #FFD700, 0 0 40px #FF8C00, 2px 2px 4px rgba(0, 0, 0, 0.8)',
-                animation: 'textFlicker 3s infinite alternate'
-              }}
+              className="font-pixel text-[#FFD700] text-sm leading-[1.8] text-center mb-5"              style={{
+                textShadow:'0 0 10px #FFD700, 0 0 20px #FFD700, 0 0 30px #FFD700, 0 0 40px #FF8C00, 2px 2px 4px rgba(0, 0, 0, 0.8)',
+                animation:'textFlicker 3s infinite alternate'              }}
             >
-              "FTX IS FINE, ASSETS ARE FINE. CLIENT ASSETS ARE FINE"
-            </div>
+"FTX IS FINE, ASSETS ARE FINE. CLIENT ASSETS ARE FINE"            </div>
             <div 
-              className="font-pixel text-[#FFD700] text-xs mt-8 text-center"
-              style={{
-                textShadow: '0 0 10px #FFD700, 0 0 20px #FFD700, 0 0 30px #FFD700, 2px 2px 4px rgba(0, 0, 0, 0.8)'
-              }}
+              className="font-pixel text-[#FFD700] text-xs mt-8 text-center"              style={{
+                textShadow:'0 0 10px #FFD700, 0 0 20px #FFD700, 0 0 30px #FFD700, 2px 2px 4px rgba(0, 0, 0, 0.8)'              }}
             >
               -SBF.
             </div>
@@ -380,10 +357,8 @@ export default function Home() {
         {/* Loader - Bottom Right */}
         <div className="fixed bottom-8 right-8 flex items-center gap-4 z-[1002]">
           <span 
-            className="font-pixel text-[#FFD700] text-sm"
-            style={{
-              textShadow: '0 0 10px #FFD700, 0 0 20px #FFD700, 0 0 30px #FF8C00'
-            }}
+            className="font-pixel text-[#FFD700] text-sm"            style={{
+              textShadow:'0 0 10px #FFD700, 0 0 20px #FFD700, 0 0 30px #FF8C00'            }}
           >
             LOADING
           </span>
@@ -391,12 +366,10 @@ export default function Home() {
             {[0, 1, 2].map((i) => (
               <span
                 key={i}
-                className="w-3 h-3 bg-[#FFD700] block pixel-art"
-                style={{
-                  animation: 'pixelBounce 1.4s infinite ease-in-out both',
-                  animationDelay: `${-0.32 + i * 0.16}s`,
-                  boxShadow: '0 0 10px #FFD700, 0 0 20px #FFD700, 0 0 30px #FF8C00'
-                }}
+                className="w-3 h-3 bg-[#FFD700] block pixel-art"                style={{
+                  animation:'pixelBounce 1.4s infinite ease-in-out both',
+                  animationDelay:`${-0.32 + i * 0.16}s`,
+                  boxShadow:'0 0 10px #FFD700, 0 0 20px #FFD700, 0 0 30px #FF8C00'                }}
               />
             ))}
           </div>
@@ -409,39 +382,32 @@ export default function Home() {
   return (
     <div className="relative min-h-screen overflow-hidden crt-effect vignette">
       <MuteButton />
-      {currentScreen === 'game' && <LeaderboardButton />}
+      {currentScreen ==='game'&& <LeaderboardButton />}
       
       {/* Background */}
       <div 
-        className="fixed inset-0 bg-cover bg-center"
-        style={{ backgroundImage: "url('/assets/jail_bg.png')" }}
+        className="fixed inset-0 bg-cover bg-center"        style={{ backgroundImage:"url('/assets/jail_bg.png')"}}
       />
 
       {/* Scanlines */}
-      <div className="fixed inset-0 scanlines pointer-events-none" />
+      <div className="fixed inset-0 scanlines pointer-events-none"/>
 
       {/* Game Layout */}
       <div className="relative z-10 min-h-screen flex flex-col items-center p-5 pt-[calc(20px+10vh)]">
         {/* Top Logo */}
         <div className="fixed top-5 left-1/2 transform -translate-x-1/2 z-[10000]">
           <img 
-            src="/assets/logo.png" 
-            alt="Logo" 
-            className="w-[200px] h-auto pixel-art"
-            style={{
-              filter: 'drop-shadow(0 0 10px rgba(102, 182, 128, 0.6)) drop-shadow(0 0 20px rgba(102, 182, 128, 0.4))'
-            }}
+            src="/assets/logo.png"            alt="Logo"            className="w-[200px] h-auto pixel-art"            style={{
+              filter:'drop-shadow(0 0 10px rgba(102, 182, 128, 0.6)) drop-shadow(0 0 20px rgba(102, 182, 128, 0.4))'            }}
           />
         </div>
 
         {/* Logout Button */}
         <button
           onClick={handleLogout}
-          className="fixed top-5 right-5 px-8 py-3 font-pixel text-[10px] text-white bg-[#ff6b6b] border-[3px] border-[#ff4444] uppercase tracking-wide transition-all hover:bg-[#ff8888] active:translate-y-0.5 z-[10000] pixel-art"
-          style={{
-            boxShadow: '0 4px 0 #cc0000, 0 4px 10px rgba(0, 0, 0, 0.5), 0 0 15px rgba(255, 107, 107, 0.4)',
-            textShadow: '1px 1px 0 #cc0000, 0 0 8px rgba(255, 107, 107, 0.8)'
-          }}
+          className="fixed top-5 right-5 px-8 py-3 font-pixel text-[10px] text-white bg-[#ff6b6b] border-[3px] border-[#ff4444] uppercase tracking-wide transition-all hover:bg-[#ff8888] active:translate-y-0.5 z-[10000] pixel-art"          style={{
+            boxShadow:'0 4px 0 #cc0000, 0 4px 10px rgba(0, 0, 0, 0.5), 0 0 15px rgba(255, 107, 107, 0.4)',
+            textShadow:'1px 1px 0 #cc0000, 0 0 8px rgba(255, 107, 107, 0.8)'          }}
         >
           Log Out
         </button>
@@ -449,16 +415,14 @@ export default function Home() {
         {!connected ? (
           /* Wallet Connect Screen */
           <div className="max-w-4xl mx-auto mt-20">
-            <div className="bg-black/85 border-4 border-[#66b680] p-12 text-center pixel-art"
-              style={{
-                boxShadow: '0 0 20px rgba(102, 182, 128, 0.5), 0 0 40px rgba(102, 182, 128, 0.3), inset 0 0 30px rgba(0, 0, 0, 0.5)'
-              }}
+            <div className="bg-black/85 border-4 border-[#66b680] p-12 text-center pixel-art"              style={{
+                boxShadow:'0 0 20px rgba(102, 182, 128, 0.5), 0 0 40px rgba(102, 182, 128, 0.3), inset 0 0 30px rgba(0, 0, 0, 0.5)'              }}
             >
               <h2 className="font-pixel text-[#FFD700] text-2xl mb-6">CONNECT WALLET</h2>
               <p className="font-pixel text-white text-[10px] mb-8 leading-relaxed uppercase">
                 Connect your Solana wallet to begin your mission
               </p>
-              <WalletMultiButton className="!font-pixel !text-sm" />
+              <WalletMultiButton className="!font-pixel !text-sm"/>
             </div>
           </div>
         ) : (
@@ -523,7 +487,7 @@ function LeaderboardOverlay({ onClose }: { onClose: () => void }) {
   // Handle ESC key
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key ==='Escape') onClose();
     };
     document.addEventListener('keydown', handleEsc);
     return () => document.removeEventListener('keydown', handleEsc);
@@ -545,41 +509,33 @@ function LeaderboardOverlay({ onClose }: { onClose: () => void }) {
 
   return (
     <div 
-      className="fixed inset-0 flex items-center justify-center p-5 z-[10002]"
-      style={{ 
-        backgroundImage: "url('/assets/jail_bg.png')",
-        backgroundSize: 'cover',
-        backgroundPosition: 'center'
-      }}
+      className="fixed inset-0 flex items-center justify-center p-5 z-[10002]"      style={{ 
+        backgroundImage:"url('/assets/jail_bg.png')",
+        backgroundSize:'cover',
+        backgroundPosition:'center'      }}
     >
       {/* Scanlines */}
-      <div className="absolute inset-0 scanlines pointer-events-none z-[100]" />
+      <div className="absolute inset-0 scanlines pointer-events-none z-[100]"/>
 
       {/* Container */}
       <div 
-        className="relative w-[90%] max-w-[1200px] h-[80vh] max-h-[800px] bg-black/85 border-4 border-[#66b680] p-8 flex flex-col pixel-art z-[101]"
-        style={{
-          boxShadow: '0 0 20px rgba(102, 182, 128, 0.5), 0 0 40px rgba(102, 182, 128, 0.3), inset 0 0 30px rgba(0, 0, 0, 0.5)'
-        }}
+        className="relative w-[90%] max-w-[1200px] h-[80vh] max-h-[800px] bg-black/85 border-4 border-[#66b680] p-8 flex flex-col pixel-art z-[101]"        style={{
+          boxShadow:'0 0 20px rgba(102, 182, 128, 0.5), 0 0 40px rgba(102, 182, 128, 0.3), inset 0 0 30px rgba(0, 0, 0, 0.5)'        }}
       >
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-8 right-8 px-6 py-3 font-pixel text-[10px] text-white bg-[#ff6b6b] border-[3px] border-[#ff4444] uppercase tracking-wide transition-all hover:bg-[#ff8888] active:translate-y-0.5 pixel-art"
-          style={{
-            boxShadow: '0 4px 0 #cc0000, 0 4px 10px rgba(0, 0, 0, 0.5), 0 0 15px rgba(255, 107, 107, 0.4)',
-            textShadow: '1px 1px 0 #cc0000, 0 0 8px rgba(255, 107, 107, 0.8)'
-          }}
+          className="absolute top-8 right-8 px-6 py-3 font-pixel text-[10px] text-white bg-[#ff6b6b] border-[3px] border-[#ff4444] uppercase tracking-wide transition-all hover:bg-[#ff8888] active:translate-y-0.5 pixel-art"          style={{
+            boxShadow:'0 4px 0 #cc0000, 0 4px 10px rgba(0, 0, 0, 0.5), 0 0 15px rgba(255, 107, 107, 0.4)',
+            textShadow:'1px 1px 0 #cc0000, 0 0 8px rgba(255, 107, 107, 0.8)'          }}
         >
           BACK
         </button>
 
         {/* Title */}
         <div 
-          className="font-pixel text-[#FFD700] text-2xl text-center mb-8"
-          style={{
-            textShadow: '0 0 10px #FFD700, 0 0 20px #FFD700, 0 0 30px #FF8C00, 2px 2px 4px rgba(0, 0, 0, 0.8)'
-          }}
+          className="font-pixel text-[#FFD700] text-2xl text-center mb-8"          style={{
+            textShadow:'0 0 10px #FFD700, 0 0 20px #FFD700, 0 0 30px #FF8C00, 2px 2px 4px rgba(0, 0, 0, 0.8)'          }}
         >
           LEADERBOARD
         </div>
@@ -594,16 +550,16 @@ function LeaderboardOverlay({ onClose }: { onClose: () => void }) {
             <table className="w-full border-collapse font-pixel text-[10px]">
               <thead className="sticky top-0 z-10">
                 <tr>
-                  <th className="bg-[#66b680] text-white p-4 text-left border-2 border-[#4a8c60] uppercase" style={{ textShadow: '2px 2px 0 #3a6c48' }}>
+                  <th className="bg-[#66b680] text-white p-4 text-left border-2 border-[#4a8c60] uppercase"style={{ textShadow:'2px 2px 0 #3a6c48'}}>
                     Position
                   </th>
-                  <th className="bg-[#66b680] text-white p-4 text-left border-2 border-[#4a8c60] uppercase" style={{ textShadow: '2px 2px 0 #3a6c48' }}>
+                  <th className="bg-[#66b680] text-white p-4 text-left border-2 border-[#4a8c60] uppercase"style={{ textShadow:'2px 2px 0 #3a6c48'}}>
                     Name
                   </th>
-                  <th className="bg-[#66b680] text-white p-4 text-left border-2 border-[#4a8c60] uppercase" style={{ textShadow: '2px 2px 0 #3a6c48' }}>
+                  <th className="bg-[#66b680] text-white p-4 text-left border-2 border-[#4a8c60] uppercase"style={{ textShadow:'2px 2px 0 #3a6c48'}}>
                     Wallet
                   </th>
-                  <th className="bg-[#66b680] text-white p-4 text-left border-2 border-[#4a8c60] uppercase" style={{ textShadow: '2px 2px 0 #3a6c48' }}>
+                  <th className="bg-[#66b680] text-white p-4 text-left border-2 border-[#4a8c60] uppercase"style={{ textShadow:'2px 2px 0 #3a6c48'}}>
                     Score
                   </th>
                 </tr>
@@ -612,23 +568,23 @@ function LeaderboardOverlay({ onClose }: { onClose: () => void }) {
                 {leaderboardData?.entries?.map((entry: any, index: number) => {
                   const isCurrentUser = entry.walletAddress === publicKey?.toString();
                   const rankClass = 
-                    entry.rank === 1 ? 'bg-[#FFD700]/10 border-[#FFD700]' :
-                    entry.rank === 2 ? 'bg-[#C0C0C0]/10 border-[#C0C0C0]' :
-                    entry.rank === 3 ? 'bg-[#CD7F32]/10 border-[#CD7F32]' :
-                    '';
+                    entry.rank === 1 ?'bg-[#FFD700]/10 border-[#FFD700]':
+                    entry.rank === 2 ?'bg-[#C0C0C0]/10 border-[#C0C0C0]':
+                    entry.rank === 3 ?'bg-[#CD7F32]/10 border-[#CD7F32]':
+'';
 
                   return (
                     <tr 
                       key={index}
-                      className={`border-b-2 border-[#66b680]/30 hover:bg-[#66b680]/20 transition-colors ${rankClass} ${isCurrentUser ? 'bg-blue-500/20' : 'bg-black/30'}`}
+                      className={`border-b-2 border-[#66b680]/30 hover:bg-[#66b680]/20 transition-colors ${rankClass} ${isCurrentUser ?'bg-blue-500/20':'bg-black/30'}`}
                     >
-                      <td className="p-4 text-center font-bold text-[#FFD700] border-2" style={{ textShadow: '0 0 5px #FFD700, 1px 1px 2px rgba(0, 0, 0, 0.8)' }}>
+                      <td className="p-4 text-center font-bold text-[#FFD700] border-2"style={{ textShadow:'0 0 5px #FFD700, 1px 1px 2px rgba(0, 0, 0, 0.8)'}}>
                         {entry.rank}
                       </td>
-                      <td className="p-4 text-white border-2" style={{ textShadow: '1px 1px 2px rgba(0, 0, 0, 0.8)' }}>
-                        {entry.username} {isCurrentUser && '(YOU)'}
+                      <td className="p-4 text-white border-2"style={{ textShadow:'1px 1px 2px rgba(0, 0, 0, 0.8)'}}>
+                        {entry.username} {isCurrentUser &&'(YOU)'}
                       </td>
-                      <td className="p-4 text-[#aaa] text-[8px] border-2" style={{ textShadow: '1px 1px 2px rgba(0, 0, 0, 0.8)' }}>
+                      <td className="p-4 text-[#aaa] text-[8px] border-2"style={{ textShadow:'1px 1px 2px rgba(0, 0, 0, 0.8)'}}>
                         {entry.walletAddress}
                       </td>
                       <td className="p-4 text-right text-[#66b680] font-bold border-2">

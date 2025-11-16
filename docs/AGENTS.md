@@ -192,4 +192,4 @@ Consider your resources:
 
 - **[AGENT_OVERVIEW.md](./AGENT_OVERVIEW.md)** - Detailed agent personalities and backgrounds
 - **[GAMEPLAY.md](./GAMEPLAY.md)** - How to interact with agents effectively
-- **[X402_PROTOCOL_COMPLIANCE.md](./X402_PROTOCOL_COMPLIANCE.md)** - Payment protocol overview
+- **[PAYMENTS.md](./PAYMENTS.md)** - Payment system overview

@@ -6,23 +6,23 @@
  */
 
 export enum SecurityEventType {
-  RATE_LIMIT_EXCEEDED = 'rate_limit_exceeded',
-  INVALID_INPUT = 'invalid_input',
-  INJECTION_ATTEMPT = 'injection_attempt',
-  AUTH_FAILURE = 'auth_failure',
-  SUSPICIOUS_ACTIVITY = 'suspicious_activity',
-  XSS_ATTEMPT = 'xss_attempt',
-  SQL_INJECTION_ATTEMPT = 'sql_injection_attempt',
-  CORS_VIOLATION = 'cors_violation',
-  INVALID_SIGNATURE = 'invalid_signature',
-  REPEATED_FAILURES = 'repeated_failures',
+  RATE_LIMIT_EXCEEDED ='rate_limit_exceeded',
+  INVALID_INPUT ='invalid_input',
+  INJECTION_ATTEMPT ='injection_attempt',
+  AUTH_FAILURE ='auth_failure',
+  SUSPICIOUS_ACTIVITY ='suspicious_activity',
+  XSS_ATTEMPT ='xss_attempt',
+  SQL_INJECTION_ATTEMPT ='sql_injection_attempt',
+  CORS_VIOLATION ='cors_violation',
+  INVALID_SIGNATURE ='invalid_signature',
+  REPEATED_FAILURES ='repeated_failures',
 }
 
 export enum SecurityLevel {
-  LOW = 'low',
-  MEDIUM = 'medium',
-  HIGH = 'high',
-  CRITICAL = 'critical',
+  LOW ='low',
+  MEDIUM ='medium',
+  HIGH ='high',
+  CRITICAL ='critical',
 }
 
 interface SecurityEvent {
@@ -41,7 +41,7 @@ interface SecurityEvent {
 /**
  * Log security event
  */
-export function logSecurityEvent(event: Omit<SecurityEvent, 'timestamp'>): void {
+export function logSecurityEvent(event: Omit<SecurityEvent,'timestamp'>): void {
   const fullEvent: SecurityEvent = {
     ...event,
     timestamp: new Date().toISOString(),
@@ -49,7 +49,7 @@ export function logSecurityEvent(event: Omit<SecurityEvent, 'timestamp'>): void 
 
   // Format log message
   const logPrefix = getLogPrefix(event.level);
-  const logMessage = `${logPrefix} [${event.type.toUpperCase()}] ${event.message}`;
+  const logMessage =`${logPrefix} [${event.type.toUpperCase()}] ${event.message}`;
 
   // Console logging (in production, send to logging service)
   console.warn(logMessage, {
@@ -59,7 +59,7 @@ export function logSecurityEvent(event: Omit<SecurityEvent, 'timestamp'>): void 
   });
 
   // In production, send to monitoring service
-  if (process.env.NODE_ENV === 'production') {
+  if (process.env.NODE_ENV ==='production') {
     sendToMonitoringService(fullEvent);
   }
 
@@ -77,15 +77,15 @@ export function logSecurityEvent(event: Omit<SecurityEvent, 'timestamp'>): void 
 function getLogPrefix(level: SecurityLevel): string {
   switch (level) {
     case SecurityLevel.LOW:
-      return '🟡';
+      return'[LOW]';
     case SecurityLevel.MEDIUM:
-      return '🟠';
+      return'[MEDIUM]';
     case SecurityLevel.HIGH:
-      return '🔴';
+      return'[HIGH]';
     case SecurityLevel.CRITICAL:
-      return '🚨';
+      return'[CRITICAL]';
     default:
-      return '⚠️';
+      return'[WARNING]';
   }
 }
 
@@ -105,8 +105,8 @@ function shouldStoreInDatabase(level: SecurityLevel): boolean {
 async function storeSecurityEvent(event: SecurityEvent): Promise<void> {
   // TODO: Implement database storage
   // For now, just log that we would store it
-  if (process.env.NODE_ENV === 'development') {
-    console.log('📝 Would store security event in database:', event.type);
+  if (process.env.NODE_ENV ==='development') {
+    console.log('Would store security event in database:', event.type);
   }
 }
 
@@ -118,8 +118,8 @@ function sendToMonitoringService(event: SecurityEvent): void {
   // Examples: Datadog, New Relic, Sentry, etc.
   if (process.env.MONITORING_WEBHOOK_URL) {
     fetch(process.env.MONITORING_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method:'POST',
+      headers: {'Content-Type':'application/json'},
       body: JSON.stringify(event),
     }).catch(err => {
       console.error('Failed to send to monitoring service:', err);
@@ -139,7 +139,7 @@ export function logRateLimitExceeded(
   logSecurityEvent({
     type: SecurityEventType.RATE_LIMIT_EXCEEDED,
     level: attempts > 100 ? SecurityLevel.HIGH : SecurityLevel.MEDIUM,
-    message: `Rate limit exceeded from IP ${ip}`,
+    message:`Rate limit exceeded from IP ${ip}`,
     ip,
     endpoint,
     details: { attempts },
@@ -155,7 +155,7 @@ export function logInjectionAttempt(
   logSecurityEvent({
     type: SecurityEventType.INJECTION_ATTEMPT,
     level: SecurityLevel.HIGH,
-    message: `Potential injection attempt detected`,
+    message:`Potential injection attempt detected`,
     ip,
     endpoint,
     details: {
@@ -173,7 +173,7 @@ export function logXSSAttempt(
   logSecurityEvent({
     type: SecurityEventType.XSS_ATTEMPT,
     level: SecurityLevel.HIGH,
-    message: `Potential XSS attempt detected`,
+    message:`Potential XSS attempt detected`,
     ip,
     endpoint,
     details: {
@@ -191,7 +191,7 @@ export function logAuthFailure(
   logSecurityEvent({
     type: SecurityEventType.AUTH_FAILURE,
     level: SecurityLevel.MEDIUM,
-    message: `Authentication failure: ${reason}`,
+    message:`Authentication failure: ${reason}`,
     ip,
     endpoint,
     walletAddress,
@@ -207,7 +207,7 @@ export function logInvalidSignature(
   logSecurityEvent({
     type: SecurityEventType.INVALID_SIGNATURE,
     level: SecurityLevel.MEDIUM,
-    message: `Invalid transaction signature provided`,
+    message:`Invalid transaction signature provided`,
     ip,
     endpoint,
     walletAddress,
@@ -223,7 +223,7 @@ export function logSuspiciousActivity(
   logSecurityEvent({
     type: SecurityEventType.SUSPICIOUS_ACTIVITY,
     level: SecurityLevel.MEDIUM,
-    message: `Suspicious activity: ${description}`,
+    message:`Suspicious activity: ${description}`,
     ip,
     endpoint,
     details,
@@ -238,7 +238,7 @@ export function logCORSViolation(
   logSecurityEvent({
     type: SecurityEventType.CORS_VIOLATION,
     level: SecurityLevel.LOW,
-    message: `CORS violation from origin ${origin}`,
+    message:`CORS violation from origin ${origin}`,
     ip,
     endpoint,
     details: { origin },
@@ -264,7 +264,7 @@ export function getClientIP(headers: Headers): string {
     return cfConnectingIP;
   }
 
-  return 'unknown';
+  return'unknown';
 }
 
 /**
@@ -292,7 +292,7 @@ export function updateThreatScore(
       logSecurityEvent({
         type: SecurityEventType.REPEATED_FAILURES,
         level: SecurityLevel.CRITICAL,
-        message: `High threat score detected for ${identifier}`,
+        message:`High threat score detected for ${identifier}`,
         details: { identifier, threatScore: newScore },
       });
     }

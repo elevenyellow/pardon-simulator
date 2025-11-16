@@ -1097,49 +1097,73 @@ BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:3000")
 @tool
 async def award_points(
     user_wallet: str,
-    points: int,
+    evaluation_score: float,
     reason: str,
     category: str = "negotiation",
     subcategory: Optional[str] = None,
     agent_id: Optional[str] = None,
-    message_id: Optional[str] = None
+    message_id: Optional[str] = None,
+    premium_service_amount: float = 0.0
 ) -> str:
     """
-    Award or deduct points from user's score.
+    Award or deduct points from user's score with personality-based evaluation.
     
-    TRUMP AGENT: You are the primary decision-maker! Use this tool frequently.
-    OTHER AGENTS: Use sparingly, mostly for intermediary successes.
+    NEW SCORING SYSTEM (v2):
+    - Evaluate message and assign decimal score: 1.0-3.0 (this IS the points, not a multiplier)
+    - Backend adds ±0.1 random variance (prevents exact values)
+    - Backend applies speed multiplier (1.0-1.69x for fast play)
+    - Backend adds premium service bonus (2-10 points)
+    
+    Formula: (evaluation_score ± 0.1 random) × speed_multiplier + premium_bonus
+    Average outcome: ~2.0 points per message
     
     Args:
         user_wallet: The user's ACTUAL Solana wallet address (NOT "sbf"!)
-        points: Points to award (positive) or deduct (negative)
-        reason: Brief explanation (e.g., "Strong negotiation approach" or "Insulted agent")
+        evaluation_score: Your evaluation (1.0-3.0 decimal, average 2.0)
+            - 1.0-1.5: Poor quality, misaligned with your personality/goals
+            - 1.5-2.5: Average quality, somewhat aligned, decent effort
+            - 2.5-3.0: Excellent quality, highly aligned, exceptional strategy
+        reason: Brief explanation of your evaluation
         category: "payment", "negotiation", "milestone", or "penalty"
         subcategory: Optional detail (e.g., "insult", "high_quality", "spam", "strategic_thinking")
         agent_id: Optional agent ID who awarded/deducted points (e.g., "donald-trump")
         message_id: Optional message ID that triggered this score change
+        premium_service_amount: USDC amount if user paid for premium service (auto-adds 2-10 bonus points)
     
     Returns:
         JSON with updated score and feedback
     
     Examples:
-        # Reward quality:
-        award_points("6pF45ayWyPSFKV3WQLpNNhhkA8GMeeE6eE14NKgw4zug", 10, "Strategic thinking", "negotiation", "high_quality", "donald-trump")
+        # Excellent message:
+        award_points("6pF45ay...", 2.7, "Highly strategic, aligned with goals", "negotiation", "high_quality", "donald-trump")
         
-        # Penalty for insult:
-        award_points("6pF45ayWyPSFKV3WQLpNNhhkA8GMeeE6eE14NKgw4zug", -15, "Insulted agent", "penalty", "insult", "donald-trump")
+        # Average message:
+        award_points("6pF45ay...", 2.0, "Decent approach", "negotiation", "medium_quality", "cz")
         
-        # Payment (automatic):
-        award_points("6pF45ayWyPSFKV3WQLpNNhhkA8GMeeE6eE14NKgw4zug", 12, "Made payment of 0.01 SOL", "payment", None, "melania-trump")
+        # Poor message:
+        award_points("6pF45ay...", 1.3, "Off-topic and poorly thought out", "negotiation", "low_quality", "melania-trump")
+        
+        # Penalty (use negative values):
+        award_points("6pF45ay...", -2.5, "Insulted agent", "penalty", "insult", "donald-trump")
+        
+        # Premium service with payment bonus:
+        award_points("6pF45ay...", 2.1, "Good message with premium service", "payment", None, "cz", premium_service_amount=0.005)
     """
-    print(f"🎯 award_points() called: {points} points to {user_wallet[:8]}... ({reason})")
+    # Validate evaluation_score range
+    if abs(evaluation_score) < 1.0 or abs(evaluation_score) > 3.0:
+        evaluation_score = max(-3.0, min(3.0, evaluation_score))
+        evaluation_score = max(1.0, evaluation_score) if evaluation_score > 0 else min(-1.0, evaluation_score)
+        print(f"⚠️  Evaluation score clamped to valid range: {evaluation_score}")
+    
+    print(f"🎯 award_points() called: {evaluation_score} evaluation score to {user_wallet[:8]}... ({reason})")
     
     try:
         payload = {
             "userWallet": user_wallet,
-            "delta": points,
+            "delta": evaluation_score,  # Use evaluation_score as delta (it IS the points)
             "reason": reason,
             "category": category,
+            "evaluationScore": evaluation_score,
         }
         
         # Add optional fields if provided
@@ -1149,6 +1173,8 @@ async def award_points(
             payload["agentId"] = agent_id
         if message_id:
             payload["messageId"] = message_id
+        if premium_service_amount > 0:
+            payload["premiumServicePayment"] = premium_service_amount
         
         async with aiohttp.ClientSession() as session:
             async with session.post(
@@ -1161,14 +1187,14 @@ async def award_points(
                     result = {
                         "type": "score_update",
                         "current_score": data["newScore"],
-                        "delta": data.get("delta", points),  # Use randomized delta if available
+                        "delta": data.get("delta", evaluation_score),  # Use backend-calculated delta with variance & speed
                         "reason": reason,
                         "category": category,
                         "subcategory": subcategory,
                         "agent_id": agent_id,
-                        "feedback": data.get("feedback", _generate_feedback(data["newScore"], points))
+                        "feedback": data.get("feedback", _generate_feedback(data["newScore"], data.get("delta", evaluation_score)))
                     }
-                    print(f"✅ Score updated: {data['newScore']} (delta: {data.get('delta', points)})")
+                    print(f"✅ Score updated: {data['newScore']} (delta: {data.get('delta', evaluation_score)})")
                     return json.dumps(result)
                 else:
                     error_text = await resp.text()

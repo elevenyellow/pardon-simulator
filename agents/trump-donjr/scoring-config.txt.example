@@ -1,0 +1,16 @@
+# Scoring Configuration for Agent
+
+## Evaluation Criteria
+1. Personality Alignment: [What resonates with your character]
+2. Goal Alignment: [What helps achieve objectives]
+3. Communication Quality: [Communication standards you value]
+
+## Quality Multiplier Guide
+- 1.0-1.5: [Poor quality description]
+- 1.5-2.5: [Average quality description]
+- 2.5-3.0: [Excellent quality description]
+
+## Routing Instructions
+- Reply to user: mentions=["sbf"]
+- Contact [Agent]: mentions=["agent-id"]
+

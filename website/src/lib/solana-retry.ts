@@ -2,7 +2,7 @@
  * Solana RPC retry utility for handling network failures
  */
 
-import { Connection, PublicKey, ConnectionConfig } from '@solana/web3.js';
+import { Connection, PublicKey, ConnectionConfig } from'@solana/web3.js';
 
 export interface SolanaRetryOptions {
   maxRetries?: number;
@@ -19,13 +19,13 @@ const DEFAULT_OPTIONS: Required<SolanaRetryOptions> = {
 /**
  * Create a Connection with improved error handling
  */
-export function createRobustConnection(rpcUrl: string, commitment: ConnectionConfig['commitment'] = 'confirmed'): Connection {
+export function createRobustConnection(rpcUrl: string, commitment: ConnectionConfig['commitment'] ='confirmed'): Connection {
   return new Connection(rpcUrl, {
     commitment,
     confirmTransactionInitialTimeout: 60000,
     disableRetryOnRateLimit: false,
     httpHeaders: {
-      'Content-Type': 'application/json',
+'Content-Type':'application/json',
     },
   });
 }
@@ -62,10 +62,10 @@ export async function withSolanaRetry<T>(
       }
 
       console.warn(
-        `⚠️ Solana RPC call failed (attempt ${attempt + 1}/${opts.maxRetries + 1}):`,
+`Solana RPC call failed (attempt ${attempt + 1}/${opts.maxRetries + 1}):`,
         error.message || error
       );
-      console.warn(`   Retrying in ${delay}ms...`);
+      console.warn(`Retrying in ${delay}ms...`);
 
       await sleep(delay);
       delay = Math.min(delay * 2, 5000);
@@ -81,22 +81,22 @@ export async function withSolanaRetry<T>(
 function isRetryableSolanaError(error: any): boolean {
   if (!error) return false;
 
-  const errorMessage = error.message?.toLowerCase() || '';
+  const errorMessage = error.message?.toLowerCase() ||'';
 
   // Network-related errors that are retryable
   const retryableMessages = [
-    'timeout',
-    'fetch failed',
-    'network',
-    'econnrefused',
-    'econnreset',
-    'etimedout',
-    'socket hang up',
-    'rate limit',
-    'too many requests',
-    '429',
-    '503',
-    '504',
+'timeout',
+'fetch failed',
+'network',
+'econnrefused',
+'econnreset',
+'etimedout',
+'socket hang up',
+'rate limit',
+'too many requests',
+'429',
+'503',
+'504',
   ];
 
   return retryableMessages.some(msg => errorMessage.includes(msg));
@@ -134,7 +134,7 @@ export async function checkSolanaHealth(connection: Connection): Promise<boolean
     );
     return true;
   } catch (error) {
-    console.error('❌ Solana RPC health check failed:', error);
+    console.error('Solana RPC health check failed:', error);
     return false;
   }
 }

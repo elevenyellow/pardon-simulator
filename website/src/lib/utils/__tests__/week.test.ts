@@ -11,7 +11,7 @@ import {
   getWeekEndDate,
   isCurrentWeek,
   formatWeekId,
-} from '../week';
+} from'../week';
 
 describe('Week Utilities', () => {
   describe('parseWeekId', () => {
@@ -92,7 +92,7 @@ describe('Week Utilities', () => {
     });
 
     it('should be 6 days after start date', () => {
-      const weekId = '2024-W10';
+      const weekId ='2024-W10';
       const startDate = getWeekStartDate(weekId);
       const endDate = getWeekEndDate(weekId);
       

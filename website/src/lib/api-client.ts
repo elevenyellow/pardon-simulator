@@ -20,8 +20,8 @@ export interface SendMessageResponse {
 }
 
 export interface PaymentRequest {
-  type: 'x402_payment_required';
-  http_status: 402;  // ✅ HTTP 402 Payment Required (x402 protocol)
+  type:'x402_payment_required';
+  http_status: 402;  //  HTTP 402 Payment Required (x402 protocol)
   recipient: string;
   recipient_address: string;
   amount_sol: number;
@@ -74,7 +74,7 @@ class APIClient {
   private baseUrl: string;
 
   constructor() {
-    this.baseUrl = '/api';
+    this.baseUrl ='/api';
   }
 
   /**
@@ -82,8 +82,8 @@ class APIClient {
    */
   async createSession(): Promise<CreateSessionResponse> {
     const response = await fetch(`${this.baseUrl}/chat/session`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method:'POST',
+      headers: {'Content-Type':'application/json'},
     });
 
     if (!response.ok) {
@@ -98,8 +98,8 @@ class APIClient {
    */
   async createThread(sessionId: string, agentId: string): Promise<CreateThreadResponse> {
     const response = await fetch(`${this.baseUrl}/chat/thread`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method:'POST',
+      headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ sessionId, agentId }),
     });
 
@@ -115,45 +115,62 @@ class APIClient {
    * Returns 402 if payment required
    */
   async sendMessage(request: SendMessageRequest): Promise<SendMessageResponse> {
-    console.log('📤 API Client: Sending message to', request.agentId);
+    console.log('API Client: Sending message to', request.agentId);
     
     const response = await fetch(`${this.baseUrl}/chat/send`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method:'POST',
+      headers: {'Content-Type':'application/json'},
       body: JSON.stringify(request),
     });
 
-    console.log('📥 API Client: Response status:', response.status);
+    console.log('API Client: Response status:', response.status);
 
     const data = await response.json();
 
     // Check for HTTP 402 Payment Required (x402 protocol)
     if (response.status === 402) {
-      console.log('💰💰💰 HTTP 402 PAYMENT REQUIRED DETECTED! 💰💰💰');
-      console.log('📋 x402 Headers:', {
-        'WWW-Authenticate': response.headers.get('WWW-Authenticate'),
-        'X-Payment-Address': response.headers.get('X-Payment-Address'),
-        'X-Payment-Amount': response.headers.get('X-Payment-Amount'),
-        'X-Payment-Currency': response.headers.get('X-Payment-Currency'),
-        'X-Payment-Blockchain': response.headers.get('X-Payment-Blockchain'),
-        'X-Payment-Network': response.headers.get('X-Payment-Network'),
-        'X-Payment-Id': response.headers.get('X-Payment-Id'),
+      console.log('[x402] HTTP 402 Payment Required detected');
+      console.log('x402 Headers:', {
+'WWW-Authenticate': response.headers.get('WWW-Authenticate'),
+'X-Payment-Address': response.headers.get('X-Payment-Address'),
+'X-Payment-Amount': response.headers.get('X-Payment-Amount'),
+'X-Payment-Currency': response.headers.get('X-Payment-Currency'),
+'X-Payment-Blockchain': response.headers.get('X-Payment-Blockchain'),
+'X-Payment-Network': response.headers.get('X-Payment-Network'),
+'X-Payment-Id': response.headers.get('X-Payment-Id'),
       });
-      console.log('💰 Payment details:', data.payment);
+      console.log('Payment details:', data.payment);
+      
+      // Backend sends PaymentRequest with: recipient_address, amount_usdc/amount_sol, payment_id, service_type
+      const backendPayment = data.payment;
+      const paymentRequest: PaymentRequest = {
+        type: backendPayment.type || 'x402_payment_required',
+        http_status: 402,
+        recipient: backendPayment.recipient || 'treasury',
+        recipient_address: backendPayment.recipient_address,
+        amount_sol: backendPayment.amount_sol || 0,
+        amount_usdc: backendPayment.amount_usdc || 0,
+        reason: backendPayment.reason || 'Premium service',
+        service_type: backendPayment.service_type || 'premium_service',
+        payment_id: backendPayment.payment_id,
+        blockchain: 'solana',
+        network: 'mainnet-beta',
+        timestamp: backendPayment.timestamp || Date.now(),
+      };
       
       return {
         success: false,
-        messages: [],
-        paymentRequired: data.payment,
+        messages: data.messages || [],
+        paymentRequired: paymentRequest,
         error: 'payment_required',
       };
     }
 
-    console.log('✅ Normal response (200 OK)');
+    console.log('Normal response (200 OK)');
 
     if (!response.ok) {
-      console.error('❌ Error response:', response.status, data);
-      throw new Error(data.error || `Failed to send message: ${response.statusText}`);
+      console.error('Error response:', response.status, data);
+      throw new Error(data.error ||`Failed to send message: ${response.statusText}`);
     }
 
     return {
@@ -167,10 +184,17 @@ class APIClient {
    */
   async getMessages(sessionId: string, threadId: string): Promise<CoralMessage[]> {
     const response = await fetch(
-      `${this.baseUrl}/chat/messages?sessionId=${sessionId}&threadId=${threadId}`
-    );
+`${this.baseUrl}/chat/messages?sessionId=${sessionId}&threadId=${threadId}`    );
 
     if (!response.ok) {
+      // 410 Gone = session no longer exists (server restart)
+      if (response.status === 410) {
+        const data = await response.json();
+        const error: any = new Error(data.message || 'Session no longer exists');
+        error.code = 'SESSION_NOT_FOUND';
+        error.status = 410;
+        throw error;
+      }
       throw new Error(`Failed to get messages: ${response.statusText}`);
     }
 
@@ -183,8 +207,8 @@ class APIClient {
    */
   async verifyPayment(request: VerifyPaymentRequest): Promise<VerifyPaymentResponse> {
     const response = await fetch(`${this.baseUrl}/payments/verify`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method:'POST',
+      headers: {'Content-Type':'application/json'},
       body: JSON.stringify(request),
     });
 

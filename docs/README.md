@@ -27,8 +27,8 @@ Understand how the system works:
 
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)** - System architecture and component overview
 - **[AGENTS.md](./AGENTS.md)** - Agent technology and capabilities
-- **[X402_PAYMENT_ARCHITECTURE.md](./X402_PAYMENT_ARCHITECTURE.md)** - Complete HTTP 402 payment protocol implementation
-- **[X402_PROTOCOL_COMPLIANCE.md](./X402_PROTOCOL_COMPLIANCE.md)** - Protocol compliance overview (deprecated - see X402_PAYMENT_ARCHITECTURE.md)
+- **[PAYMENTS.md](./PAYMENTS.md)** - Payment system and x402 protocol implementation
+- **[CORAL_SERVER.md](./CORAL_SERVER.md)** - Coral Server orchestration
 
 ### 🔒 Security & Deployment
 
@@ -36,8 +36,6 @@ Deploy and secure your instance:
 
 - **[SECURITY.md](./SECURITY.md)** - Security best practices
 - **[DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)** - Production deployment guide
-- **[CDP_SETUP.md](./CDP_SETUP.md)** - CDP SDK integration
-- **[CDP_CREDENTIALS.md](./CDP_CREDENTIALS.md)** - CDP API credentials setup and verification
 
 ---
 

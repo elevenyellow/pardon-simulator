@@ -16,7 +16,7 @@
     "db:merge-sessions": "node merge-duplicate-sessions.js"
   },
   "dependencies": {
-    "@coinbase/cdp-sdk": "latest",
+    "@coinbase/cdp-sdk": "^1.38.5",
     "@coinbase/x402": "^0.7.1",
     "@coral-xyz/anchor": "^0.32.1",
     "@prisma/client": "^6.19.0",
@@ -27,9 +27,11 @@
     "@solana/wallet-adapter-wallets": "^0.19.32",
     "@solana/web3.js": "^1.95.8",
     "lucide-react": "^0.468.0",
-    "next": "^14.2.33",
+    "next": "^15.0.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "x402": "latest",
+    "x402-next": "latest"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.6.3",

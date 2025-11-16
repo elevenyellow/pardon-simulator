@@ -89,7 +89,8 @@ fun Routing.debugApiRoutes(localSessionManager: LocalSessionManager) {
             val thread = session.createThread(
                 name = request.threadName,
                 creatorId = debugRequest.debugAgentId,
-                participantIds = request.participantIds
+                participantIds = request.participantIds,
+                threadId = request.threadId
             )
 
             call.respond(thread.resolve())
@@ -191,10 +192,10 @@ fun Routing.debugApiRoutes(localSessionManager: LocalSessionManager) {
         val session = localSessionManager.getSession(debugRequest.coralSessionId)
             ?: throw RouteException(HttpStatusCode.NotFound, "Session not found")
 
-        try {
-            val thread = session.getThread(debugRequest.threadId)
-                ?: throw RouteException(HttpStatusCode.NotFound, "Thread not found")
+        val thread = session.getThread(debugRequest.threadId)
+            ?: throw RouteException(HttpStatusCode.NotFound, "Thread not found")
 
+        try {
             val messages = thread.messages.map { it.resolve() }
             call.respond(mapOf("messages" to messages))
         } catch (e: Exception) {

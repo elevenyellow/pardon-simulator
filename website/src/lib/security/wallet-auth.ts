@@ -5,9 +5,9 @@
  * This ensures that API requests actually come from the wallet owner.
  */
 
-import { PublicKey } from '@solana/web3.js';
-import * as nacl from 'tweetnacl';
-import bs58 from 'bs58';
+import { PublicKey } from'@solana/web3.js';
+import * as nacl from'tweetnacl';
+import bs58 from'bs58';
 
 interface SignatureVerificationResult {
   valid: boolean;
@@ -48,13 +48,12 @@ export function verifyWalletSignature(
     if (valid) {
       return { valid: true, publicKey };
     } else {
-      return { valid: false, error: 'Invalid signature' };
+      return { valid: false, error:'Invalid signature'};
     }
   } catch (error: any) {
     return { 
       valid: false, 
-      error: `Signature verification failed: ${error.message}` 
-    };
+      error:`Signature verification failed: ${error.message}`    };
   }
 }
 
@@ -62,7 +61,7 @@ export function verifyWalletSignature(
  * Create a message for the user to sign
  * This includes a nonce and timestamp to prevent replay attacks
  * 
- * @param action - The action being authenticated (e.g., "send_message", "update_score")
+ * @param action - The action being authenticated (e.g.,"send_message","update_score")
  * @param nonce - A unique nonce for this request
  * @param timestamp - Request timestamp
  * @returns Message string to sign
@@ -72,7 +71,7 @@ export function createSignMessage(
   nonce: string,
   timestamp: number
 ): string {
-  return `Pardon Simulator Authentication
+  return`Pardon Simulator Authentication
 Action: ${action}
 Nonce: ${nonce}
 Timestamp: ${timestamp}
@@ -106,15 +105,13 @@ export function verifyAuthMessage(
     if (age > maxAgeSeconds) {
       return { 
         valid: false, 
-        error: `Authentication expired (${Math.floor(age)}s old, max ${maxAgeSeconds}s)` 
-      };
+        error:`Authentication expired (${Math.floor(age)}s old, max ${maxAgeSeconds}s)`      };
     }
     
     if (authData.timestamp > now + 60000) {
       return { 
         valid: false, 
-        error: 'Authentication timestamp is in the future' 
-      };
+        error:'Authentication timestamp is in the future'      };
     }
     
     // Reconstruct the message
@@ -133,8 +130,7 @@ export function verifyAuthMessage(
   } catch (error: any) {
     return { 
       valid: false, 
-      error: `Authentication verification failed: ${error.message}` 
-    };
+      error:`Authentication verification failed: ${error.message}`    };
   }
 }
 
@@ -152,7 +148,7 @@ const usedNonces = new Map<string, number>();
  * @returns true if nonce is fresh (not used before)
  */
 export function checkNonce(walletAddress: string, nonce: string): boolean {
-  const key = `${walletAddress}:${nonce}`;
+  const key =`${walletAddress}:${nonce}`;
   
   if (usedNonces.has(key)) {
     return false; // Nonce already used
@@ -196,39 +192,35 @@ export function requireWalletAuth(
   if (!authHeader) {
     return { 
       valid: false, 
-      error: 'Missing authentication header' 
-    };
+      error:'Missing authentication header'    };
   }
   
   try {
     // Parse auth header
     // Format: "Wallet <base64_json>"
     const parts = authHeader.split(' ');
-    if (parts.length !== 2 || parts[0] !== 'Wallet') {
+    if (parts.length !== 2 || parts[0] !=='Wallet') {
       return { 
         valid: false, 
-        error: 'Invalid authentication header format' 
-      };
+        error:'Invalid authentication header format'      };
     }
     
     // Decode and parse auth data
-    const authJson = Buffer.from(parts[1], 'base64').toString('utf-8');
+    const authJson = Buffer.from(parts[1],'base64').toString('utf-8');
     const authData: AuthData = JSON.parse(authJson);
     
     // Verify action matches
     if (authData.action !== requiredAction) {
       return { 
         valid: false, 
-        error: `Action mismatch: expected ${requiredAction}, got ${authData.action}` 
-      };
+        error:`Action mismatch: expected ${requiredAction}, got ${authData.action}`      };
     }
     
     // Check nonce
     if (!checkNonce(authData.publicKey, authData.nonce)) {
       return { 
         valid: false, 
-        error: 'Nonce already used (replay attack detected)' 
-      };
+        error:'Nonce already used (replay attack detected)'      };
     }
     
     // Verify signature
@@ -238,8 +230,7 @@ export function requireWalletAuth(
   } catch (error: any) {
     return { 
       valid: false, 
-      error: `Failed to parse authentication: ${error.message}` 
-    };
+      error:`Failed to parse authentication: ${error.message}`    };
   }
 }
 
@@ -250,6 +241,6 @@ export function requireWalletAuth(
 export function createAuthHeader(authData: AuthData): string {
   const authJson = JSON.stringify(authData);
   const authBase64 = Buffer.from(authJson).toString('base64');
-  return `Wallet ${authBase64}`;
+  return`Wallet ${authBase64}`;
 }
 

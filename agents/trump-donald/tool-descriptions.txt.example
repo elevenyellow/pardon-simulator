@@ -1,0 +1,7 @@
+# Tool Descriptions for Agent
+
+## check_fortune_status
+Check the current fortune status
+
+Returns: Agent's Portfolio: {balance} SOL | Wallet: {wallet_address} | Status: [Agent-specific status message]
+

@@ -1,38 +1,38 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { getCurrentWeekId, getLastWeekId } from '@/lib/utils/week';
+import { NextRequest, NextResponse } from'next/server';
+import { prisma } from'@/lib/prisma';
+import { getCurrentWeekId, getLastWeekId } from'@/lib/utils/week';
 
 export async function GET(request: NextRequest) {
   // Verify cron secret (Vercel Cron authentication)
   const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    console.error('❌ Unauthorized cron attempt');
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (authHeader !==`Bearer ${process.env.CRON_SECRET}`) {
+    console.error('Unauthorized cron attempt');
+    return NextResponse.json({ error:'Unauthorized'}, { status: 401 });
   }
   
   try {
-    console.log('🔄 Starting weekly reset...');
+    console.log('Starting weekly reset...');
     
     const lastWeekId = getLastWeekId();
     const currentWeekId = getCurrentWeekId();
     
-    console.log(`   Last week: ${lastWeekId}`);
-    console.log(`   Current week: ${currentWeekId}`);
+    console.log(`Last week: ${lastWeekId}`);
+    console.log(`Current week: ${currentWeekId}`);
     
     // Get all sessions from last week
     const sessions = await prisma.session.findMany({
       where: { weekId: lastWeekId },
       include: { user: true },
-      orderBy: { currentScore: 'desc' },
+      orderBy: { currentScore:'desc'},
     });
     
-    console.log(`   Found ${sessions.length} sessions from last week`);
+    console.log(`Found ${sessions.length} sessions from last week`);
     
     if (sessions.length === 0) {
-      console.log('   No sessions to process, skipping reset');
+      console.log('No sessions to process, skipping reset');
       return NextResponse.json({
         success: true,
-        message: 'No sessions to process',
+        message:'No sessions to process',
         lastWeek: lastWeekId,
         currentWeek: currentWeekId,
       });
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
         });
         
         if (existing) {
-          console.log(`   Skipping existing entry for user ${session.user.username}`);
+          console.log(`Skipping existing entry for user ${session.user.username}`);
           continue;
         }
         
@@ -71,21 +71,21 @@ export async function GET(request: NextRequest) {
           },
         });
         
-        console.log(`   Created leaderboard entry: Rank ${i + 1} - ${session.user.username} (Score: ${session.currentScore})`);
+        console.log(`Created leaderboard entry: Rank ${i + 1} - ${session.user.username} (Score: ${session.currentScore})`);
       }
     });
     
-    // Calculate prize distribution (80+ scorers)
-    const winners = sessions.filter(s => s.currentScore >= 80);
+    // Calculate prize distribution (90+ scorers qualify)
+    const winners = sessions.filter(s => s.currentScore >= 90);
     const totalPrizePool = 10000; // 10,000 $PARDON tokens per week
     
-    console.log(`   Winners (80+ score): ${winners.length}`);
+    console.log(`Winners (90+ score): ${winners.length}`);
     
     if (winners.length > 0) {
       const prizeDistribution = calculatePrizeDistribution(winners, totalPrizePool);
-      console.log('   Prize distribution:');
+      console.log('Prize distribution:');
       prizeDistribution.forEach((prize, index) => {
-        console.log(`      ${index + 1}. ${prize.username} - ${prize.prizeAmount} PARDON (Rank ${prize.rank})`);
+        console.log(`${index + 1}. ${prize.username} - ${prize.prizeAmount} PARDON (Rank ${prize.rank})`);
       });
       
       // TODO: Call smart contract to distribute prizes
@@ -103,7 +103,7 @@ export async function GET(request: NextRequest) {
       },
     });
     
-    console.log('✅ Weekly reset complete');
+    console.log('Weekly reset complete');
     
     return NextResponse.json({
       success: true,
@@ -112,16 +112,16 @@ export async function GET(request: NextRequest) {
       totalPlayers: sessions.length,
       winners: winners.length,
       prizePool: totalPrizePool,
-      message: 'Weekly reset completed successfully',
+      message:'Weekly reset completed successfully',
     });
     
   } catch (error: any) {
-    console.error('❌ Weekly reset error:', error);
+    console.error('Weekly reset error:', error);
     return NextResponse.json(
       { 
-        error: 'Internal server error', 
+        error:'Internal server error', 
         message: error.message,
-        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        stack: process.env.NODE_ENV ==='development'? error.stack : undefined
       },
       { status: 500 }
     );
@@ -136,11 +136,11 @@ export async function GET(request: NextRequest) {
  * - 2nd place: 20% of pool
  * - 3rd place: 10% of pool
  * - 4th-10th: Share remaining 20%
- * - Must have score >= 80 to win
+ * - Must have score >= 90 to qualify for prizes
  */
 function calculatePrizeAmount(rank: number, score: number, totalPlayers: number): number | null {
-  // Must qualify with 80+ score
-  if (score < 80) return null;
+  // Must qualify with 90+ score
+  if (score < 90) return null;
   
   const PRIZE_POOL = 10000; // 10,000 $PARDON
   

@@ -18,25 +18,22 @@ export function validatePrompt(text: string): ValidationResult {
   if (!text || text.trim().length === 0) {
     return {
       valid: false,
-      error: "Message cannot be empty"
-    };
+      error:"Message cannot be empty"    };
   }
   
   // Length check (100 characters max)
   if (text.length > 100) {
     return {
       valid: false,
-      error: `Message too long (${text.length}/100 characters)`
-    };
+      error:`Message too long (${text.length}/100 characters)`    };
   }
   
   // Minimum content check
-  const nonWhitespaceCount = text.replace(/\s/g, '').length;
+  const nonWhitespaceCount = text.replace(/\s/g,'').length;
   if (nonWhitespaceCount < 3) {
     return {
       valid: false,
-      error: "Message too short (minimum 3 characters)"
-    };
+      error:"Message too short (minimum 3 characters)"    };
   }
   
   // English-only check (allow A-Z, a-z, 0-9, and common punctuation)
@@ -44,8 +41,7 @@ export function validatePrompt(text: string): ValidationResult {
   if (!englishRegex.test(text)) {
     return {
       valid: false,
-      error: "English characters only (A-Z, 0-9, punctuation allowed)"
-    };
+      error:"English characters only (A-Z, 0-9, punctuation allowed)"    };
   }
   
   return { valid: true };
@@ -64,13 +60,13 @@ export function getCharacterCountInfo(text: string): {
   const max = 100;
   const percentage = (count / max) * 100;
   
-  let colorClass = 'text-gray-400'; // < 80%
+  let colorClass ='text-gray-400'; // < 80%
   if (percentage >= 95) {
-    colorClass = 'text-red-400'; // 95-100%
+    colorClass ='text-red-400'; // 95-100%
   } else if (percentage >= 80) {
-    colorClass = 'text-yellow-400'; // 80-95%
+    colorClass ='text-yellow-400'; // 80-95%
   } else if (percentage >= 60) {
-    colorClass = 'text-green-400'; // 60-80%
+    colorClass ='text-green-400'; // 60-80%
   }
   
   return { count, max, percentage, colorClass };

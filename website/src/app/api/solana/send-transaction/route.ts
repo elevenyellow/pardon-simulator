@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { Connection, Transaction, VersionedTransaction } from '@solana/web3.js';
+import { NextRequest, NextResponse } from'next/server';
+import { Connection, Transaction, VersionedTransaction } from'@solana/web3.js';
 
-// ✅ This API key is PRIVATE (no NEXT_PUBLIC_ prefix)
+//  This API key is PRIVATE (no NEXT_PUBLIC_ prefix)
 // It stays on the server and is never exposed to the browser
-const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL || '';
+const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL ||'';
 if (!SOLANA_RPC_URL) {
   throw new Error('SOLANA_RPC_URL environment variable is required. Get your Helius API key from https://www.helius.dev/');
 }
@@ -19,35 +19,35 @@ export async function POST(request: NextRequest) {
 
     if (!serializedTransaction) {
       return NextResponse.json(
-        { error: 'Missing serializedTransaction' },
+        { error:'Missing serializedTransaction'},
         { status: 400 }
       );
     }
 
-    console.log('📤 Proxying transaction to Solana...');
+    console.log('Proxying transaction to Solana...');
 
     // Create connection on backend (API key stays private)
-    const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
+    const connection = new Connection(SOLANA_RPC_URL,'confirmed');
 
     // Deserialize transaction
-    const transaction = Transaction.from(Buffer.from(serializedTransaction, 'base64'));
+    const transaction = Transaction.from(Buffer.from(serializedTransaction,'base64'));
 
     // Send transaction
     const signature = await connection.sendRawTransaction(transaction.serialize(), {
       skipPreflight: false,
-      preflightCommitment: 'confirmed',
+      preflightCommitment:'confirmed',
     });
 
-    console.log('✅ Transaction sent:', signature);
+    console.log('Transaction sent:', signature);
 
     return NextResponse.json({
       signature,
     });
 
   } catch (error: any) {
-    console.error('❌ Transaction send error:', error);
+    console.error('Transaction send error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to send transaction' },
+      { error: error.message ||'Failed to send transaction'},
       { status: 500 }
     );
   }

@@ -10,12 +10,12 @@
  */
 export function escapeHtml(text: string): string {
   const map: Record<string, string> = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#x27;',
-    '/': '&#x2F;',
+'&':'&amp;',
+'<':'&lt;',
+'>':'&gt;',
+'"':'&quot;',
+"'":'&#x27;',
+'/':'&#x2F;',
   };
 
   return text.replace(/[&<>"'/]/g, (char) => map[char]);
@@ -25,15 +25,15 @@ export function escapeHtml(text: string): string {
  * Remove all HTML tags from input
  */
 export function stripHtml(input: string): string {
-  return input.replace(/<[^>]*>/g, '');
+  return input.replace(/<[^>]*>/g,'');
 }
 
 /**
  * Sanitize text input - removes HTML and escapes special characters
  */
 export function sanitizeText(input: string): string {
-  if (typeof input !== 'string') {
-    return '';
+  if (typeof input !=='string') {
+    return'';
   }
 
   // Remove HTML tags first
@@ -43,7 +43,7 @@ export function sanitizeText(input: string): string {
   sanitized = sanitized.trim();
   
   // Remove null bytes
-  sanitized = sanitized.replace(/\0/g, '');
+  sanitized = sanitized.replace(/\0/g,'');
   
   return sanitized;
 }
@@ -52,7 +52,7 @@ export function sanitizeText(input: string): string {
  * Sanitize and validate wallet address
  */
 export function sanitizeWalletAddress(address: string): string | null {
-  if (typeof address !== 'string') {
+  if (typeof address !=='string') {
     return null;
   }
 
@@ -71,12 +71,12 @@ export function sanitizeWalletAddress(address: string): string | null {
  * Sanitize transaction signature
  */
 export function sanitizeSignature(signature: string): string | null {
-  if (typeof signature !== 'string') {
+  if (typeof signature !=='string') {
     return null;
   }
 
   // Remove whitespace and newlines
-  const cleaned = signature.trim().replace(/[\r\n\t]/g, '');
+  const cleaned = signature.trim().replace(/[\r\n\t]/g,'');
 
   // Validate Solana transaction signature format (base58, 87-88 chars)
   if (!/^[1-9A-HJ-NP-Za-km-z]{87,88}$/.test(cleaned)) {
@@ -101,8 +101,8 @@ export function sanitizeMessage(message: string, options: {
     allowSpecialChars = true
   } = options;
 
-  if (typeof message !== 'string') {
-    return '';
+  if (typeof message !=='string') {
+    return'';
   }
 
   // Remove HTML
@@ -110,17 +110,17 @@ export function sanitizeMessage(message: string, options: {
 
   // Remove control characters except allowed ones
   if (allowNewlines) {
-    sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+    sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g,'');
   } else {
-    sanitized = sanitized.replace(/[\x00-\x1F\x7F]/g, '');
+    sanitized = sanitized.replace(/[\x00-\x1F\x7F]/g,'');
   }
 
-  // Remove excessive whitespace
+  // Remove excessive whitespace (replace multiple spaces with single space)
   sanitized = sanitized.replace(/\s+/g, ' ');
 
   // If special characters not allowed, keep only alphanumeric and basic punctuation
   if (!allowSpecialChars) {
-    sanitized = sanitized.replace(/[^a-zA-Z0-9\s\.,!?;:'"()\-@#$%&*+=\[\]{}\/\\]/g, '');
+    sanitized = sanitized.replace(/[^a-zA-Z0-9\s\.,!?;:'"()\-@#$%&*+=\[\]{}\/\\]/g,'');
   }
 
   // Trim
@@ -173,14 +173,14 @@ export function sanitizeNumber(input: any, options: {
  * Sanitize URL to prevent javascript: and data: URLs
  */
 export function sanitizeUrl(url: string): string | null {
-  if (typeof url !== 'string') {
+  if (typeof url !=='string') {
     return null;
   }
 
   const cleaned = url.trim();
 
   // Block dangerous protocols
-  const dangerousProtocols = ['javascript:', 'data:', 'vbscript:', 'file:'];
+  const dangerousProtocols = ['javascript:','data:','vbscript:','file:'];
   const lowerUrl = cleaned.toLowerCase();
   
   if (dangerousProtocols.some(proto => lowerUrl.startsWith(proto))) {
@@ -202,7 +202,7 @@ export function sanitizeUrl(url: string): string | null {
  * Parses and re-stringifies to ensure valid JSON and removes any functions
  */
 export function sanitizeJson(input: string, maxDepth: number = 10): any | null {
-  if (typeof input !== 'string') {
+  if (typeof input !=='string') {
     return null;
   }
 
@@ -229,7 +229,7 @@ function isValidDepth(obj: any, maxDepth: number, currentDepth: number = 0): boo
     return false;
   }
 
-  if (typeof obj !== 'object' || obj === null) {
+  if (typeof obj !=='object'|| obj === null) {
     return true;
   }
 
@@ -245,21 +245,22 @@ function isValidDepth(obj: any, maxDepth: number, currentDepth: number = 0): boo
  */
 export function sanitizeObject<T extends Record<string, any>>(
   obj: T,
-  sanitizers: Record<keyof T, (value: any) => any> = {}
+  sanitizers: Partial<Record<keyof T, (value: any) => any>> = {}
 ): T {
   const sanitized: any = {};
 
   for (const [key, value] of Object.entries(obj)) {
-    if (sanitizers[key as keyof T]) {
+    const sanitizer = sanitizers[key as keyof T];
+    if (sanitizer) {
       // Use custom sanitizer if provided
-      sanitized[key] = sanitizers[key as keyof T](value);
-    } else if (typeof value === 'string') {
+      sanitized[key] = sanitizer(value);
+    } else if (typeof value ==='string') {
       // Default string sanitization
       sanitized[key] = sanitizeText(value);
-    } else if (typeof value === 'number') {
+    } else if (typeof value ==='number') {
       // Keep numbers as-is (validate separately if needed)
       sanitized[key] = value;
-    } else if (typeof value === 'boolean') {
+    } else if (typeof value ==='boolean') {
       // Keep booleans as-is
       sanitized[key] = value;
     } else if (value === null || value === undefined) {
@@ -268,9 +269,9 @@ export function sanitizeObject<T extends Record<string, any>>(
     } else if (Array.isArray(value)) {
       // Recursively sanitize arrays
       sanitized[key] = value.map(item => 
-        typeof item === 'string' ? sanitizeText(item) : item
+        typeof item ==='string'? sanitizeText(item) : item
       );
-    } else if (typeof value === 'object') {
+    } else if (typeof value ==='object') {
       // Recursively sanitize objects
       sanitized[key] = sanitizeObject(value, sanitizers);
     } else {
@@ -290,8 +291,8 @@ export function sanitizeScoringRequest(data: any): {
   sanitized?: any;
   error?: string;
 } {
-  if (!data || typeof data !== 'object') {
-    return { valid: false, error: 'Invalid request data' };
+  if (!data || typeof data !=='object') {
+    return { valid: false, error:'Invalid request data'};
   }
 
   const { userWallet, delta, reason, category, subcategory, agentId, messageId } = data;
@@ -299,25 +300,25 @@ export function sanitizeScoringRequest(data: any): {
   // Sanitize and validate wallet
   const sanitizedWallet = sanitizeWalletAddress(userWallet);
   if (!sanitizedWallet) {
-    return { valid: false, error: 'Invalid wallet address' };
+    return { valid: false, error:'Invalid wallet address'};
   }
 
   // Validate delta (must be a number)
   const sanitizedDelta = sanitizeNumber(delta, { min: -100, max: 100 });
   if (sanitizedDelta === null) {
-    return { valid: false, error: 'Invalid delta value' };
+    return { valid: false, error:'Invalid delta value'};
   }
 
   // Sanitize reason
   const sanitizedReason = sanitizeMessage(reason, { maxLength: 200 });
   if (!sanitizedReason) {
-    return { valid: false, error: 'Invalid or empty reason' };
+    return { valid: false, error:'Invalid or empty reason'};
   }
 
   // Validate category
-  const validCategories = ['payment', 'negotiation', 'milestone', 'penalty'];
+  const validCategories = ['payment','negotiation','milestone','penalty'];
   if (!validCategories.includes(category)) {
-    return { valid: false, error: 'Invalid category' };
+    return { valid: false, error:'Invalid category'};
   }
 
   return {

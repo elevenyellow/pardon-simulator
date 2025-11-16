@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from'next/server';
 import { 
   Connection, 
   Transaction, 
@@ -6,8 +6,8 @@ import {
   PublicKey,
   LAMPORTS_PER_SOL,
   sendAndConfirmTransaction
-} from '@solana/web3.js';
-import { getCDPClient } from '@/lib/x402-cdp-client';
+} from'@solana/web3.js';
+import { getCDPClient } from'@/lib/x402-cdp-client';
 
 /**
  * x402 Protocol Compliant Transaction Submission Endpoint
@@ -27,7 +27,7 @@ import { getCDPClient } from '@/lib/x402-cdp-client';
  */
 
 // Backend-only RPC URL (API key stays private)
-const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL || '';
+const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL ||'';
 if (!SOLANA_RPC_URL) {
   throw new Error('SOLANA_RPC_URL environment variable is required');
 }
@@ -57,26 +57,23 @@ export async function POST(request: NextRequest) {
     // Validate request
     if (!paymentPayload) {
       return NextResponse.json(
-        { error: 'Missing paymentPayload' },
+        { error:'Missing paymentPayload'},
         { status: 400 }
       );
     }
 
-    console.log('\n' + '='.repeat(80));
-    console.log('💳 X402 TRANSACTION SUBMISSION (Backend-Controlled)');
-    console.log('='.repeat(80));
+    console.log('X402 TRANSACTION SUBMISSION (Backend-Controlled)');
 
     // Verify required fields
-    const required = ['payment_id', 'from', 'to', 'amount', 'signature', 'chain', 'protocol'];
+    const required = ['payment_id','from','to','amount','signature','chain','protocol'];
     const missing = required.filter(field => !paymentPayload[field]);
     
     if (missing.length > 0) {
-      console.error(`❌ Missing required fields: ${missing.join(', ')}`);
+      console.error(`[x402] Missing required fields: ${missing.join(',')}`);
       return NextResponse.json(
         { 
           success: false,
-          error: `Missing required fields: ${missing.join(', ')}` 
-        },
+          error:`Missing required fields: ${missing.join(',')}`        },
         { status: 400 }
       );
     }
@@ -84,16 +81,16 @@ export async function POST(request: NextRequest) {
     const payload: PaymentPayload = paymentPayload;
 
     // Verify chain and protocol
-    if (payload.chain !== 'solana') {
+    if (payload.chain !=='solana') {
       return NextResponse.json(
-        { success: false, error: 'Only Solana chain is supported' },
+        { success: false, error:'Only Solana chain is supported'},
         { status: 400 }
       );
     }
 
-    if (payload.protocol !== 'x402') {
+    if (payload.protocol !=='x402') {
       return NextResponse.json(
-        { success: false, error: 'Only x402 protocol is supported' },
+        { success: false, error:'Only x402 protocol is supported'},
         { status: 400 }
       );
     }
@@ -101,37 +98,37 @@ export async function POST(request: NextRequest) {
     // Verify amount is reasonable
     if (payload.amount <= 0 || payload.amount > 10) {
       return NextResponse.json(
-        { success: false, error: 'Invalid amount (must be between 0 and 10 SOL)' },
+        { success: false, error:'Invalid amount (must be between 0 and 10 SOL)'},
         { status: 400 }
       );
     }
 
-    console.log(`📋 Payment Details:`);
-    console.log(`   Payment ID: ${payload.payment_id}`);
-    console.log(`   From: ${payload.from.substring(0, 8)}...${payload.from.substring(payload.from.length - 8)}`);
-    console.log(`   To: ${payload.to.substring(0, 8)}...${payload.to.substring(payload.to.length - 8)}`);
-    console.log(`   Amount: ${payload.amount} SOL`);
-    console.log(`   Protocol: ${payload.protocol} v${payload.version}`);
+    console.log(`Payment Details:`);
+    console.log(`Payment ID: ${payload.payment_id}`);
+    console.log(`From: ${payload.from.substring(0, 8)}...${payload.from.substring(payload.from.length - 8)}`);
+    console.log(`To: ${payload.to.substring(0, 8)}...${payload.to.substring(payload.to.length - 8)}`);
+    console.log(`Amount: ${payload.amount} SOL`);
+    console.log(`Protocol: ${payload.protocol} v${payload.version}`);
 
     // Step 1: Verify payload signature
     // Note: Full cryptographic verification would require recovering the public key
-    // from the signature and verifying it matches the 'from' address.
+    // from the signature and verifying it matches the'from'address.
     // For now, we trust that the signature field exists and defer full verification
     // to the blockchain when the transaction is submitted.
-    console.log(`\n✅ Step 1: Payment payload verified`);
-    console.log(`   Signature present: ${payload.signature.length > 0}`);
+    // Payment payload verified
+    console.log(`Signature present: ${payload.signature.length > 0}`);
 
     // Step 2: Create Solana connection
-    console.log(`\n📡 Step 2: Connecting to Solana...`);
-    const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
+    console.log(`\n Step 2: Connecting to Solana...`);
+    const connection = new Connection(SOLANA_RPC_URL,'confirmed');
     
     try {
       const blockHeight = await connection.getBlockHeight();
-      console.log(`✅ Connected to Solana (block height: ${blockHeight})`);
+      console.log(`[x402] Connected to Solana (block height: ${blockHeight})`);
     } catch (error: any) {
-      console.error(`❌ Failed to connect to Solana:`, error.message);
+      console.error('[x402] Failed to connect to Solana:', error.message);
       return NextResponse.json(
-        { success: false, error: 'Failed to connect to Solana network' },
+        { success: false, error:'Failed to connect to Solana network'},
         { status: 500 }
       );
     }
@@ -151,18 +148,18 @@ export async function POST(request: NextRequest) {
     //
     // For now, let's document this limitation and provide a helpful error message.
 
-    console.log(`\n⚠️  Step 3: Transaction Creation Limitation`);
-    console.log(`   The Solana blockchain requires transactions to be signed with`);
-    console.log(`   the sender's private key. For security, we don't have access`);
-    console.log(`   to user private keys on the backend.`);
+    // Transaction Creation Limitation
+    console.log(`The Solana blockchain requires transactions to be signed with`);
+    console.log(`the sender's private key. For security, we don't have access`);
+    console.log(`to user private keys on the backend.`);
     console.log(``);
-    console.log(`   Current status: Waiting for CDP to add full Solana facilitator`);
-    console.log(`   support where the facilitator can submit transactions with`);
-    console.log(`   delegated authority.`);
+    console.log(`Current status: Waiting for CDP to add full Solana facilitator`);
+    console.log(`support where the facilitator can submit transactions with`);
+    console.log(`delegated authority.`);
     console.log(``);
-    console.log(`   Temporary solution: Backend will create unsigned transaction`);
-    console.log(`   and return it for client-side signing, then client returns`);
-    console.log(`   the signed transaction for submission.`);
+    console.log(`Temporary solution: Backend will create unsigned transaction`);
+    console.log(`and return it for client-side signing, then client returns`);
+    console.log(`the signed transaction for submission.`);
 
     // Create unsigned transaction
     const fromPubkey = new PublicKey(payload.from);
@@ -182,11 +179,11 @@ export async function POST(request: NextRequest) {
     transaction.recentBlockhash = blockhash;
     transaction.feePayer = fromPubkey;
 
-    console.log(`\n✅ Step 3: Unsigned transaction created`);
-    console.log(`   Transfer: ${payload.amount} SOL`);
-    console.log(`   From: ${payload.from}`);
-    console.log(`   To: ${payload.to}`);
-    console.log(`   Blockhash: ${blockhash.substring(0, 16)}...`);
+    // Unsigned transaction created
+    console.log(`Transfer: ${payload.amount} SOL`);
+    console.log(`From: ${payload.from}`);
+    console.log(`To: ${payload.to}`);
+    console.log(`Blockhash: ${blockhash.substring(0, 16)}...`);
 
     // Serialize transaction for client signing
     const serializedTransaction = transaction.serialize({
@@ -194,10 +191,9 @@ export async function POST(request: NextRequest) {
       verifySignatures: false,
     }).toString('base64');
 
-    console.log(`\n📤 Step 4: Returning unsigned transaction to client`);
-    console.log(`   The client will sign this transaction and return it`);
-    console.log(`   for final submission (hybrid x402 flow until full CDP support)`);
-    console.log('='.repeat(80) + '\n');
+    console.log(`\n Step 4: Returning unsigned transaction to client`);
+    console.log(`The client will sign this transaction and return it`);
+    console.log(`for final submission (hybrid x402 flow until full CDP support)`);
 
     // Return unsigned transaction for client signing
     // This is a hybrid approach until CDP adds full Solana facilitator support
@@ -211,19 +207,17 @@ export async function POST(request: NextRequest) {
       from: payload.from,
       to: payload.to,
       payment_id: payload.payment_id,
-      x402Compliant: 'partial', // Partial until full CDP support
-      method: 'hybrid_backend_prepared',
-      message: 'Transaction created by backend, awaiting client signature for submission'
-    });
+      x402Compliant:'partial', // Partial until full CDP support
+      method:'hybrid_backend_prepared',
+      message:'Transaction created by backend, awaiting client signature for submission'    });
 
   } catch (error: any) {
-    console.error('❌ Transaction submission error:', error);
+    console.error('Transaction submission error:', error);
     console.error('Stack trace:', error.stack);
     return NextResponse.json(
       { 
         success: false, 
-        error: error.message || 'Failed to submit transaction' 
-      },
+        error: error.message ||'Failed to submit transaction'      },
       { status: 500 }
     );
   }
@@ -241,76 +235,73 @@ export async function PUT(request: NextRequest) {
 
     if (!signedTransaction || !payment_id) {
       return NextResponse.json(
-        { error: 'Missing signedTransaction or payment_id' },
+        { error:'Missing signedTransaction or payment_id'},
         { status: 400 }
       );
     }
 
-    console.log('\n' + '='.repeat(80));
-    console.log('✅ X402 TRANSACTION FINALIZATION (Client-Signed)');
-    console.log('='.repeat(80));
-    console.log(`   Payment ID: ${payment_id}`);
+    console.log('X402 TRANSACTION FINALIZATION (Client-Signed)');
+    console.log(`Payment ID: ${payment_id}`);
 
-    const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
+    const connection = new Connection(SOLANA_RPC_URL,'confirmed');
 
     // Deserialize and submit transaction
     const transaction = Transaction.from(
-      Buffer.from(signedTransaction, 'base64')
+      Buffer.from(signedTransaction,'base64')
     );
 
-    console.log(`📤 Submitting signed transaction...`);
+    console.log(`Submitting signed transaction...`);
     const signature = await connection.sendRawTransaction(
       transaction.serialize(),
       {
         skipPreflight: false,
-        preflightCommitment: 'confirmed',
+        preflightCommitment:'confirmed',
       }
     );
 
-    console.log(`✅ Transaction submitted!`);
-    console.log(`   Signature: ${signature.substring(0, 16)}...${signature.substring(signature.length - 16)}`);
+    console.log('[x402] Transaction submitted');
+    console.log(`Signature: ${signature.substring(0, 16)}...${signature.substring(signature.length - 16)}`);
 
     // Wait for confirmation
-    console.log(`⏳ Waiting for confirmation...`);
-    const confirmation = await connection.confirmTransaction(signature, 'confirmed');
+    console.log(`Waiting for confirmation...`);
+    const confirmation = await connection.confirmTransaction(signature,'confirmed');
     
     if (confirmation.value.err) {
-      console.error(`❌ Transaction failed:`, confirmation.value.err);
+      console.error('[x402] Transaction failed:', confirmation.value.err);
       return NextResponse.json({
         success: false,
-        error: 'Transaction failed on-chain',
+        error:'Transaction failed on-chain',
         signature
       }, { status: 500 });
     }
 
-    console.log(`✅ Transaction confirmed on-chain!`);
+    console.log('[x402] Transaction confirmed on-chain');
 
     // Register with x402scan
-    console.log(`\n📡 Registering with x402scan...`);
+    console.log(`\n Registering with x402scan...`);
     const cdpClient = getCDPClient();
     
     // Extract transaction details for registration
     const instruction = transaction.instructions[0];
     const keys = instruction.keys;
-    const from = keys[0]?.pubkey.toBase58() || '';
-    const to = keys[1]?.pubkey.toBase58() || '';
+    const from = keys[0]?.pubkey.toBase58() ||'';
+    const to = keys[1]?.pubkey.toBase58() ||'';
     const amount = Number(instruction.data.readBigUInt64LE(4)) / LAMPORTS_PER_SOL;
 
     const registrationResult = await cdpClient.registerTransaction({
       signature,
-      chain: 'solana',
-      network: 'mainnet-beta',
+      chain:'solana',
+      network:'mainnet-beta',
       from,
       to,
       amount,
-      currency: 'SOL',
+      currency:'SOL',
       metadata: {
-        platform: 'pardon-simulator',
+        platform:'pardon-simulator',
         service_type: payment_id,
       }
     });
 
-    console.log('='.repeat(80) + '\n');
 
     return NextResponse.json({
       success: true,
@@ -319,14 +310,14 @@ export async function PUT(request: NextRequest) {
       x402Compliant: true,
       x402ScanUrl: registrationResult.x402ScanUrl,
       x402ScanId: registrationResult.x402ScanId,
-      method: 'backend_finalized',
+      method:'backend_finalized',
       confirmed: true
     });
 
   } catch (error: any) {
-    console.error('❌ Transaction finalization error:', error);
+    console.error('Transaction finalization error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to finalize transaction' },
+      { success: false, error: error.message ||'Failed to finalize transaction'},
       { status: 500 }
     );
   }

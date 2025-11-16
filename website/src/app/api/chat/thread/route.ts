@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from'next/server';
 
-// ✅ Backend-only Coral Server URL (never exposed to browser)
-const CORAL_SERVER_URL = process.env.CORAL_SERVER_URL || 'http://localhost:5555';
+//  Backend-only Coral Server URL (never exposed to browser)
+const CORAL_SERVER_URL = process.env.CORAL_SERVER_URL ||'http://localhost:5555';
 
 /**
  * POST /api/chat/thread
@@ -13,22 +13,22 @@ export async function POST(request: NextRequest) {
 
     if (!sessionId || !agentId) {
       return NextResponse.json(
-        { error: 'Missing required fields: sessionId, agentId' },
+        { error:'Missing required fields: sessionId, agentId'},
         { status: 400 }
       );
     }
 
-    console.log(`📝 Creating thread for session ${sessionId} with agent ${agentId}`);
+    console.log(`Creating thread for session ${sessionId} with agent ${agentId}`);
 
     // Create thread via Coral Server debug API
     const response = await fetch(
-      `${CORAL_SERVER_URL}/api/v1/debug/thread/app/debug/${sessionId}/sbf`,
+`${CORAL_SERVER_URL}/api/v1/debug/thread/app/debug/${sessionId}/sbf`,
       {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method:'POST',
+        headers: {'Content-Type':'application/json'},
         body: JSON.stringify({
-          threadName: 'Pardon Simulator Chat',
-          participantIds: [agentId, 'sbf'],
+          threadName:'Pardon Simulator Chat',
+          participantIds: [agentId,'sbf'],
         }),
       }
     );
@@ -42,16 +42,16 @@ export async function POST(request: NextRequest) {
     const data = await response.json();
     const threadId = data.threadId || data.id;
 
-    console.log('✅ Thread created:', threadId);
+    console.log('Thread created:', threadId);
 
     return NextResponse.json({
       threadId,
     });
 
   } catch (error: any) {
-    console.error('❌ Thread creation error:', error);
+    console.error('Thread creation error:', error);
     return NextResponse.json(
-      { error: 'failed_to_create_thread', message: error.message },
+      { error:'failed_to_create_thread', message: error.message },
       { status: 500 }
     );
   }

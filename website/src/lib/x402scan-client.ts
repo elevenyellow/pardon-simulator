@@ -7,8 +7,8 @@
 
 export interface X402Transaction {
   signature: string;           // Blockchain transaction signature
-  chain: 'solana';             // Blockchain network
-  network: 'mainnet-beta' | 'devnet' | 'testnet';
+  chain:'solana';             // Blockchain network
+  network:'mainnet-beta'|'devnet'|'testnet';
   from: string;                // Sender wallet address
   to: string;                  // Recipient wallet address
   amount: number;              // Amount in native currency (SOL)
@@ -37,10 +37,10 @@ export async function registerX402Transaction(
   transaction: X402Transaction
 ): Promise<X402ScanResponse> {
   try {
-    console.log('📡 Registering transaction with x402scan.com:', transaction.signature);
+    console.log('Registering transaction with x402scan.com:', transaction.signature);
     
     // x402scan.com API endpoint (may need adjustment based on actual API)
-    const endpoint = process.env.X402_SCAN_API_URL || 'https://api.x402scan.com/v1/transactions';
+    const endpoint = process.env.X402_SCAN_API_URL ||'https://api.x402scan.com/v1/transactions';
     
     const payload = {
       signature: transaction.signature,
@@ -53,42 +53,42 @@ export async function registerX402Transaction(
       resource_url: transaction.resource_url,
       payment_id: transaction.payment_id,
       timestamp: transaction.timestamp,
-      protocol_version: transaction.protocol_version || '1.0',
-      payment_method: transaction.payment_method || 'native',
+      protocol_version: transaction.protocol_version ||'1.0',
+      payment_method: transaction.payment_method ||'native',
     };
 
     const response = await fetch(endpoint, {
-      method: 'POST',
+      method:'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'X-Protocol-Version': '1.0',
-        'X-Chain': 'solana',
+'Content-Type':'application/json',
+'X-Protocol-Version':'1.0',
+'X-Chain':'solana',
       },
       body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.warn('⚠️ x402scan.com registration failed:', response.status, errorText);
+      console.warn('x402scan.com registration failed:', response.status, errorText);
       
       // Don't throw - registration failure shouldn't break payment flow
       return {
         success: false,
-        error: `HTTP ${response.status}: ${errorText}`,
+        error:`HTTP ${response.status}: ${errorText}`,
       };
     }
 
     const data = await response.json();
-    console.log('✅ Transaction registered with x402scan.com:', data);
+    console.log('Transaction registered with x402scan.com:', data);
 
     return {
       success: true,
       transaction_id: data.transaction_id || data.id,
-      message: data.message || 'Transaction registered successfully',
+      message: data.message ||'Transaction registered successfully',
     };
 
   } catch (error: any) {
-    console.error('❌ Error registering with x402scan.com:', error);
+    console.error('Error registering with x402scan.com:', error);
     
     // Don't throw - registration is optional for payment flow
     return {
@@ -108,8 +108,8 @@ export async function checkX402Transaction(
   signature: string
 ): Promise<{ found: boolean; url?: string }> {
   try {
-    const baseUrl = 'https://www.x402scan.com';
-    const url = `${baseUrl}/tx/${signature}`;
+    const baseUrl ='https://www.x402scan.com';
+    const url =`${baseUrl}/tx/${signature}`;
     
     // Simple check - could be enhanced with actual API call
     return {
@@ -129,7 +129,7 @@ export async function checkX402Transaction(
  * @param chain - Blockchain (default: solana)
  * @returns Explorer URL
  */
-export function getX402ScanUrl(signature: string, chain: string = 'solana'): string {
-  return `https://www.x402scan.com/tx/${signature}?chain=${chain}`;
+export function getX402ScanUrl(signature: string, chain: string ='solana'): string {
+  return`https://www.x402scan.com/tx/${signature}?chain=${chain}`;
 }
 

@@ -1,8 +1,8 @@
 'use client';
 
-import { FC, ReactNode, useMemo } from 'react';
-import { ConnectionProvider, WalletProvider as SolanaWalletProvider } from '@solana/wallet-adapter-react';
-import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
+import { FC, ReactNode, useMemo } from'react';
+import { ConnectionProvider, WalletProvider as SolanaWalletProvider } from'@solana/wallet-adapter-react';
+import { WalletAdapterNetwork } from'@solana/wallet-adapter-base';
 import { 
   PhantomWalletAdapter, 
   SolflareWalletAdapter,
@@ -11,19 +11,19 @@ import {
   // TrustWalletAdapter,
   // LedgerWalletAdapter,
   // TorusWalletAdapter,
-} from '@solana/wallet-adapter-wallets';
-import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
-import { clusterApiUrl } from '@solana/web3.js';
+} from'@solana/wallet-adapter-wallets';
+import { WalletModalProvider } from'@solana/wallet-adapter-react-ui';
+import { clusterApiUrl } from'@solana/web3.js';
 
 // Import wallet adapter CSS
-import '@solana/wallet-adapter-react-ui/styles.css';
+import'@solana/wallet-adapter-react-ui/styles.css';
 
 export const WalletProvider: FC<{ children: ReactNode }> = ({ children }) => {
   // Using mainnet-beta - REAL SOL with actual value!
   const network = WalletAdapterNetwork.Mainnet;
   const endpoint = useMemo(() => clusterApiUrl(network), [network]);
 
-  // ⚠️ IMPORTANT: Only Solana wallets here!
+  //  IMPORTANT: Only Solana wallets here!
   // MetaMask is for Ethereum, NOT Solana - don't add it!
   const wallets = useMemo(
     () => [

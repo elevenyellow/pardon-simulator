@@ -13,9 +13,9 @@
  */
 
 // DEPRECATED: Don't use NEXT_PUBLIC_ for sensitive URLs!
-const BASE_URL = process.env.NEXT_PUBLIC_CORAL_SERVER_URL || 'http://localhost:5555';
-const APPLICATION_ID = 'app';
-const PRIVACY_KEY = 'debug';
+const BASE_URL = process.env.NEXT_PUBLIC_CORAL_SERVER_URL ||'http://localhost:5555';
+const APPLICATION_ID ='app';
+const PRIVACY_KEY ='debug';
 
 export interface CoralMessage {
   id: string;
@@ -54,9 +54,9 @@ export async function createSession(): Promise<CoralSession> {
 
     // Create session with full agent graph
     const response = await fetch(`${BASE_URL}/api/v1/sessions`, {
-      method: 'POST',
+      method:'POST',
       headers: {
-        'Content-Type': 'application/json',
+'Content-Type':'application/json',
       },
       body: JSON.stringify(sessionConfig),
     });
@@ -67,10 +67,10 @@ export async function createSession(): Promise<CoralSession> {
     }
 
     const data = await response.json();
-    console.log('✅ Session created:', data.sessionId);
+    console.log('Session created:', data.sessionId);
     return data;
   } catch (error) {
-    console.error('❌ Error creating session:', error);
+    console.error('Error creating session:', error);
     throw error;
   }
 }
@@ -81,20 +81,20 @@ export async function createSession(): Promise<CoralSession> {
  */
 export async function createThread(
   sessionId: string,
-  creatorAgent: string = 'sbf',
+  creatorAgent: string ='sbf',
   participants: string[] = []
 ): Promise<CoralThread> {
   try {
     // Use the debug API endpoint like Python scripts
-    const endpoint = `${BASE_URL}/api/v1/debug/thread/${APPLICATION_ID}/${PRIVACY_KEY}/${sessionId}/${creatorAgent}`;
+    const endpoint =`${BASE_URL}/api/v1/debug/thread/${APPLICATION_ID}/${PRIVACY_KEY}/${sessionId}/${creatorAgent}`;
     
     const response = await fetch(endpoint, {
-      method: 'POST',
+      method:'POST',
       headers: {
-        'Content-Type': 'application/json',
+'Content-Type':'application/json',
       },
       body: JSON.stringify({
-        threadName: 'Pardon Simulator Chat',
+        threadName:'Pardon Simulator Chat',
         participantIds: participants.length > 0 ? participants : undefined,
       }),
     });
@@ -105,7 +105,7 @@ export async function createThread(
     }
 
     const data = await response.json();
-    console.log('✅ Thread created:', data.threadId);
+    console.log('Thread created:', data.threadId);
     return {
       threadId: data.threadId || data.id,
       sessionId,
@@ -113,7 +113,7 @@ export async function createThread(
       name: data.name,
     };
   } catch (error) {
-    console.error('❌ Error creating thread:', error);
+    console.error('Error creating thread:', error);
     throw error;
   }
 }
@@ -127,14 +127,13 @@ export async function sendMessage(
   threadId: string,
   content: string,
   mentions: string[],
-  senderAgent: string = 'sbf'
-): Promise<void> {
+  senderAgent: string ='sbf'): Promise<void> {
   try {
-    const endpoint = `${BASE_URL}/api/v1/debug/thread/sendMessage/${APPLICATION_ID}/${PRIVACY_KEY}/${sessionId}/${senderAgent}`;
+    const endpoint =`${BASE_URL}/api/v1/debug/thread/sendMessage/${APPLICATION_ID}/${PRIVACY_KEY}/${sessionId}/${senderAgent}`;
     
     // Format message with @ mentions
-    const mentionsStr = mentions.map(m => `@${m}`).join(' ');
-    const formattedContent = `${mentionsStr} ${content}`;
+    const mentionsStr = mentions.map(m =>`@${m}`).join('');
+    const formattedContent =`${mentionsStr} ${content}`;
     
     const payload = {
       threadId,
@@ -142,12 +141,12 @@ export async function sendMessage(
       mentions, // Array of agent IDs
     };
 
-    console.log('📤 Sending message:', payload);
+    console.log('Sending message:', payload);
 
     const response = await fetch(endpoint, {
-      method: 'POST',
+      method:'POST',
       headers: {
-        'Content-Type': 'application/json',
+'Content-Type':'application/json',
       },
       body: JSON.stringify(payload),
     });
@@ -157,9 +156,9 @@ export async function sendMessage(
       throw new Error(`Failed to send message: ${response.statusText} - ${errorText}`);
     }
 
-    console.log('✅ Message sent successfully');
+    console.log('Message sent successfully');
   } catch (error) {
-    console.error('❌ Error sending message:', error);
+    console.error('Error sending message:', error);
     throw error;
   }
 }
@@ -172,20 +171,20 @@ export async function getMessages(
   threadId: string
 ): Promise<CoralMessage[]> {
   try {
-    const endpoint = `${BASE_URL}/api/v1/debug/thread/${APPLICATION_ID}/${PRIVACY_KEY}/${sessionId}/${threadId}/messages`;
+    const endpoint =`${BASE_URL}/api/v1/debug/thread/${APPLICATION_ID}/${PRIVACY_KEY}/${sessionId}/${threadId}/messages`;
     
-    console.log('📥 Fetching messages from:', endpoint);
+    console.log('Fetching messages from:', endpoint);
     
     const response = await fetch(endpoint, {
-      method: 'GET',
+      method:'GET',
       headers: {
-        'Content-Type': 'application/json',
+'Content-Type':'application/json',
       },
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('❌ Failed to get messages:', response.status, errorText);
+      console.error('Failed to get messages:', response.status, errorText);
       throw new Error(`Failed to get messages: ${response.statusText} - ${errorText}`);
     }
 
@@ -193,7 +192,7 @@ export async function getMessages(
     console.log('📬 Received messages:', data);
     return data.messages || [];
   } catch (error) {
-    console.error('❌ Error getting messages:', error);
+    console.error('Error getting messages:', error);
     return [];
   }
 }
@@ -203,12 +202,12 @@ export async function getMessages(
  */
 export async function listAgents(sessionId: string): Promise<string[]> {
   try {
-    const endpoint = `${BASE_URL}/api/v1/sessions/${sessionId}/agents`;
+    const endpoint =`${BASE_URL}/api/v1/sessions/${sessionId}/agents`;
     
     const response = await fetch(endpoint, {
-      method: 'GET',
+      method:'GET',
       headers: {
-        'Content-Type': 'application/json',
+'Content-Type':'application/json',
       },
     });
 
@@ -219,7 +218,7 @@ export async function listAgents(sessionId: string): Promise<string[]> {
     const data = await response.json();
     return data.agents || [];
   } catch (error) {
-    console.error('❌ Error listing agents:', error);
+    console.error('Error listing agents:', error);
     return [];
   }
 }

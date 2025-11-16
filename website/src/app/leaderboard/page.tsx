@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
-import Link from 'next/link';
-import { ArrowLeft, Trophy, TrendingUp, Award } from 'lucide-react';
+import { useState, useEffect } from'react';
+import { useWallet } from'@solana/wallet-adapter-react';
+import Link from'next/link';
+import { ArrowLeft, Trophy, TrendingUp, Award } from'lucide-react';
 
 interface LeaderboardEntry {
   rank: number;
@@ -52,21 +52,16 @@ export default function LeaderboardPage() {
     }
   };
 
-  const getRankEmoji = (rank: number): string => {
-    switch (rank) {
-      case 1: return '🥇';
-      case 2: return '🥈';
-      case 3: return '🥉';
-      default: return `#${rank}`;
-    }
+  const getRankDisplay = (rank: number): string => {
+    return`#${rank}`;
   };
 
   const getPrizeAmount = (rank: number): string => {
     const prizePool = 10000;
     switch (rank) {
-      case 1: return `${(prizePool * 0.5).toLocaleString()} PARDON`;
-      case 2: return `${(prizePool * 0.2).toLocaleString()} PARDON`;
-      case 3: return `${(prizePool * 0.1).toLocaleString()} PARDON`;
+      case 1: return`${(prizePool * 0.5).toLocaleString()} PARDON`;
+      case 2: return`${(prizePool * 0.2).toLocaleString()} PARDON`;
+      case 3: return`${(prizePool * 0.1).toLocaleString()} PARDON`;
       case 4:
       case 5:
       case 6:
@@ -74,8 +69,8 @@ export default function LeaderboardPage() {
       case 8:
       case 9:
       case 10:
-        return `${Math.floor((prizePool * 0.2) / 7).toLocaleString()} PARDON`;
-      default: return '-';
+        return`${Math.floor((prizePool * 0.2) / 7).toLocaleString()} PARDON`;
+      default: return'-';
     }
   };
 
@@ -87,14 +82,12 @@ export default function LeaderboardPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <Link 
-                href="/"
-                className="text-gray-400 hover:text-white transition-colors"
-              >
-                <ArrowLeft className="w-6 h-6" />
+                href="/"                className="text-gray-400 hover:text-white transition-colors"              >
+                <ArrowLeft className="w-6 h-6"/>
               </Link>
               <div>
                 <h1 className="text-3xl font-bold flex items-center">
-                  <Trophy className="w-8 h-8 mr-3 text-yellow-500" />
+                  <Trophy className="w-8 h-8 mr-3 text-yellow-500"/>
                   Leaderboard
                 </h1>
                 {leaderboard && (
@@ -125,14 +118,14 @@ export default function LeaderboardPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-gray-800 rounded-lg p-4">
                 <div className="flex items-center">
-                  <TrendingUp className="w-5 h-5 text-blue-400 mr-2" />
+                  <TrendingUp className="w-5 h-5 text-blue-400 mr-2"/>
                   <div className="text-sm text-gray-400">Total Players</div>
                 </div>
                 <div className="text-2xl font-bold mt-1">{leaderboard.totalPlayers}</div>
               </div>
               <div className="bg-gray-800 rounded-lg p-4">
                 <div className="flex items-center">
-                  <Award className="w-5 h-5 text-green-400 mr-2" />
+                  <Award className="w-5 h-5 text-green-400 mr-2"/>
                   <div className="text-sm text-gray-400">Prize Eligible</div>
                 </div>
                 <div className="text-2xl font-bold mt-1 text-green-400">
@@ -141,7 +134,7 @@ export default function LeaderboardPage() {
               </div>
               <div className="bg-gray-800 rounded-lg p-4">
                 <div className="flex items-center">
-                  <Trophy className="w-5 h-5 text-yellow-400 mr-2" />
+                  <Trophy className="w-5 h-5 text-yellow-400 mr-2"/>
                   <div className="text-sm text-gray-400">Minimum Score</div>
                 </div>
                 <div className="text-2xl font-bold mt-1">80</div>
@@ -165,8 +158,7 @@ export default function LeaderboardPage() {
             <p className="text-red-400">Error loading leaderboard: {error}</p>
             <button
               onClick={fetchLeaderboard}
-              className="mt-2 px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg text-sm font-medium transition-colors"
-            >
+              className="mt-2 px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg text-sm font-medium transition-colors"            >
               Retry
             </button>
           </div>
@@ -174,13 +166,11 @@ export default function LeaderboardPage() {
 
         {leaderboard && leaderboard.entries.length === 0 && (
           <div className="text-center py-12">
-            <Trophy className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+            <Trophy className="w-16 h-16 text-gray-600 mx-auto mb-4"/>
             <p className="text-gray-400 text-lg">No players yet this week</p>
             <p className="text-gray-500 text-sm mt-2">Be the first to compete!</p>
             <Link
-              href="/"
-              className="mt-6 inline-block px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors"
-            >
+              href="/"              className="mt-6 inline-block px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors"            >
               Start Playing
             </Link>
           </div>
@@ -208,14 +198,13 @@ export default function LeaderboardPage() {
                       <tr 
                         key={entry.rank}
                         className={`border-b border-gray-700 hover:bg-gray-700/50 transition-colors ${
-                          isCurrentUser ? 'bg-blue-900/20' : ''
-                        }`}
+                          isCurrentUser ?'bg-blue-900/20':''                        }`}
                       >
                         {/* Rank */}
                         <td className="p-4">
                           <div className="flex items-center">
                             <span className="text-xl font-bold">
-                              {getRankEmoji(entry.rank)}
+                              {getRankDisplay(entry.rank)}
                             </span>
                           </div>
                         </td>
@@ -243,10 +232,9 @@ export default function LeaderboardPage() {
                         {/* Score */}
                         <td className="text-right p-4">
                           <div className={`text-xl font-bold ${
-                            entry.score >= 80 ? 'text-green-400' :
-                            entry.score >= 60 ? 'text-yellow-400' :
-                            'text-gray-400'
-                          }`}>
+                            entry.score >= 80 ?'text-green-400':
+                            entry.score >= 60 ?'text-yellow-400':
+'text-gray-400'                          }`}>
                             {entry.score}
                           </div>
                           <div className="text-xs text-gray-500">
@@ -274,21 +262,21 @@ export default function LeaderboardPage() {
             {/* Prize Distribution Info */}
             <div className="mt-8 bg-gray-800 rounded-lg p-6">
               <h3 className="text-xl font-bold mb-4 flex items-center">
-                <Trophy className="w-6 h-6 mr-2 text-yellow-500" />
+                <Trophy className="w-6 h-6 mr-2 text-yellow-500"/>
                 Prize Distribution
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <div className="flex justify-between items-center p-3 bg-gray-900 rounded">
-                    <span>🥇 1st Place</span>
+                    <span> 1st Place</span>
                     <span className="font-semibold text-yellow-400">5,000 PARDON (50%)</span>
                   </div>
                   <div className="flex justify-between items-center p-3 bg-gray-900 rounded">
-                    <span>🥈 2nd Place</span>
+                    <span> 2nd Place</span>
                     <span className="font-semibold text-gray-300">2,000 PARDON (20%)</span>
                   </div>
                   <div className="flex justify-between items-center p-3 bg-gray-900 rounded">
-                    <span>🥉 3rd Place</span>
+                    <span> 3rd Place</span>
                     <span className="font-semibold text-orange-400">1,000 PARDON (10%)</span>
                   </div>
                 </div>
@@ -298,7 +286,7 @@ export default function LeaderboardPage() {
                     <span className="font-semibold text-blue-400">~285 PARDON each</span>
                   </div>
                   <div className="flex justify-between items-center p-3 bg-gray-900 rounded">
-                    <span>📊 Minimum Score</span>
+                    <span> Minimum Score</span>
                     <span className="font-semibold text-green-400">80 points</span>
                   </div>
                   <div className="flex justify-between items-center p-3 bg-gray-900 rounded">

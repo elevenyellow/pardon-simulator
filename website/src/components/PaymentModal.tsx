@@ -1,11 +1,11 @@
-import { useState } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
+import { useState } from'react';
+import { useWallet } from'@solana/wallet-adapter-react';
 import { 
   PublicKey
-} from '@solana/web3.js';
+} from'@solana/web3.js';
 
 interface PaymentRequest {
-  type: 'x402_payment_required';
+  type:'x402_payment_required';
   recipient: string;
   recipient_address: string;
   amount_sol: number;
@@ -58,47 +58,35 @@ export default function PaymentModal({
       setLoading(true);
       setError(null);
 
-      console.log('\n' + '='.repeat(80));
-      console.log('💰 X402 PAYMENT SUBMISSION (User → Backend → Facilitator)');
-      console.log('='.repeat(80));
-      console.log('From:', publicKey.toString());
-      console.log('To:', paymentRequest.recipient_address);
-      console.log('Amount:', paymentRequest.amount_usdc || paymentRequest.amount_sol, paymentRequest.amount_usdc ? 'USDC' : 'SOL');
-      console.log('Service:', paymentRequest.service_type || paymentRequest.reason);
+      console.log('[x402] Starting payment submission');
 
-      // Step 1: Create and sign Solana USDC transaction
-      console.log('\n🔐 Step 1: Creating Solana USDC transaction...');
+      // Step 1: Create and sign x402 payment authorization
+      console.log('[x402] Creating payment authorization');
       const { createUSDCTransaction } = await import('@/lib/x402-payload-client');
-      const { Connection } = await import('@solana/web3.js');
-      
-      const connection = new Connection(
-        process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com',
-        'confirmed'
-      );
+      const { PublicKey } = await import('@solana/web3.js');
       
       const signedTx = await createUSDCTransaction(
-        `payment-${Date.now()}`,
-        connection,
+`payment-${Date.now()}`,
         publicKey,
         new PublicKey(paymentRequest.recipient_address),
         paymentRequest.amount_usdc || paymentRequest.amount_sol,
         signTransaction
       );
 
-      console.log('✅ Transaction signed');
+      console.log('[x402] Transaction signed');
 
       // Step 2: Submit to backend (which will use facilitator)
-      console.log('\n📤 Step 2: Submitting to backend facilitator endpoint...');
+      console.log('[x402] Submitting to backend');
       const response = await fetch('/api/x402/user-submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method:'POST',
+        headers: {'Content-Type':'application/json'},
         body: JSON.stringify({
           signedTransaction: signedTx,
           paymentRequest: {
             payment_id: paymentRequest.payment_id || signedTx.payment_id,
             recipient_address: paymentRequest.recipient_address,
             amount_usdc: paymentRequest.amount_usdc || paymentRequest.amount_sol,
-            service_type: paymentRequest.service_type || 'service',
+            service_type: paymentRequest.service_type ||'service',
             reason: paymentRequest.reason,
           },
         }),
@@ -106,27 +94,23 @@ export default function PaymentModal({
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || `Payment submission failed: ${response.status}`);
+        throw new Error(errorData.error ||`Payment submission failed: ${response.status}`);
       }
 
       const result = await response.json();
 
       if (!result.success) {
-        throw new Error(result.error || 'Payment submission failed');
+        throw new Error(result.error ||'Payment submission failed');
       }
 
-      console.log('='.repeat(80));
-      console.log('✅ PAYMENT SUBMITTED SUCCESSFULLY!');
-      console.log('='.repeat(80));
+      console.log('PAYMENT SUBMITTED SUCCESSFULLY!');
       console.log('Transaction:', result.transaction);
       console.log('Network:', result.network);
       console.log('x402 Compliant:', result.x402Compliant);
       console.log('Via Facilitator:', result.submittedViaFacilitator);
       console.log('\n🔍 View transaction:');
-      console.log('   x402scan:', result.x402ScanUrl);
-      console.log('   Solana Explorer:', result.solanaExplorer);
-      console.log('='.repeat(80));
-      console.log('');
+      console.log('x402scan:', result.x402ScanUrl);
+      console.log('Solana Explorer:', result.solanaExplorer);
 
       // Step 3: Return transaction hash (NOT payload) to chat
       // The agent will verify this transaction hash via backend
@@ -140,24 +124,29 @@ export default function PaymentModal({
       
       onClose();
     } catch (err: any) {
-      console.error('❌ Payment submission error:', err);
-      setError(err.message || 'Payment submission failed');
+      console.error('Payment submission error:', err);
+      setError(err.message ||'Payment submission failed');
     } finally {
       setLoading(false);
     }
   };
 
-  const usdEstimate = (paymentRequest.amount_sol * 200).toFixed(2); // Rough estimate
+  // Determine currency type and amounts
+  const isUSDC = paymentRequest.amount_usdc && paymentRequest.amount_usdc > 0;
+  const displayAmount = isUSDC ? paymentRequest.amount_usdc : paymentRequest.amount_sol;
+  const displayCurrency = isUSDC ? 'USDC' : 'SOL';
+  const usdEstimate = isUSDC 
+    ? displayAmount.toFixed(2) 
+    : (paymentRequest.amount_sol * 200).toFixed(2);
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
         <div className="flex justify-between items-start mb-4">
-          <h2 className="text-2xl font-bold text-gray-900">💰 Payment Required</h2>
+          <h2 className="text-2xl font-bold text-gray-900"> Payment Required</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-            disabled={loading}
+            className="text-gray-400 hover:text-gray-600"            disabled={loading}
           >
             ✕
           </button>
@@ -178,11 +167,18 @@ export default function PaymentModal({
               <span className="text-gray-900 font-medium">Amount:</span>
               <div className="text-right">
                 <div className="text-xl font-bold text-purple-600">
-                  {paymentRequest.amount_sol} SOL
+                  {displayAmount} {displayCurrency}
                 </div>
-                <div className="text-sm text-gray-500">
-                  ≈ ${usdEstimate} USD
-                </div>
+                {!isUSDC && (
+                  <div className="text-sm text-gray-500">
+                    ≈ ${usdEstimate} USD
+                  </div>
+                )}
+                {isUSDC && (
+                  <div className="text-sm text-gray-500">
+                    ${usdEstimate}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -205,7 +201,7 @@ export default function PaymentModal({
           {/* Wallet Status */}
           {!publicKey && (
             <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded">
-              ⚠️ Please connect your Solana wallet to continue
+               Please connect your Solana wallet to continue
             </div>
           )}
 
@@ -213,24 +209,21 @@ export default function PaymentModal({
           <div className="flex gap-3 pt-2">
             <button
               onClick={onClose}
-              className="flex-1 px-4 py-3 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition-colors disabled:opacity-50"
-              disabled={loading}
+              className="flex-1 px-4 py-3 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition-colors disabled:opacity-50"              disabled={loading}
             >
               Cancel
             </button>
             <button
               onClick={handlePay}
               disabled={loading || !publicKey}
-              className="flex-1 px-4 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
+              className="flex-1 px-4 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"            >
               {loading ? (
                 <>
-                  <span className="inline-block animate-spin mr-2">⏳</span>
+                  <span className="inline-block animate-spin mr-2"></span>
                   Processing...
                 </>
               ) : (
-                'Pay with Wallet'
-              )}
+'Pay with Wallet'              )}
             </button>
           </div>
 

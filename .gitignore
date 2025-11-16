@@ -184,6 +184,13 @@ agents/*/personality-public.txt
 agents/shared/operational-template.txt
 agents/shared/personality-template.txt
 
+# Agent content files (extracted from code for easy customization)
+# Keep the .example versions for templates
+agents/*/tool-descriptions.txt
+agents/*/scoring-config.txt
+agents/shared/scoring-mandate.txt
+agents/shared/agent-comms-note.txt
+
 # Build artifacts
 *.tar.gz
 *.zip

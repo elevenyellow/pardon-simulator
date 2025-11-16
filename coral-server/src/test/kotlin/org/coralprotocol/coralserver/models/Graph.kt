@@ -31,7 +31,7 @@
 //            runtime = RuntimeId.DOCKER,
 //            serverSource = GraphAgentServerSource.Servers(
 //                listOf(
-//                    GraphAgentServer("https://hackathon.coralprotocol.org:5555",
+//                    GraphAgentServer("https://coral-server-1.example.com:5555",
 //                        listOf(
 //                            GraphAgentServerAttribute.String(GraphAgentServerAttributeType.ATTESTED_BY, "Coral Team"),
 //                        )),

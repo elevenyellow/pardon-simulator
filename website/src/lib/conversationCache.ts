@@ -30,7 +30,7 @@ interface ConversationCache {
   [walletAddress: string]: WalletCache;
 }
 
-const CACHE_KEY = 'pardon_conversations';
+const CACHE_KEY ='pardon_conversations';
 const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 1 week (matches game cycle)
 const MAX_THREADS_PER_WALLET = 10; // Keep last 10 conversations per wallet
 const MAX_WALLETS = 3; // Keep last 3 wallets to prevent unlimited growth
@@ -90,7 +90,7 @@ function saveCache(cache: ConversationCache): void {
     console.warn('Failed to save conversation cache:', error);
     
     // If quota exceeded, try clearing old data
-    if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+    if (error instanceof DOMException && error.name ==='QuotaExceededError') {
       console.warn('Storage quota exceeded, clearing old conversations...');
       clearOldConversations();
       
@@ -268,7 +268,7 @@ export function getCacheStats(): {
     });
   });
   
-  const cacheString = localStorage.getItem(CACHE_KEY) || '';
+  const cacheString = localStorage.getItem(CACHE_KEY) ||'';
   const sizeKB = Math.round((cacheString.length * 2) / 1024); // UTF-16 = 2 bytes per char
   
   return {

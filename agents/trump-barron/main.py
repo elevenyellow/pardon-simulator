@@ -190,6 +190,29 @@ async def lookup_agent_wallet(agent_name: str) -> str:
         return f"[ERROR] Unknown agent '{agent_name}'. Available: {available}"
 
 
+def load_dynamic_content():
+    """Load dynamic content from text files for scoring and agent communication"""
+    agent_dir = os.path.dirname(os.path.abspath(__file__))
+    shared_dir = os.path.join(os.path.dirname(agent_dir), "shared")
+    
+    # Load shared scoring mandate template
+    with open(os.path.join(shared_dir, "scoring-mandate.txt"), 'r', encoding='utf-8') as f:
+        scoring_mandate_template = f.read()
+    
+    # Load shared agent comms note
+    with open(os.path.join(shared_dir, "agent-comms-note.txt"), 'r', encoding='utf-8') as f:
+        agent_comms_note = f.read()
+    
+    # Load agent-specific scoring configuration
+    with open(os.path.join(agent_dir, "scoring-config.txt"), 'r', encoding='utf-8') as f:
+        scoring_config = f.read()
+    
+    return {
+        'scoring_mandate_template': scoring_mandate_template,
+        'agent_comms_note': agent_comms_note,
+        'scoring_config': scoring_config
+    }
+
 def load_agent_prompt(**variables) -> str:
     """
     Load agent operational prompts (shared + agent-specific) and substitute variables.
@@ -411,53 +434,41 @@ async def main():
                     # Check if sender is the user (sbf) or another agent
                     is_user_message = sender_id == "sbf"
                     
+                    # Load dynamic content
+                    dynamic_content = load_dynamic_content()
+                    
                     # For user messages, replace senderId with actual wallet for scoring
                     if is_user_message:
                         mentions_result_clean = json.dumps(mentions_data)
                         
-                        scoring_mandate = f""" MANDATORY FIRST STEP - SCORE THIS MESSAGE! 
-
-Before responding, you MUST:
-1. Evaluate this message for penalties or quality  
-2. Call award_points() with the user's wallet from senderId (it's their real Solana address)
-3. award_points() returns a JSON score_update object - YOU MUST INCLUDE IT IN YOUR MESSAGE!
-4. Send coral_send_message with your response AND the score_update JSON appended at the end
-
-IMPORTANT ROUTING RULES:
-- To reply to THIS USER: mentions=["sbf"] ← Use "sbf" for routing back to user
-- To contact Donald: mentions=["donald-trump"]
-- To contact Melania: mentions=["melania-trump"]
-
-The senderId contains the user's actual wallet address for scoring.
-Use it directly in award_points(senderId, points, reason, category, subcategory, "barron-trump")
-
-EXAMPLE WORKFLOW:
-1. score_result = award_points("6pF45ayW...", 5, "Good attempt", "negotiation", "medium_quality", "barron-trump")
-2. coral_send_message(threadId="...", content="Your response here\\n\\n" + score_result, mentions=["sbf"])
-
-The score_result JSON MUST be included in your message for the user to see their score update!
-
-
-
-"""
+                        # Build scoring mandate from loaded config
+                        scoring_config_content = dynamic_content['scoring_config']
+                        
+                        # Extract sections from scoring config
+                        import re
+                        eval_criteria_match = re.search(r'## Evaluation Criteria\n(.+?)(?=\n## )', scoring_config_content, re.DOTALL)
+                        score_guide_match = re.search(r'## Evaluation Score Guide[^\n]*\n(.+?)(?=\n## |\nNote:)', scoring_config_content, re.DOTALL)
+                        routing_match = re.search(r'## Routing Instructions\n(.+?)$', scoring_config_content, re.DOTALL)
+                        
+                        evaluation_criteria = eval_criteria_match.group(1).strip() if eval_criteria_match else ""
+                        evaluation_score_guide = score_guide_match.group(1).strip() if score_guide_match else ""
+                        routing_instructions = routing_match.group(1).strip() if routing_match else ""
+                        
+                        # Format the scoring mandate template with agent-specific content
+                        scoring_mandate = dynamic_content['scoring_mandate_template'].format(
+                            evaluation_criteria=evaluation_criteria,
+                            evaluation_score_guide=evaluation_score_guide,
+                            routing_instructions=routing_instructions,
+                            agent_id="barron-trump"
+                        )
+                        
                         full_input = f"{scoring_mandate}Process these mentions and respond appropriately: {mentions_result_clean}"
                     else:
                         # Agent-to-agent communication - no scoring needed
                         mentions_result_clean = json.dumps(mentions_data)
                         
-                        agent_comms_note = f""" AGENT-TO-AGENT COMMUNICATION 
-
-You received this message from another agent ({sender_id}), NOT from the user.
-
-IMPORTANT:
-- DO NOT call award_points() for agent messages
-- Scoring is ONLY for user (sbf) messages
-- Respond naturally to the agent's request
-- Use appropriate mentions when replying
-
-
-
-"""
+                        # Use loaded agent comms note
+                        agent_comms_note = dynamic_content['agent_comms_note']
                         full_input = f"{agent_comms_note}Process this agent message and respond appropriately: {mentions_result_clean}"
                     
                     response = await asyncio.wait_for(

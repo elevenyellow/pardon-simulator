@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, User } from 'lucide-react';
+import React, { useState } from'react';
+import { ChevronDown, ChevronUp, User } from'lucide-react';
 
 interface AgentPersonality {
   agent: string;
@@ -36,7 +36,7 @@ export function AgentPersonalityCard({ agentId, defaultExpanded = false, onClose
         const data = await response.json();
         setPersonality(data);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unknown error');
+        setError(err instanceof Error ? err.message :'Unknown error');
       } finally {
         setLoading(false);
       }
@@ -82,9 +82,9 @@ export function AgentPersonalityCard({ agentId, defaultExpanded = false, onClose
     } else if (currentSection && line.trim()) {
       currentSection.content.push(line);
     } else if (!currentSection && line.trim()) {
-      // Content before first section (like "You are...")
+      // Content before first section (like"You are...")
       if (sections.length === 0) {
-        sections.push({ title: '', content: [line] });
+        sections.push({ title:'', content: [line] });
       }
     }
   }
@@ -101,7 +101,7 @@ export function AgentPersonalityCard({ agentId, defaultExpanded = false, onClose
           <div className="flex items-center gap-4 flex-1">
             {/* Avatar */}
             <div className="relative w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-2xl overflow-hidden">
-              <User className="w-10 h-10" />
+              <User className="w-10 h-10"/>
             </div>
             
             {/* Name and Title */}
@@ -114,16 +114,15 @@ export function AgentPersonalityCard({ agentId, defaultExpanded = false, onClose
           {/* Expand/Collapse Button */}
           <button
             onClick={() => setExpanded(!expanded)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-          >
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"          >
             {expanded ? (
               <>
-                <ChevronUp className="w-4 h-4" />
+                <ChevronUp className="w-4 h-4"/>
                 <span className="hidden sm:inline">Show Less</span>
               </>
             ) : (
               <>
-                <ChevronDown className="w-4 h-4" />
+                <ChevronDown className="w-4 h-4"/>
                 <span className="hidden sm:inline">Show More</span>
               </>
             )}
@@ -133,9 +132,7 @@ export function AgentPersonalityCard({ agentId, defaultExpanded = false, onClose
           {onClose && (
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-white transition-colors"
-              aria-label="Close"
-            >
+              className="text-gray-400 hover:text-white transition-colors"              aria-label="Close"            >
               ×
             </button>
           )}
@@ -168,7 +165,7 @@ export function AgentPersonalityCard({ agentId, defaultExpanded = false, onClose
       {!expanded && (
         <div className="p-4 bg-gray-900/50 text-center">
           <p className="text-sm text-gray-400">
-            Click "Show More" to view full personality details
+            Click"Show More"to view full personality details
           </p>
         </div>
       )}

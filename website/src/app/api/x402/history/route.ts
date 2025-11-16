@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { NextRequest, NextResponse } from'next/server';
+import { prisma } from'@/lib/prisma';
 
 /**
  * Get payment history for a wallet
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     
     if (!wallet) {
       return NextResponse.json(
-        { error: 'Missing wallet parameter' },
+        { error:'Missing wallet parameter'},
         { status: 400 }
       );
     }
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
           { toWallet: wallet }
         ]
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt:'desc'},
       take: limit,
       select: {
         id: true,
@@ -56,9 +56,9 @@ export async function GET(request: NextRequest) {
     });
     
   } catch (error: any) {
-    console.error('❌ Error fetching payment history:', error);
+    console.error('Error fetching payment history:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch history', message: error.message },
+      { error:'Failed to fetch history', message: error.message },
       { status: 500 }
     );
   }

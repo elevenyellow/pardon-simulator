@@ -1,13 +1,13 @@
-import { CdpClient } from '@coinbase/cdp-sdk';
+import { CdpClient } from'@coinbase/cdp-sdk';
 
 export interface X402RegistrationRequest {
   signature: string;
-  chain: 'solana';
-  network: 'mainnet-beta' | 'devnet';
+  chain:'solana';
+  network:'mainnet-beta'|'devnet';
   from: string;
   to: string;
   amount: number;
-  currency: 'SOL';
+  currency:'SOL';
   metadata?: {
     platform: string;
     service_type?: string;
@@ -32,8 +32,6 @@ export class X402CDPClient {
     // - CDP_API_KEY_ID
     // - CDP_API_KEY_SECRET
     if (!process.env.CDP_API_KEY_ID || !process.env.CDP_API_KEY_SECRET) {
-      console.warn('⚠️ CDP credentials not configured - set CDP_API_KEY_ID and CDP_API_KEY_SECRET');
-      console.warn('   Get credentials from: https://portal.cdp.coinbase.com/');
       return;
     }
     
@@ -41,9 +39,8 @@ export class X402CDPClient {
       // Initialize CDP client - it reads credentials from environment variables
       this.cdp = new CdpClient();
       this.isConfigured = true;
-      console.log('✅ CDP x402 Facilitator configured (Official SDK)');
     } catch (error: any) {
-      console.error('❌ CDP SDK initialization failed:', error.message);
+      console.error('CDP SDK initialization failed:', error.message);
       this.isConfigured = false;
     }
   }
@@ -52,14 +49,13 @@ export class X402CDPClient {
     if (!this.isConfigured || !this.cdp) {
       return {
         success: false,
-        error: 'CDP not configured',
-        x402ScanUrl: `https://www.x402scan.com/tx/${request.signature}?chain=solana`
-      };
+        error:'CDP not configured',
+        x402ScanUrl:`https://www.x402scan.com/tx/${request.signature}?chain=solana`      };
     }
     
     try {
-      console.log(`📡 Registering transaction with x402scan.com via CDP facilitator...`);
-      console.log(`   Transaction: ${request.signature.substring(0, 16)}...${request.signature.substring(request.signature.length - 16)}`);
+      console.log(`Registering transaction with x402scan.com via CDP facilitator...`);
+      console.log(`Transaction: ${request.signature.substring(0, 16)}...${request.signature.substring(request.signature.length - 16)}`);
       
       // Use official CDP SDK for x402 registration
       // The SDK handles Solana network communication internally
@@ -72,15 +68,15 @@ export class X402CDPClient {
         amount: request.amount,
         currency: request.currency,
         metadata: {
-          platform: process.env.X402_PLATFORM_NAME || 'pardon-simulator',
+          platform: process.env.X402_PLATFORM_NAME ||'pardon-simulator',
           platform_url: process.env.X402_PLATFORM_URL,
           ...request.metadata
         }
       });
       
-      const x402ScanUrl = `https://www.x402scan.com/tx/${request.signature}?chain=solana`;
-      console.log('✅ Transaction registered via CDP SDK');
-      console.log(`   View at: ${x402ScanUrl}`);
+      const x402ScanUrl =`https://www.x402scan.com/tx/${request.signature}?chain=solana`;
+      console.log('Transaction registered via CDP SDK');
+      console.log(`View at: ${x402ScanUrl}`);
       
       return {
         success: true,
@@ -88,14 +84,13 @@ export class X402CDPClient {
         x402ScanId: result?.id
       };
     } catch (error: any) {
-      console.error('⚠️ CDP x402 registration failed (non-blocking):', error.message);
+      console.error('[x402] CDP registration failed (non-blocking):', error.message);
       
       // Return URL even if registration fails (non-blocking)
       return {
         success: false,
         error: error.message,
-        x402ScanUrl: `https://www.x402scan.com/tx/${request.signature}?chain=solana`
-      };
+        x402ScanUrl:`https://www.x402scan.com/tx/${request.signature}?chain=solana`      };
     }
   }
 }

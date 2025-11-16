@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { NextRequest, NextResponse } from'next/server';
+import { prisma } from'@/lib/prisma';
 
 /**
  * Store payment in database
@@ -13,9 +13,9 @@ export async function POST(request: NextRequest) {
       data: {
         fromWallet: data.fromWallet,
         toWallet: data.toWallet,
-        toAgent: data.toAgent || 'unknown',
+        toAgent: data.toAgent ||'unknown',
         amount: data.amount,
-        currency: data.currency || 'SOL',
+        currency: data.currency ||'SOL',
         signature: data.signature,
         serviceType: data.serviceType,
         verified: data.verified || false,

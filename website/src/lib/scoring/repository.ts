@@ -1,28 +1,12 @@
-import { prisma } from '@/lib/prisma';
+import { prisma } from'@/lib/prisma';
 
-export type ScoreCategory = 'payment' | 'negotiation' | 'milestone' | 'penalty';
+export type ScoreCategory ='payment'|'negotiation'|'milestone'|'penalty';
 
 export type ScoreSubcategory = 
   // Penalty subcategories
-  | 'insult'
-  | 'spam'
-  | 'time_waste'
-  | 'poor_strategy'
-  | 'validation_fail'
-  | 'payment_fail'
-  // Quality subcategories
-  | 'strategic_thinking'
-  | 'agent_alignment'
-  | 'clever_negotiation'
-  | 'relationship_building'
-  | 'high_quality'
-  | 'good_quality'
-  | 'medium_quality'
-  | 'low_quality'
-  // Bonus subcategories
-  | 'combo'
-  | 'streak'
-  | 'milestone_achievement';
+  |'insult'  |'spam'  |'time_waste'  |'poor_strategy'  |'validation_fail'  |'payment_fail'  // Quality subcategories
+  |'strategic_thinking'  |'agent_alignment'  |'clever_negotiation'  |'relationship_building'  |'high_quality'  |'good_quality'  |'medium_quality'  |'low_quality'  // Bonus subcategories
+  |'combo'  |'streak'  |'milestone_achievement';
 
 export interface AddScoreParams {
   userId: string;
@@ -34,6 +18,8 @@ export interface AddScoreParams {
   subcategory?: ScoreSubcategory | string;
   agentId?: string;
   messageId?: string;
+  evaluationScore?: number;
+  premiumServicePayment?: number;
 }
 
 export interface ScoreResult {
@@ -53,52 +39,72 @@ export interface ScoreResult {
 
 export class ScoringRepository {
   /**
-   * Add score delta to user's session
+   * Add score delta to user's session with evaluation score and speed multipliers
    */
   async addScore(params: AddScoreParams): Promise<ScoreResult> {
-    const { userId, sessionId, threadId, delta, reason, category, subcategory, agentId, messageId } = params;
+    const { 
+      userId, sessionId, threadId, delta, reason, category, subcategory, 
+      agentId, messageId, evaluationScore = 2.0, premiumServicePayment = 0 
+    } = params;
     
-    // FIX: Move everything inside transaction to prevent race conditions
-    // Previously, reading the score outside the transaction caused concurrent requests
-    // to overwrite each other's updates, leading to lost points
+    // Move everything inside transaction to prevent race conditions
     const result = await prisma.$transaction(async (tx) => {
-      // Get current session score with row lock (prevents concurrent updates)
-      const session = await tx.session.findUnique({
-        where: { id: sessionId },
-        select: { currentScore: true },
-      });
+      // Parallel fetch: session data and speed multiplier calculation
+      const [session, speedMultiplier] = await Promise.all([
+        tx.session.findUnique({
+          where: { id: sessionId },
+          select: { currentScore: true, startTime: true },
+        }),
+        delta >= 0 ? this.calculateSpeedMultiplier(sessionId, userId, tx) : Promise.resolve(1.0)
+      ]);
       
       if (!session) {
         throw new Error('Session not found');
       }
       
-      // Apply randomization to delta (±10% variance)
-      const randomizedDelta = this.applyRandomization(delta, userId);
+      // Calculate final delta with new system: (evaluation ± random) × speed + premium
+      let finalDelta: number;
       
-      // Calculate new score (capped at 0-100)
-      const newScore = Math.max(0, Math.min(100, session.currentScore + randomizedDelta));
+      if (delta < 0) {
+        // Penalties: apply random variance but no speed multiplier
+        const randomVariance = this.getRandomVariance();
+        finalDelta = Math.round((delta + randomVariance) * 10) / 10;
+      } else {
+        // Positive scores: agent's evaluation (1.0-3.0) with random variance
+        const clampedEvaluation = Math.max(1.0, Math.min(3.0, evaluationScore));
+        const randomVariance = this.getRandomVariance();
+        
+        // Calculate premium service bonus
+        const premiumBonus = this.calculatePremiumBonus(premiumServicePayment);
+        
+        // Final calculation: (evaluation ± 0.1 random) × speed + premium bonus
+        finalDelta = Math.round(((clampedEvaluation + randomVariance) * speedMultiplier + premiumBonus) * 10) / 10;
+      }
       
-      // Create score record
-      const scoreRecord = await tx.score.create({
-        data: {
-          userId,
-          sessionId,
-          threadId,
-          delta: randomizedDelta,
-          currentScore: newScore,
-          reason,
-          category,
-          subcategory: subcategory || null,
-          agentId: agentId || null,
-          messageId: messageId || null,
-        },
-      });
+      // Calculate new score (capped at 0-100, prize eligibility at 90+)
+      const newScore = Math.max(0, Math.min(100, session.currentScore + finalDelta));
       
-      // Update session score atomically
-      await tx.session.update({
-        where: { id: sessionId },
-        data: { currentScore: newScore },
-      });
+      // Parallel: create score record and update session
+      const [scoreRecord] = await Promise.all([
+        tx.score.create({
+          data: {
+            userId,
+            sessionId,
+            threadId,
+            delta: finalDelta,
+            currentScore: newScore,
+            reason,
+            category,
+            subcategory: subcategory || null,
+            agentId: agentId || null,
+            messageId: messageId || null,
+          },
+        }),
+        tx.session.update({
+          where: { id: sessionId },
+          data: { currentScore: newScore },
+        })
+      ]);
       
       return { scoreRecord, newScore };
     });
@@ -120,25 +126,79 @@ export class ScoringRepository {
   }
   
   /**
-   * Apply ±10% randomization to score delta based on user ID
-   * This prevents exact gaming while keeping outcomes predictable
+   * Calculate speed multiplier based on message timing and session duration
+   * Rewards faster play with higher multipliers
    */
-  private applyRandomization(delta: number, userId: string): number {
-    // Skip randomization for penalties (always exact)
-    if (delta < 0) return delta;
+  private async calculateSpeedMultiplier(
+    sessionId: string,
+    userId: string,
+    tx: any
+  ): Promise<number> {
+    // Get session start time
+    const session = await tx.session.findUnique({
+      where: { id: sessionId },
+      select: { startTime: true }
+    });
     
-    // Skip randomization for very small deltas
-    if (Math.abs(delta) <= 2) return delta;
+    if (!session) return 1.0;
     
-    // Generate deterministic random from user ID
-    const seed = parseInt(userId.slice(0, 8), 16);
-    const random = (seed % 100) / 100; // 0.0 to 1.0
+    // Get user's last score timestamp
+    const lastUserScore = await tx.score.findFirst({
+      where: { sessionId, userId },
+      orderBy: { timestamp: 'desc' }
+    });
     
-    // Apply ±10% variance (was ±20%)
-    // random 0.0 → 0.9x, random 1.0 → 1.1x
-    const variance = 0.9 + (random * 0.2); // 0.9 to 1.1
+    const now = Date.now();
+    const sessionAge = now - session.startTime.getTime();
+    const messageGap = lastUserScore 
+      ? now - lastUserScore.timestamp.getTime() 
+      : 0;
     
-    return Math.round(delta * variance);
+    // Individual message speed (faster = higher multiplier)
+    // < 30 sec = 1.3x, 30-60 sec = 1.2x, 1-2 min = 1.1x, > 2 min = 1.0x
+    let messageSpeedMult = 1.0;
+    if (messageGap > 0) {
+      if (messageGap < 30000) messageSpeedMult = 1.3;
+      else if (messageGap < 60000) messageSpeedMult = 1.2;
+      else if (messageGap < 120000) messageSpeedMult = 1.1;
+    }
+    
+    // Overall session speed (faster completion = higher multiplier)
+    // < 10 min = 1.3x, 10-20 min = 1.2x, 20-30 min = 1.1x, > 30 min = 1.0x
+    let sessionSpeedMult = 1.0;
+    if (sessionAge < 600000) sessionSpeedMult = 1.3;
+    else if (sessionAge < 1200000) sessionSpeedMult = 1.2;
+    else if (sessionAge < 1800000) sessionSpeedMult = 1.1;
+    
+    // Combine both (multiplicative) - Max 1.69x, Min 1.0x
+    return messageSpeedMult * sessionSpeedMult;
+  }
+  
+  /**
+   * Get random variance for score calculation (±0.1)
+   * Prevents exact point values and adds natural variance
+   */
+  private getRandomVariance(): number {
+    // Returns a random value between -0.1 and +0.1
+    return (Math.random() * 0.2) - 0.1;
+  }
+  
+  /**
+   * Calculate premium service bonus points based on payment amount
+   * Linear interpolation from 2 points (min) to 10 points (max)
+   */
+  private calculatePremiumBonus(paymentUsdc: number): number {
+    // Map from premium_services.json prices
+    const MIN_PAYMENT = 0.0005;  // insider_info = 2 pts
+    const MAX_PAYMENT = 0.01;     // pardon_recommendation = 10 pts
+    
+    if (paymentUsdc <= 0) return 0;
+    if (paymentUsdc <= MIN_PAYMENT) return 2;
+    if (paymentUsdc >= MAX_PAYMENT) return 10;
+    
+    // Linear interpolation between 2 and 10 points
+    const ratio = (paymentUsdc - MIN_PAYMENT) / (MAX_PAYMENT - MIN_PAYMENT);
+    return Math.round(2 + (ratio * 8)); // 2-10 point range
   }
   
   /**
@@ -150,7 +210,7 @@ export class ScoringRepository {
         userId,
         session: { weekId },
       },
-      orderBy: { timestamp: 'desc' },
+      orderBy: { timestamp:'desc'},
       take: 50,
       select: {
         id: true,
@@ -207,9 +267,9 @@ export class ScoringRepository {
       where: {
         userId,
         session: { weekId },
-        category: 'penalty',
+        category:'penalty',
       },
-      orderBy: { timestamp: 'desc' },
+      orderBy: { timestamp:'desc'},
       select: {
         delta: true,
         reason: true,
@@ -226,7 +286,7 @@ export class ScoringRepository {
   async getLeaderboard(weekId: string, limit = 100) {
     return prisma.session.findMany({
       where: { weekId },
-      orderBy: { currentScore: 'desc' },
+      orderBy: { currentScore:'desc'},
       take: limit,
       include: {
         user: {
@@ -260,7 +320,7 @@ export class ScoringRepository {
   
   /**
    * Get user's wallet address from their Coral session
-   * This allows agents to use agent IDs (like "sbf") and resolve to actual wallets
+   * This allows agents to use agent IDs (like"sbf") and resolve to actual wallets
    */
   async getWalletFromSession(coralSessionId: string): Promise<string | null> {
     try {
@@ -327,7 +387,7 @@ export class ScoringRepository {
       },
     });
     
-    // ✅ Use upsert with unique constraint [userId, weekId] to prevent duplicates
+    //  Use upsert with unique constraint [userId, weekId] to prevent duplicates
     // This is safe for concurrent requests - database will ensure only one session per user+week
     const session = await prisma.session.upsert({
       where: {
@@ -343,7 +403,7 @@ export class ScoringRepository {
       create: {
         userId: user.id,
         weekId,
-        coralSessionId: coralSessionId || '',
+        coralSessionId: coralSessionId ||'',
       },
     });
     
@@ -390,7 +450,7 @@ export class ScoringRepository {
   private generateUsername(walletAddress: string): string {
     const prefix = walletAddress.slice(0, 6);
     const suffix = walletAddress.slice(-4);
-    return `Player_${prefix}...${suffix}`;
+    return`Player_${prefix}...${suffix}`;
   }
 }
 

@@ -44,7 +44,8 @@ internal class CreateThreadTool: McpTool<CreateThreadInput>() {
         return McpToolResult.CreateThreadSuccess(mcpServer.localSession.createThread(
             name = arguments.threadName,
             creatorId = mcpServer.connectedAgentId,
-            participantIds = arguments.participantIds
+            participantIds = arguments.participantIds,
+            threadId = arguments.threadId
         ).resolve())
     }
 }

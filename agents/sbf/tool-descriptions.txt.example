@@ -1,0 +1,28 @@
+# Tool Descriptions for Agent
+
+## check_my_balance
+Check agent's current wallet balance in SOL
+
+## send_crypto
+Request payment from the user
+
+Args:
+    recipient_name: Name of the recipient
+    recipient_address: Wallet address
+    amount_sol: Amount to send
+    reason: Reason for the payment
+
+## create_payment_payload
+Create a payment payload for the user to sign
+
+Args:
+    recipient_name: Name of the recipient
+    recipient_address: Wallet address
+    amount_sol: Amount to send
+    reason: Reason for the payment
+
+## check_pardon_status
+Check current status of pardon application
+
+Returns: Status details with obstacles and strategies
+

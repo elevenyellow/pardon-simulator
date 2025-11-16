@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { AgentPersonalityCard } from '@/components/AgentPersonalityCard';
-import { Users, ArrowLeft } from 'lucide-react';
-import Link from 'next/link';
+import React, { useState, useEffect } from'react';
+import { AgentPersonalityCard } from'@/components/AgentPersonalityCard';
+import { Users, ArrowLeft } from'lucide-react';
+import Link from'next/link';
 
 interface Agent {
   id: string;
@@ -13,13 +13,13 @@ interface Agent {
 
 export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([
-    { id: 'donald-trump', name: 'Donald Trump', title: 'President of the United States' },
-    { id: 'melania-trump', name: 'Melania Trump', title: 'First Lady' },
-    { id: 'eric-trump', name: 'Eric Trump', title: 'Executive VP, Trump Organization' },
-    { id: 'donjr-trump', name: 'Donald Trump Jr', title: 'Political Activist' },
-    { id: 'barron-trump', name: 'Barron Trump', title: 'Crypto Prodigy' },
-    { id: 'cz', name: 'Changpeng Zhao (CZ)', title: 'Binance Founder' },
-    { id: 'sbf', name: 'Sam Bankman-Fried (SBF)', title: 'Former FTX CEO (Player)' }
+    { id:'donald-trump', name:'Donald Trump', title:'President of the United States'},
+    { id:'melania-trump', name:'Melania Trump', title:'First Lady'},
+    { id:'eric-trump', name:'Eric Trump', title:'Executive VP, Trump Organization'},
+    { id:'donjr-trump', name:'Donald Trump Jr', title:'Political Activist'},
+    { id:'barron-trump', name:'Barron Trump', title:'Crypto Prodigy'},
+    { id:'cz', name:'Changpeng Zhao (CZ)', title:'Binance Founder'},
+    { id:'sbf', name:'Sam Bankman-Fried (SBF)', title:'Former FTX CEO (Player)'}
   ]);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
 
@@ -31,14 +31,12 @@ export default function AgentsPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Link
-                href="/"
-                className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
-              >
-                <ArrowLeft className="w-4 h-4" />
+                href="/"                className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"              >
+                <ArrowLeft className="w-4 h-4"/>
                 <span>Back to Game</span>
               </Link>
               <h1 className="text-2xl font-bold flex items-center gap-3">
-                <Users className="w-8 h-8 text-blue-400" />
+                <Users className="w-8 h-8 text-blue-400"/>
                 Agent Directory
               </h1>
             </div>
@@ -75,17 +73,14 @@ export default function AgentsPage() {
             <button
               key={agent.id}
               onClick={() => setSelectedAgent(selectedAgent === agent.id ? null : agent.id)}
-              className={`
-                bg-gradient-to-br from-gray-800 to-gray-900 
+              className={`                bg-gradient-to-br from-gray-800 to-gray-900 
                 border rounded-lg p-6 
                 hover:scale-105 hover:shadow-xl
                 transition-all duration-200
                 text-left
                 ${selectedAgent === agent.id 
-                  ? 'border-blue-500 ring-2 ring-blue-500/50' 
-                  : 'border-gray-700 hover:border-gray-600'
-                }
-              `}
+                  ?'border-blue-500 ring-2 ring-blue-500/50'                  :'border-gray-700 hover:border-gray-600'                }
+`}
             >
               {/* Avatar Placeholder */}
               <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-3xl mb-4 mx-auto">
@@ -98,14 +93,11 @@ export default function AgentsPage() {
                 <p className="text-sm text-gray-400 mb-3">{agent.title}</p>
                 
                 {/* View Button */}
-                <div className={`
-                  inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors
+                <div className={`                  inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors
                   ${selectedAgent === agent.id
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  }
-                `}>
-                  {selectedAgent === agent.id ? 'Viewing' : 'View Details'}
+                    ?'bg-blue-600 text-white'                    :'bg-gray-700 text-gray-300 hover:bg-gray-600'                  }
+`}>
+                  {selectedAgent === agent.id ?'Viewing':'View Details'}
                 </div>
               </div>
             </button>

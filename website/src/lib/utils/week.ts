@@ -3,14 +3,12 @@
  */
 
 /**
- * Get current week ID in format "YYYY-Www"
- * Example: "2024-W45"
- */
+ * Get current week ID in format"YYYY-Www" * Example:"2024-W45" */
 export function getCurrentWeekId(): string {
   const now = new Date();
   const year = now.getFullYear();
   const week = getWeekNumber(now);
-  return `${year}-W${week.toString().padStart(2, '0')}`;
+  return`${year}-W${week.toString().padStart(2,'0')}`;
 }
 
 /**
@@ -22,7 +20,7 @@ export function getLastWeekId(): string {
   now.setDate(now.getDate() - 7);
   const year = now.getFullYear();
   const week = getWeekNumber(now);
-  return `${year}-W${week.toString().padStart(2, '0')}`;
+  return`${year}-W${week.toString().padStart(2,'0')}`;
 }
 
 /**
@@ -86,10 +84,9 @@ export function isCurrentWeek(weekId: string): boolean {
 
 /**
  * Format week ID for display
- * Example: "2024-W45" -> "Week 45, 2024"
- */
+ * Example:"2024-W45"->"Week 45, 2024" */
 export function formatWeekId(weekId: string): string {
   const { year, week } = parseWeekId(weekId);
-  return `Week ${week}, ${year}`;
+  return`Week ${week}, ${year}`;
 }
 

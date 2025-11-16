@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from'react';
 
 interface Payment {
   id: string;
@@ -30,7 +30,7 @@ export default function PaymentHistory({ walletAddress }: { walletAddress: strin
         if (data.success) {
           setPayments(data.payments || []);
         } else {
-          setError(data.error || 'Failed to fetch payment history');
+          setError(data.error ||'Failed to fetch payment history');
         }
         setLoading(false);
       })
@@ -73,10 +73,10 @@ export default function PaymentHistory({ walletAddress }: { walletAddress: strin
             <div className="flex justify-between items-start mb-2">
               <div>
                 <div className="font-medium text-gray-900">
-                  {payment.serviceType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                  {payment.serviceType.replace(/_/g,'').replace(/\b\w/g, l => l.toUpperCase())}
                 </div>
                 <div className="text-sm text-gray-500">
-                  {payment.fromWallet === walletAddress ? 'To' : 'From'}: {payment.toAgent}
+                  {payment.fromWallet === walletAddress ?'To':'From'}: {payment.toAgent}
                 </div>
                 {payment.isAgentToAgent && (
                   <span className="inline-block text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded mt-1">
@@ -97,20 +97,14 @@ export default function PaymentHistory({ walletAddress }: { walletAddress: strin
             <div className="flex gap-3 mt-3 text-xs">
               <a 
                 href={`https://solscan.io/tx/${payment.signature}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-gray-600 hover:text-gray-900 hover:underline"
-              >
+                target="_blank"                rel="noopener noreferrer"                className="text-gray-600 hover:text-gray-900 hover:underline"              >
                 View on Solscan →
               </a>
               
               {payment.x402ScanUrl && (
                 <a 
                   href={payment.x402ScanUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-purple-600 hover:text-purple-800 hover:underline font-medium"
-                >
+                  target="_blank"                  rel="noopener noreferrer"                  className="text-purple-600 hover:text-purple-800 hover:underline font-medium"                >
                   View on x402scan →
                 </a>
               )}

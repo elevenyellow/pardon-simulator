@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { NextRequest, NextResponse } from'next/server';
+import { prisma } from'@/lib/prisma';
 
 /**
  * Update payment with x402scan data
@@ -7,13 +7,14 @@ import { prisma } from '@/lib/prisma';
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { signature: string } }
+  { params }: { params: Promise<{ signature: string }> }
 ) {
   try {
+    const { signature } = await params;
     const data = await request.json();
     
     const payment = await prisma.payment.update({
-      where: { signature: params.signature },
+      where: { signature },
       data: {
         x402Registered: data.x402Registered || true,
         x402ScanUrl: data.x402ScanUrl,

@@ -1,12 +1,12 @@
 'use client';
 
-import { Activity } from 'lucide-react';
+import { Activity } from'lucide-react';
 
 export default function GameStatus() {
   return (
     <div className="bg-gradient-to-br from-gray-900 to-black rounded-2xl p-6 border-2 border-trump-gold shadow-2xl">
       <div className="flex items-center gap-3 mb-4">
-        <Activity className="w-6 h-6 text-trump-gold" />
+        <Activity className="w-6 h-6 text-trump-gold"/>
         <h2 className="text-2xl font-bold text-trump-gold">Mission Status</h2>
       </div>
       

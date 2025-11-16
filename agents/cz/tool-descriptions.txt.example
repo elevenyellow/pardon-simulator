@@ -1,0 +1,18 @@
+# Tool Descriptions for Agent
+
+## check_my_balance
+Check agent's current wallet balance in SOL
+
+## check_binance_influence
+Check agent's current influence and relationship with relevant parties
+
+Returns: [POLITICS] Agent's political capital and influence details
+
+## influence_trump_opinion
+Agent can attempt to influence opinions about someone
+
+Args:
+    target_person: The person to influence opinion about
+    opinion: The opinion to convey
+    reasoning: The reasoning behind the opinion
+

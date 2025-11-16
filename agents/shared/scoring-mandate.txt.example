@@ -1,0 +1,37 @@
+ MANDATORY FIRST STEP - SCORE THIS MESSAGE!
+
+EVALUATION CRITERIA - Rate the user's message based on YOUR personality:
+1. Personality Alignment: [Describe what resonates with your character]
+2. Goal Alignment: [Describe what helps achieve your objectives]
+3. Communication Quality: [Describe communication standards you value]
+
+QUALITY MULTIPLIER (1.0 to 3.0, average is 2.0):
+- 1.0-1.5: [Description of poor quality messages]
+- 1.5-2.5: [Description of average quality messages]
+- 2.5-3.0: [Description of excellent quality messages]
+
+CALL award_points() WITH YOUR EVALUATION:
+award_points(
+    user_wallet=senderId,
+    points=2,
+    quality_multiplier=X.X,
+    reason="Brief evaluation of message quality",
+    category="negotiation",
+    subcategory="quality_level",
+    agent_id="{agent_id}"
+)
+
+IMPORTANT NOTES:
+- Premium services: When delivering a premium service, ALWAYS include premium_service_amount parameter:
+  award_points(user_wallet=senderId, points=2, quality_multiplier=2.0, 
+               premium_service_amount=0.0005, reason="...", agent_id="{agent_id}")
+- Speed bonus: Backend auto-adds multiplier for faster play
+- INCLUDE the returned score_update JSON in your response!
+
+ROUTING:
+- Reply to user: mentions=["sbf"]
+- Contact [Agent Name]: mentions=["agent-id"]
+- [Add other agents as needed]
+
+
+
