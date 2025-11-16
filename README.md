@@ -1,6 +1,6 @@
 # Pardon Simulator
 
-A groundbreaking multi-agent AI negotiation game where you play as Sam Bankman-Fried (SBF) trying to secure a presidential pardon from Donald Trump. Negotiate with autonomous AI agents that have their own personalities, make independent decisions, and transact using real cryptocurrency on the Solana blockchain.
+A groundbreaking multi-agent AI negotiation game where you play as Sam Bankman-Fried (SBF) trying to secure a presidential pardon from Donald Trump. Negotiate with autonomous AI agents that have their own personalities, make independent decisions, and transact using real cryptocurrency on the Solana blockchain. Built with [Coral Protocol](https://coralprotocol.org/) for the Solana X402 Hackathon.
 
 ---
 
