@@ -84,12 +84,12 @@ export default function AgentSelector({
           {/* Info Icon */}
           <button
             onClick={(e) => handleInfoClick(agent, e)}
-            className="absolute bottom-2 right-2 w-6 h-6 bg-black/70 border border-white/30 rounded-full flex items-center justify-center hover:bg-black/90 hover:border-[#FFD700] transition-all z-10"            aria-label="Show character info"          >
-            <Info className="w-3 h-3 text-white"/>
+            className="absolute bottom-0.5 right-0.5 md:bottom-2 md:right-2 w-5 h-5 md:w-6 md:h-6 bg-black/70 border border-white/30 rounded-full flex items-center justify-center hover:bg-black/90 hover:border-[#FFD700] transition-all z-10"            aria-label="Show character info"          >
+            <Info className="w-2.5 h-2.5 md:w-3 md:h-3 text-white"/>
           </button>
         </div>
         <div 
-          className="font-pixel text-[8px] text-[#FFD700] text-center leading-tight"          style={{
+          className="font-pixel text-[8px] text-[#FFD700] text-center leading-tight hidden md:block"          style={{
             textShadow:'0 0 10px #FFD700, 0 0 20px #FFD700'          }}
         >
           {agent.name}
@@ -100,16 +100,17 @@ export default function AgentSelector({
 
   return (
     <>
-      <div className="flex items-start gap-5">
+      {/* Desktop Layout: 3 left + TV + 3 right */}
+      <div className="hidden lg:flex items-start gap-3">
         {/* Left Column */}
-        <div className="flex flex-col gap-4 w-[180px]">
+        <div className="flex flex-col gap-3 w-[140px]">
           {leftAgents.map((agent) => (
             <AgentCard key={agent.id} agent={agent} />
           ))}
         </div>
 
         {/* Center - TV Container */}
-        <div className="relative w-[900px] h-[650px] flex items-center justify-center">
+        <div className="relative w-[700px] h-[500px] flex items-center justify-center">
           {/* TV Frame Background */}
           <div 
             className="absolute inset-0 bg-contain bg-center bg-no-repeat pointer-events-none pixel-art"            style={{ backgroundImage:"url('/assets/tv_1.png')"}}
@@ -121,8 +122,46 @@ export default function AgentSelector({
         </div>
 
         {/* Right Column */}
-        <div className="flex flex-col gap-4 w-[180px]">
+        <div className="flex flex-col gap-3 w-[140px]">
           {rightAgents.map((agent) => (
+            <AgentCard key={agent.id} agent={agent} />
+          ))}
+        </div>
+      </div>
+
+      {/* Tablet Layout: TV on top, agents in horizontal row below (6 columns) */}
+      <div className="hidden md:flex lg:hidden flex-col items-center gap-4">
+        {/* TV Container */}
+        <div className="relative w-[500px] h-[360px] flex items-center justify-center">
+          <div 
+            className="absolute inset-0 bg-contain bg-center bg-no-repeat pointer-events-none pixel-art"            style={{ backgroundImage:"url('/assets/tv_1.png')"}}
+          />
+          <img
+            src="/assets/main_img.png"            alt="SBF"            className="w-full h-full object-cover relative z-[1] pixel-art"          />
+        </div>
+
+        {/* Agents in horizontal row */}
+        <div className="grid grid-cols-6 gap-3 max-w-[700px]">
+          {agents.map((agent) => (
+            <AgentCard key={agent.id} agent={agent} />
+          ))}
+        </div>
+      </div>
+
+      {/* Mobile Layout: TV on top, agents in 6 columns row (no names) */}
+      <div className="flex md:hidden flex-col items-center gap-4 w-full px-4">
+        {/* TV Container - smaller on mobile */}
+        <div className="relative w-full h-[250px] flex items-center justify-center">
+          <div 
+            className="absolute inset-0 bg-contain bg-center bg-no-repeat pointer-events-none pixel-art"            style={{ backgroundImage:"url('/assets/tv_1.png')"}}
+          />
+          <img
+            src="/assets/main_img.png"            alt="SBF"            className="w-full h-full object-cover relative z-[1] pixel-art"          />
+        </div>
+
+        {/* Agents in 6 columns horizontal row - same width as TV */}
+        <div className="grid grid-cols-6 gap-1.5 w-full">
+          {agents.map((agent) => (
             <AgentCard key={agent.id} agent={agent} />
           ))}
         </div>

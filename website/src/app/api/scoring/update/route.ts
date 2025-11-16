@@ -47,9 +47,9 @@ async function handlePOST(request: NextRequest) {
     let evaluationScore = 2.0;
     if (rawBody.evaluationScore !== undefined) {
       evaluationScore = parseFloat(rawBody.evaluationScore);
-      if (isNaN(evaluationScore) || evaluationScore < 1.0 || evaluationScore > 3.0) {
-        console.warn(`[scoring] Invalid evaluation score ${rawBody.evaluationScore}, clamping to range`);
-        evaluationScore = Math.max(1.0, Math.min(3.0, evaluationScore));
+      if (isNaN(evaluationScore) || evaluationScore < -3.0 || evaluationScore > 3.0) {
+        console.warn(`[scoring] Invalid evaluation score ${rawBody.evaluationScore}, clamping to range -3.0 to 3.0`);
+        evaluationScore = Math.max(-3.0, Math.min(3.0, evaluationScore));
       }
     }
     

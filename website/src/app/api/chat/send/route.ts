@@ -16,6 +16,11 @@ if (!SOLANA_RPC_URL) {
   throw new Error('SOLANA_RPC_URL environment variable is required. Get your Helius API key from https://www.helius.dev/');
 }
 
+// CDP Facilitator cache (saves 1-2s on repeat messages)
+let cachedFacilitator: any = null;
+let facilitatorCacheTime = 0;
+const FACILITATOR_CACHE_TTL = 3600000; // 1 hour
+
 interface PaymentRequest {
   type:'x402_payment_required';
   recipient: string;
@@ -151,12 +156,18 @@ async function handlePOST(request: NextRequest) {
           }
         };
         
+        // Extract the actual payment amount from the frontend payload
+        const amountUsdc = frontendPayload.amount_usdc || 0.01; // Default to message fee if not specified
+        const amountMicroUsdc = Math.round(amountUsdc * 1_000_000).toString();
+        
+        console.log(`[CDP] Payment amount: ${amountUsdc} USDC (${amountMicroUsdc} micro-USDC)`);
+        
         const to = process.env.WALLET_WHITE_HOUSE ||'';
         const x402Requirements = {
           network:'solana',
           scheme:'exact',
           payTo: to,
-          maxAmountRequired:'10000',
+          maxAmountRequired: amountMicroUsdc, // Use actual amount from payment request
           asset:'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
           resource:`${process.env.NEXT_PUBLIC_BASE_URL ||'https://pardon-simulator.com'}/api/chat/send`,
           description:'Pardon Simulator Chat Message',
@@ -170,81 +181,88 @@ async function handlePOST(request: NextRequest) {
           }
         };
         
-        const cdpKeyId = process.env.CDP_API_KEY_ID;
-        let cdpKeySecret = process.env.CDP_API_KEY_SECRET ||'';
-        
-        cdpKeySecret = cdpKeySecret
-          .trim()
-          .replace(/\\n/g,'\n')
-          .replace(/^["']|["']$/g,'')
-          .replace(/\r/g,'');
-        
-        const pemMatch = cdpKeySecret.match(/-----BEGIN ([A-Z ]+)-----\s*([\s\S]*?)\s*-----END \1-----/);
-        
-        if (!pemMatch) {
-          throw new Error('Invalid PEM format - could not parse key structure');
-        }
-        
-        const keyType = pemMatch[1];
-        let keyBody = pemMatch[2];
-        keyBody = keyBody.replace(/\s+/g,'');
-        
-        const keyBodyLines: string[] = [];
-        for (let i = 0; i < keyBody.length; i += 64) {
-          keyBodyLines.push(keyBody.substring(i, i + 64));
-        }
-        
-        cdpKeySecret = [
+        const now = Date.now();
+        if (!cachedFacilitator || now - facilitatorCacheTime > FACILITATOR_CACHE_TTL) {
+          const cdpKeyId = process.env.CDP_API_KEY_ID;
+          let cdpKeySecret = process.env.CDP_API_KEY_SECRET ||'';
+          
+          cdpKeySecret = cdpKeySecret
+            .trim()
+            .replace(/\\n/g,'\n')
+            .replace(/^["']|["']$/g,'')
+            .replace(/\r/g,'');
+          
+          const pemMatch = cdpKeySecret.match(/-----BEGIN ([A-Z ]+)-----\s*([\s\S]*?)\s*-----END \1-----/);
+          
+          if (!pemMatch) {
+            throw new Error('Invalid PEM format - could not parse key structure');
+          }
+          
+          const keyType = pemMatch[1];
+          let keyBody = pemMatch[2];
+          keyBody = keyBody.replace(/\s+/g,'');
+          
+          const keyBodyLines: string[] = [];
+          for (let i = 0; i < keyBody.length; i += 64) {
+            keyBodyLines.push(keyBody.substring(i, i + 64));
+          }
+          
+          cdpKeySecret = [
 `-----BEGIN ${keyType}-----`,
-          ...keyBodyLines,
-`-----END ${keyType}-----`        ].join('\n');
-        
-        if (keyType ==='EC PRIVATE KEY') {
+            ...keyBodyLines,
+`-----END ${keyType}-----`          ].join('\n');
+          
+          if (keyType ==='EC PRIVATE KEY') {
+            try {
+              const crypto = require('crypto');
+              const key = crypto.createPrivateKey({
+                key: cdpKeySecret,
+                format:'pem',
+                type:'sec1'              });
+              
+              cdpKeySecret = key.export({
+                format:'pem',
+                type:'pkcs8'              }).toString();
+            } catch (convError: any) {
+              console.error('Key conversion failed:', convError.message);
+              throw new Error(`Failed to convert EC key to PKCS8: ${convError.message}`);
+            }
+          }
+          
           try {
             const crypto = require('crypto');
-            const key = crypto.createPrivateKey({
-              key: cdpKeySecret,
-              format:'pem',
-              type:'sec1'            });
             
-            cdpKeySecret = key.export({
+            let cryptoKey;
+            try {
+              cryptoKey = crypto.createPrivateKey({
+                key: cdpKeySecret,
+                format:'pem',
+                type:'pkcs8'              });
+            } catch (pkcs8Error) {
+              cryptoKey = crypto.createPrivateKey({
+                key: cdpKeySecret,
+                format:'pem',
+                type:'sec1'              });
+            }
+            
+            cdpKeySecret = cryptoKey.export({
               format:'pem',
               type:'pkcs8'            }).toString();
-          } catch (convError: any) {
-            console.error('Key conversion failed:', convError.message);
-            throw new Error(`Failed to convert EC key to PKCS8: ${convError.message}`);
-          }
-        }
-        
-        try {
-          const crypto = require('crypto');
-          
-          let cryptoKey;
-          try {
-            cryptoKey = crypto.createPrivateKey({
-              key: cdpKeySecret,
-              format:'pem',
-              type:'pkcs8'            });
-          } catch (pkcs8Error) {
-            cryptoKey = crypto.createPrivateKey({
-              key: cdpKeySecret,
-              format:'pem',
-              type:'sec1'            });
+            
+            const { importPKCS8 } = require('jose');
+            await importPKCS8(cdpKeySecret,'ES256');
+            
+          } catch (error: any) {
+            console.error('Key processing failed:', error.message);
+            throw new Error(`Key processing failed: ${error.message}`);
           }
           
-          cdpKeySecret = cryptoKey.export({
-            format:'pem',
-            type:'pkcs8'          }).toString();
-          
-          const { importPKCS8 } = require('jose');
-          await importPKCS8(cdpKeySecret,'ES256');
-          
-        } catch (error: any) {
-          console.error('Key processing failed:', error.message);
-          throw new Error(`Key processing failed: ${error.message}`);
+          cachedFacilitator = createFacilitatorConfig(cdpKeyId, cdpKeySecret);
+          facilitatorCacheTime = now;
+          console.log('[CDP] Facilitator config cached');
         }
         
-        const facilitator = createFacilitatorConfig(cdpKeyId, cdpKeySecret);
+        const facilitator = cachedFacilitator;
         const authHeaders = await facilitator.createAuthHeaders?.();
         if (!authHeaders) {
           throw new Error('Failed to create authentication headers');
@@ -273,21 +291,23 @@ async function handlePOST(request: NextRequest) {
         if (!settleResponse.ok) {
           const errorText = await settleResponse.text();
           let errorData;
+          let isHtmlError = false;
           
           try {
             errorData = JSON.parse(errorText);
           } catch {
             // Check if error is HTML (CDP returns HTML error pages)
             if (errorText.trim().startsWith('<!DOCTYPE') || errorText.trim().startsWith('<html')) {
-              errorData = { errorMessage: 'CDP returned HTML error page (500 Internal Server Error)' };
-              console.error('CDP settlement failed:', settleResponse.status, 'HTML error page received (not logging full HTML)');
+              isHtmlError = true;
+              errorData = { errorMessage: `CDP returned HTML error page (${settleResponse.status} error)` };
+              console.error(`CDP settlement failed: ${settleResponse.status} - HTML error page received (not logging full HTML)`);
             } else {
               errorData = { errorMessage: errorText };
-              console.error('CDP settlement failed:', settleResponse.status, errorText);
+              console.error('CDP settlement failed:', settleResponse.status, errorText.substring(0, 500)); // Limit log output
             }
           }
           
-          if (settleResponse.status === 500 && errorData.errorType ==='internal_server_error') {
+          if (settleResponse.status === 500 || isHtmlError) {
             console.warn('CDP backend error (500) - transaction may have succeeded');
             
             settlementResult = {
@@ -299,7 +319,11 @@ async function handlePOST(request: NextRequest) {
               correlationId: errorData.correlationId,
               note:'Payment likely succeeded but CDP had a backend error. Check blockchain for confirmation.'            };
           } else {
-            throw new Error(`CDP facilitator settle failed: ${settleResponse.status} ${errorText}`);
+            // Don't include full HTML in error message
+            const errorMessage = isHtmlError 
+              ? `CDP facilitator settle failed: ${settleResponse.status} (HTML error page)` 
+              : `CDP facilitator settle failed: ${settleResponse.status} ${errorText.substring(0, 200)}`;
+            throw new Error(errorMessage);
           }
         } else {
           const settleResult = await settleResponse.json();
@@ -310,6 +334,8 @@ async function handlePOST(request: NextRequest) {
           }
           
           const txSignature = settleResult.transaction;
+          
+          console.log('[CDP] Settlement successful! Transaction:', txSignature);
           
           if (!txSignature) {
             throw new Error('No transaction signature returned from CDP settle');
@@ -322,6 +348,8 @@ async function handlePOST(request: NextRequest) {
             payer: settleResult.payer || frontendPayload.from,
             solanaExplorer:`https://explorer.solana.com/tx/${txSignature}`,
           };
+          
+          console.log('[CDP] Settlement result:', settlementResult);
         }
       } catch (error: any) {
         console.error('CDP settlement error:', error.message);
@@ -357,7 +385,10 @@ async function handlePOST(request: NextRequest) {
     
     // If this is a premium service payment with a successful settlement, append transaction info for agent verification
     if (isPremiumServicePayment && settlementResult?.success && settlementResult?.transaction) {
+      console.log('[Premium Service] Appending payment completion marker with tx:', settlementResult.transaction);
       contentWithWallet +=`\n[PREMIUM_SERVICE_PAYMENT_COMPLETED: ${settlementResult.transaction}]`;
+    } else if (isPremiumServicePayment) {
+      console.log('[Premium Service] Payment marker NOT added. settlementResult:', settlementResult);
     }
     
     // Try to send the message
@@ -430,159 +461,10 @@ async function handlePOST(request: NextRequest) {
       userWallet
     });
 
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    const existingMessagesResponse = await fetch(
-`${CORAL_SERVER_URL}/api/v1/debug/thread/app/debug/${sessionId}/${threadId}/messages`    );
-    const existingData = await existingMessagesResponse.json();
-    const existingMessages = existingData.messages || [];
-    const seenMessageIds = new Set<string>(existingMessages.map((m: any) => m.id));
-
-    let messages: any[] = [];
-    let attempts = 0;
-    const maxAttempts = 5; // 5 seconds initial wait
-    let agentResponseDetected = false;
-    let noNewMessagesCount = 0;
-    
-    while (attempts < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      attempts++;
-
-      const messagesResponse = await fetch(
-`${CORAL_SERVER_URL}/api/v1/debug/thread/app/debug/${sessionId}/${threadId}/messages`      );
-
-      if (!messagesResponse.ok) {
-        throw new Error(`Failed to get messages: ${messagesResponse.statusText}`);
-      }
-
-      const data = await messagesResponse.json();
-      messages = data.messages || [];
-      
-      let foundNewAgentMessage = false;
-      for (const msg of messages) {
-        if (!seenMessageIds.has(msg.id)) {
-          seenMessageIds.add(msg.id);
-          if (msg.senderId !=='sbf') {
-            foundNewAgentMessage = true;
-          }
-        }
-      }
-      
-      const lastMessage = messages[messages.length - 1];
-      const hasNewMessage = messages.length > Math.max(initialMessageCount, messages.length - 1);
-      const isFromAgent = lastMessage?.senderId !=='sbf';
-      
-      if (foundNewAgentMessage || (hasNewMessage && isFromAgent)) {
-        agentResponseDetected = true;
-        noNewMessagesCount = 0;
-        
-        if (attempts > 3) {
-          continue;
-        }
-      } else if (agentResponseDetected) {
-        noNewMessagesCount++;
-        
-        if (noNewMessagesCount >= 5) {
-          break;
-        }
-      }
-    }
-    
-    // Continue polling in background if agent response not ready
-    if (!agentResponseDetected) {
-      console.log('Agent response not ready in 5s, continuing in background...');
-      
-      // Continue polling in background for up to 25 more seconds
-      const backgroundMaxAttempts = 25;
-      let backgroundAttempts = 0;
-      
-      while (backgroundAttempts < backgroundMaxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        backgroundAttempts++;
-        
-        const messagesResponse = await fetch(
-          `${CORAL_SERVER_URL}/api/v1/debug/thread/app/debug/${sessionId}/${threadId}/messages`
-        );
-        
-        if (messagesResponse.ok) {
-          const data = await messagesResponse.json();
-          messages = data.messages || [];
-          
-          let foundNewAgentMessage = false;
-          for (const msg of messages) {
-            if (!seenMessageIds.has(msg.id)) {
-              seenMessageIds.add(msg.id);
-              if (msg.senderId !== 'sbf') {
-                foundNewAgentMessage = true;
-              }
-            }
-          }
-          
-          if (foundNewAgentMessage) {
-            agentResponseDetected = true;
-            break;
-          }
-        }
-      }
-    }
-    
-    for (let i = initialMessageCount; i < messages.length; i++) {
-      const message = messages[i];
-      
-      if (message.senderId !=='sbf') {
-        await saveMessageToDatabase({
-          threadId,
-          sessionId,
-          senderId: message.senderId,
-          content: message.content,
-          mentions: message.mentions || [],
-          isIntermediary: false,
-          userWallet
-        });
-      }
-    }
-    
-    const lastMessage = messages[messages.length - 1];
-    
-    if (lastMessage && lastMessage.senderId !=='sbf') {
-      const paymentRequest = extractPaymentRequest(lastMessage.content);
-      
-      if (paymentRequest) {
-        const amount = paymentRequest.amount_usdc || paymentRequest.amount_sol || 0.01;
-        const currency = paymentRequest.amount_usdc ? 'USDC' : 'SOL';
-        
-        return NextResponse.json(
-          {
-            error:'payment_required',
-            payment: paymentRequest,
-            messages,
-          },
-          { 
-            status: 402,
-            headers: {
-'WWW-Authenticate':`Bearer realm="x402"`,
-'X-Payment-Required':'true',
-'X-Payment-Protocol-Version':'1.0',
-'X-Payment-Chain':'solana',
-'X-Payment-Network':'mainnet-beta',
-'X-Payment-Method': currency ==='USDC' ? 'spl_token' :'native',
-'X-Payment-Address': paymentRequest.recipient_address,
-'X-Payment-Recipient': paymentRequest.recipient ||'',
-'X-Payment-Amount': amount.toString(),
-'X-Payment-Currency': currency,
-'X-Payment-Id': paymentRequest.payment_id,
-'X-Payment-Reason': paymentRequest.reason ||'',
-'X-Payment-Service-Type': paymentRequest.service_type ||'',
-'X-Payment-Expiry': (Date.now() + 600000).toString(),
-            }
-          }
-        );
-      }
-    }
-
+    // Return immediately - frontend will get updates via SSE
     const response = NextResponse.json({
       success: true,
-      messages,
+      message_sent: true
     });
 
     if (settlementResult && settlementResult.success) {

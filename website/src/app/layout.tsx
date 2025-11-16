@@ -5,6 +5,9 @@ import { WalletProvider } from'@/components/WalletProvider';
 export const metadata: Metadata = {
   title:'Pardon Simulator',
   description:'You are SBF - Negotiate with the Trump family using crypto to secure your presidential pardon!',
+  icons: {
+    icon: '/assets/favicon.png',
+  },
 };
 
 export default function RootLayout({

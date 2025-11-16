@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from'react';
+import { useState, useEffect, useRef, memo } from'react';
 import { useWallet, useConnection } from'@solana/wallet-adapter-react';
 import { Send, Loader2 } from'lucide-react';
 import { PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } from'@solana/web3.js';
@@ -45,6 +45,65 @@ interface ScoreEntry {
   currentScore: number;
 }
 
+// Memoized message component to prevent unnecessary re-renders
+const MessageItem = memo(({ 
+  message, 
+  formatAgentName, 
+  stripDebugMarkers 
+}: { 
+  message: Message; 
+  formatAgentName: (agentId: string) => string;
+  stripDebugMarkers: (content: string) => string;
+}) => {
+  // Render intermediary messages differently
+  if (message.isIntermediary) {
+    // Filter out wallet addresses from mentions
+    const mentionedAgent = message.mentions?.find(m => !m.match(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/));
+    return (
+      <div className="mx-4 my-1">
+        <div className="bg-gray-800/50 border-l-2 border-yellow-500 rounded p-2">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-yellow-400 font-pixel text-[14px]">
+              💬 {formatAgentName(message.senderId)} → {mentionedAgent ? formatAgentName(mentionedAgent) :'Agent'}
+            </span>
+          </div>
+          <div className="text-gray-300 font-pixel text-[15px] pl-2 whitespace-pre-wrap break-words leading-relaxed">
+            {stripDebugMarkers(message.content)}
+          </div>
+          <div className="font-pixel text-[12px] text-gray-500 mt-1 pl-2 opacity-50">
+            {message.timestamp.toLocaleTimeString()}
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  // Regular user/agent messages
+  const cleanContent = stripDebugMarkers(message.content);
+  
+  return (
+    <div
+      className={`flex ${message.isAgent ?'justify-start':'justify-end'}`}
+    >
+      <div
+        className={`max-w-[95%] sm:max-w-[85%] md:max-w-[80%] p-2 sm:p-3 rounded border ${
+          message.isAgent
+            ?'bg-gray-800/80 text-white border-white/20'            :'bg-[#66b680]/80 text-white border-[#66b680]'        }`}
+      >
+        <div className="font-pixel text-[12px] sm:text-[14px] mb-1 opacity-70">{message.sender}</div>
+        <div className="font-pixel text-[13px] sm:text-[15px] whitespace-pre-wrap break-words leading-relaxed">
+          {cleanContent}
+        </div>
+        <div className="font-pixel text-[10px] sm:text-[12px] opacity-50 mt-1">
+          {message.timestamp.toLocaleTimeString()}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+MessageItem.displayName = 'MessageItem';
+
 export default function ChatInterface({ 
   selectedAgent, 
   threadId, 
@@ -64,9 +123,11 @@ export default function ChatInterface({
   const [polling, setPolling] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
   const sessionInitializedRef = useRef(false);
   const previousWalletRef = useRef<string | null>(null); // Track wallet changes for cache clearing
   const previousMessageCountRef = useRef<number>(0); // Track message count to detect new messages
+  const loadingMessageIdRef = useRef<string | null>(null); // Track loading message to remove when agent responds
   
   // Score tracking state
   const [currentScore, setCurrentScore] = useState(0);
@@ -89,21 +150,15 @@ export default function ChatInterface({
   // Extract score update from agent message
   const extractScoreUpdate = (content: string): ScoreUpdate | null => {
     try {
-      // Look for JSON score_update in message
-      // Use a more permissive regex to capture nested braces in feedback
+      // First try JSON format
       const jsonMatch = content.match(/\{"type":\s*"score_update"[^}]*(?:"feedback":\s*"[^"]*")?[^}]*\}/);
       if (jsonMatch) {
         let jsonStr = jsonMatch[0];
         
         // Fix common JSON encoding issues from LLM responses:
-        // 1. Replace invalid unicode escapes (e.g., \u001f504) with proper encoding
-        // 2. Handle emojis that got mangled during serialization
         jsonStr = jsonStr.replace(/\\u([0-9a-fA-F]{4})([0-9]{1,3})/g, (match, hex, extra) => {
-          // This catches cases like \u001f504 which should be a single emoji
-          // Try to decode as UTF-16 surrogate pair or single character
           try {
             const codePoint = parseInt(hex, 16);
-            // If it's a high surrogate (0xD800-0xDBFF), combine with next part
             if (codePoint >= 0xD800 && codePoint <= 0xDBFF && extra) {
               const fullCodePoint = ((codePoint - 0xD800) * 0x400) + parseInt(extra, 16) + 0x10000;
               return String.fromCodePoint(fullCodePoint);
@@ -114,15 +169,29 @@ export default function ChatInterface({
           }
         });
         
-        // Try parsing
         const parsed = JSON.parse(jsonStr);
         if (parsed.type ==='score_update') {
           return parsed;
         }
       }
+      
+      // Try text format: "Score Update: \n- Current Score: X\n- Reason: Y"
+      const textMatch = content.match(/Score Update:\s*\n-\s*Current Score:\s*([\d.]+)\s*\n-\s*Reason:\s*([^\n]+)/i);
+      if (textMatch) {
+        const currentScore = parseFloat(textMatch[1]);
+        const reason = textMatch[2].trim();
+        
+        // We don't have the previous score, so we can't calculate delta
+        // We'll need to fetch it or infer from context
+        return {
+          type: 'score_update',
+          current_score: currentScore,
+          delta: 0, // Will be calculated later
+          reason: reason
+        };
+      }
     } catch (e) {
       console.error('Failed to parse score update:', e);
-      console.log('Content that failed to parse:', content.substring(0, 500));
     }
     return null;
   };
@@ -132,10 +201,21 @@ export default function ChatInterface({
     return content
       // Remove USER_WALLET prefix (used for internal routing only)
       .replace(/\[USER_WALLET:[1-9A-HJ-NP-Za-km-z]{32,44}]\s*/g, '')
-      // Remove PREMIUM_SERVICE_PAYMENT_COMPLETED marker
-      .replace(/\[PREMIUM_SERVICE_PAYMENT_COMPLETED:\s*[^\]]+\]\s*/g, '')
-      // Remove score_update JSON (displayed separately in toast)
+      // Remove PREMIUM_SERVICE_PAYMENT_COMPLETED marker (with or without transaction info)
+      .replace(/\[PREMIUM_SERVICE_PAYMENT_COMPLETED(?::\s*[^\]]+)?\]\s*/g, '')
+      // Remove score_update markers (both JSON and bracket format)
+      .replace(/\[score_update:\s*[^\]]+\]\s*/gi, '')
       .replace(/\s*\{\"type\":\s*\"score_update\"[^\}]*\}\s*$/g, '')
+      // Remove multi-line Score Update section
+      .replace(/\n{1,2}Score Update:\s*\n-\s*Current Score:.*?\n-\s*Reason:.*?(?=\n\n|\n[A-Z]|$)/gs, '')
+      // Remove debug scoring information lines (with optional double newlines)
+      .replace(/\n{1,2}Current Score:.*?(?=\n|$)/gs, '')
+      .replace(/\n{1,2}Pro Tip:.*?(?=\n|$)/gs, '')
+      .replace(/\n{1,2}Feedback:.*?(?=\n|$)/gs, '')
+      // Remove "Your (current) score is (now)..." feedback sentences and paragraphs
+      .replace(/\n*Your (?:current )?score is (?:now )?[\d.]+[,.]?\s*[^\n]*(?:\n(?![A-Z])[^\n]*)*\./gs, '')
+      // Remove standalone sentences about score/points at end of paragraphs
+      .replace(/\s+Your (?:current )?score is (?:now )?[\d.]+[,.]?\s*[^\n.]*\./g, '')
       .trim();
   };
 
@@ -284,17 +364,178 @@ export default function ChatInterface({
     }
   }, [selectedAgent, sessionId, publicKey, threadId]);
 
-  // Start polling when thread ready
+  // Replace polling with SSE
   useEffect(() => {
-    if (threadId && sessionId && !polling) {
-      startPolling();
+    if (threadId && sessionId && !eventSourceRef.current) {
+      const eventSource = new EventSource(
+        `/api/chat/stream?sessionId=${sessionId}&threadId=${threadId}`
+      );
+      eventSourceRef.current = eventSource;
+      
+      eventSource.onopen = () => {
+        console.log('[SSE] Connected to message stream');
+        setPolling(true);
+      };
+      
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          if (data.type === 'messages' && data.messages) {
+            // Track pending payment requests from agent messages
+            let pendingPaymentRequest: { request: PaymentRequest; messageId: string } | null = null;
+            
+            const newMessages = data.messages.map((m: any) => {
+              const isFromUser = m.senderId === 'sbf';
+              const mentionsUser = m.mentions?.includes('sbf');
+              const isIntermediary = !isFromUser && !mentionsUser;
+              
+              // Check for payment request in agent messages and clean content
+              let content = m.content;
+              if (m.content?.includes('<x402_payment_request>') && !isFromUser) {
+                const extracted = extractPaymentRequest(m.content);
+                if (extracted) {
+                  content = extracted.cleanMessage;
+                  
+                  // Check if this is a new message we haven't processed yet
+                  const alreadyProcessed = processedMessageIdsRef.current.has(m.id);
+                  if (!alreadyProcessed && publicKey && sessionId && threadId) {
+                    pendingPaymentRequest = { 
+                      request: extracted.request, 
+                      messageId: m.id 
+                    };
+                    console.log('[SSE] Detected new payment request:', extracted.request);
+                  }
+                }
+              }
+              
+              return {
+                id: m.id,
+                senderId: m.senderId,
+                sender: isFromUser ? 'You (SBF)' : formatAgentName(m.senderId),
+                content: content,
+                timestamp: new Date(m.timestamp),
+                isAgent: !isFromUser,
+                mentions: m.mentions || [],
+                isIntermediary
+              };
+            });
+            
+            setMessages(prev => {
+              const existingIds = new Set(prev.map(m => m.id));
+              const uniqueNew = newMessages.filter(m => !existingIds.has(m.id));
+              
+              // Replace optimistic messages IN-PLACE to avoid reordering
+              const updated = prev.map(prevMsg => {
+                if (prevMsg.id.startsWith('optimistic-')) {
+                  const serverVersion = newMessages.find(serverMsg => 
+                    serverMsg.senderId === 'sbf' &&
+                    stripDebugMarkers(serverMsg.content).trim() === stripDebugMarkers(prevMsg.content).trim()
+                  );
+                  
+                  if (serverVersion) {
+                    // Replace in-place, preserving timestamp to maintain position
+                    return {
+                      ...serverVersion,
+                      timestamp: prevMsg.timestamp
+                    };
+                  }
+                }
+                return prevMsg;
+              });
+              
+              // Filter out server versions that were used for replacement
+              const replacedServerIds = new Set<string>();
+              prev.forEach(prevMsg => {
+                if (prevMsg.id.startsWith('optimistic-')) {
+                  const serverVersion = newMessages.find(serverMsg => 
+                    serverMsg.senderId === 'sbf' &&
+                    stripDebugMarkers(serverMsg.content).trim() === stripDebugMarkers(prevMsg.content).trim()
+                  );
+                  if (serverVersion) {
+                    replacedServerIds.add(serverVersion.id);
+                  }
+                }
+              });
+              
+              const trulyNew = uniqueNew.filter(m => !replacedServerIds.has(m.id));
+              
+              // If we have new agent messages and there's a pending loading message, remove it
+              const hasNewAgentMessages = trulyNew.some(m => m.isAgent && m.senderId !== 'system');
+              let withoutLoading = updated;
+              if (hasNewAgentMessages && loadingMessageIdRef.current) {
+                withoutLoading = updated.filter(m => m.id !== loadingMessageIdRef.current);
+                loadingMessageIdRef.current = null;
+                setLoading(false); // Stop loading when agent response arrives via SSE
+              }
+              
+              const merged = [...withoutLoading, ...trulyNew];
+              
+              if (publicKey && threadId && trulyNew.length > 0) {
+                cacheConversation(publicKey.toString(), threadId, merged, selectedAgent);
+              }
+              
+              return merged;
+            });
+            
+            // Trigger payment flow if we detected a payment request
+            if (pendingPaymentRequest && publicKey && sessionId && threadId) {
+              const { request, messageId } = pendingPaymentRequest;
+              
+              console.log(`[SSE] Triggering payment flow for message ${messageId}`);
+              
+              // Mark this message as processed
+              processedMessageIdsRef.current.add(messageId);
+              
+              const amount = request.amount_usdc || request.amount_sol || 0;
+              const currency = request.amount_usdc ? 'USDC' : 'SOL';
+              const service = request.service_type?.replace(/_/g, ' ') || 'premium service';
+              
+              console.log(`[SSE Premium Service] Payment request detected: ${amount} ${currency} for ${service}`);
+              
+              // Trigger payment flow
+              setLoading(true);
+              handlePayment(
+                request,
+                `Premium service: ${service}`,
+                sessionId,
+                threadId,
+                selectedAgent
+              ).catch((error: any) => {
+                console.error('[SSE Premium Service] Payment error:', error);
+                showToast(error.message || 'Payment failed', 'error');
+              }).finally(() => {
+                setLoading(false);
+              });
+            }
+          }
+        } catch (e) {
+          console.error('[SSE] Failed to parse message:', e);
+        }
+      };
+      
+      eventSource.onerror = (error) => {
+        console.error('[SSE] Connection error, falling back to polling');
+        eventSource.close();
+        eventSourceRef.current = null;
+        setPolling(false);
+        
+        if (!pollIntervalRef.current) {
+          pollIntervalRef.current = setInterval(pollMessages, 1000);
+        }
+      };
     }
+    
     return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
       }
     };
-  }, [threadId, sessionId]);
+  }, [threadId, sessionId, publicKey, selectedAgent]);
 
   // Auto-scroll only when new messages are added
   useEffect(() => {
@@ -302,12 +543,15 @@ export default function ChatInterface({
     
     // Only scroll if message count increased (new messages added)
     if (currentMessageCount > previousMessageCountRef.current) {
-      messagesEndRef.current?.scrollIntoView({ behavior:'smooth', block:'nearest', inline:'nearest'});
+      // Use requestAnimationFrame to batch scroll operations and improve performance
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior:'smooth', block:'end'});
+      });
     }
     
     // Update the previous count
     previousMessageCountRef.current = currentMessageCount;
-  }, [messages]);
+  }, [messages.length]); // Only depend on length, not the entire array
 
   // Fetch initial score when wallet connected
   useEffect(() => {
@@ -356,17 +600,23 @@ export default function ChatInterface({
         // Mark this message as processed BEFORE showing toast
         processedMessageIdsRef.current.add(lastMessage.id);
         
+        // Calculate delta if not provided
+        let delta = scoreUpdate.delta;
+        if (delta === 0 && lastScoreFetchRef.current > 0) {
+          delta = scoreUpdate.current_score - lastScoreFetchRef.current;
+        }
+        
         lastScoreFetchRef.current = scoreUpdate.current_score;
         setCurrentScore(scoreUpdate.current_score);
         setScoreHistory(prev => [...prev, {
-          delta: scoreUpdate.delta,
+          delta: delta,
           reason: scoreUpdate.reason,
           timestamp: new Date(),
           currentScore: scoreUpdate.current_score
         }]);
         
-        const deltaText = scoreUpdate.delta > 0 ?`+${scoreUpdate.delta}`: scoreUpdate.delta;
-        showToast(`${deltaText} points: ${scoreUpdate.reason}`, scoreUpdate.delta > 0 ?'success':'error');
+        const deltaText = delta > 0 ?`+${delta.toFixed(1)}`: delta.toFixed(1);
+        showToast(`${deltaText} points: ${scoreUpdate.reason}`, delta > 0 ?'success':'error');
       } else {
         // If no embedded score, fetch from API (agents may have updated score via award_points without embedding it)
         
@@ -377,10 +627,9 @@ export default function ChatInterface({
         processedMessageIdsRef.current.add(lastMessage.id);
         }
         
-        // Add a small delay to allow backend to finish processing
-        setTimeout(() => {
-          fetchCurrentScore();
-        }, 500);
+        // REMOVED: Redundant score fetch after every message
+        // The agent already updates score via award_points tool
+        // Score is fetched on wallet connect and explicit user request only
       }
     } else {
     }
@@ -541,49 +790,73 @@ export default function ChatInterface({
           ? prev.filter(m => !m.id.startsWith('payment-'))
           : prev;
         
-        // Replace optimistic user messages with server versions when they arrive
-        const optimisticMessagesToReplace = new Set<string>();
-        const serverVersionsToAdd: Message[] = [];
-        
-        // Find optimistic messages that have server versions
-        filteredPrev.forEach(prevMsg => {
+        // Replace optimistic messages IN-PLACE to avoid reordering
+        const updated = filteredPrev.map(prevMsg => {
           if (prevMsg.id.startsWith('optimistic-')) {
             const serverVersion = allMessages.find(serverMsg => 
-              serverMsg.senderId ==='sbf'&&
-              serverMsg.content.trim() === prevMsg.content.trim()
+              serverMsg.senderId === 'sbf' &&
+              stripDebugMarkers(serverMsg.content).trim() === stripDebugMarkers(prevMsg.content).trim()
             );
             
             if (serverVersion) {
-              optimisticMessagesToReplace.add(prevMsg.id);
-              serverVersionsToAdd.push(serverVersion);
+              // Replace in-place, preserving timestamp to maintain position
+              return {
+                ...serverVersion,
+                timestamp: prevMsg.timestamp
+              };
+            }
+          }
+          return prevMsg;
+        });
+        
+        // Filter out server versions that were used for replacement
+        const replacedServerIds = new Set<string>();
+        filteredPrev.forEach(prevMsg => {
+          if (prevMsg.id.startsWith('optimistic-')) {
+            const serverVersion = allMessages.find(serverMsg => 
+              serverMsg.senderId === 'sbf' &&
+              stripDebugMarkers(serverMsg.content).trim() === stripDebugMarkers(prevMsg.content).trim()
+            );
+            if (serverVersion) {
+              replacedServerIds.add(serverVersion.id);
             }
           }
         });
         
-        // Remove optimistic messages that have server versions
-        filteredPrev = filteredPrev.filter(prevMsg => 
-          !optimisticMessagesToReplace.has(prevMsg.id)
-        );
+        const trulyNew = newMessages.filter(m => !replacedServerIds.has(m.id));
         
-        // Add server versions of optimistic messages
-        if (serverVersionsToAdd.length > 0) {
-          filteredPrev = [...filteredPrev, ...serverVersionsToAdd];
+        // If we have new agent messages and there's a pending loading message, remove it
+        const hasNewAgentMessages = trulyNew.some(m => m.isAgent && m.senderId !== 'system');
+        let withoutLoading = updated;
+        if (hasNewAgentMessages && loadingMessageIdRef.current) {
+          withoutLoading = updated.filter(m => m.id !== loadingMessageIdRef.current);
+          loadingMessageIdRef.current = null;
+          setLoading(false); // Stop loading when agent response arrives via polling
         }
         
-        // Return merged messages in chronological order
-        if (newMessages.length === 0 && serverVersionsToAdd.length === 0) {
-          return filteredPrev; // No changes needed
+        // Return early if no new messages
+        if (trulyNew.length === 0) {
+          return withoutLoading;
         }
         
-        const merged = [...filteredPrev, ...newMessages];
+        // Add new messages and sort only when necessary
+        const merged = [...withoutLoading, ...trulyNew];
         const sorted = merged.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
         
+        // Final deduplication pass to ensure no duplicate IDs (React key constraint)
+        const deduplicatedById = sorted.reduce((acc, msg) => {
+          if (!acc.some(m => m.id === msg.id)) {
+            acc.push(msg);
+          }
+          return acc;
+        }, [] as Message[]);
+        
         //  Cache the updated conversation if any new messages were added
-        if (newMessages.length > 0 && publicKey && threadId) {
-          cacheConversation(publicKey.toString(), threadId, sorted, selectedAgent);
+        if (trulyNew.length > 0 && publicKey && threadId) {
+          cacheConversation(publicKey.toString(), threadId, deduplicatedById, selectedAgent);
         }
         
-        return sorted;
+        return deduplicatedById;
       });
 
       // If we found a new payment request, trigger the payment flow
@@ -612,9 +885,8 @@ export default function ChatInterface({
         const service = request.service_type?.replace(/_/g, ' ') || 'premium service';
         
         console.log(`[Premium Service] Payment request detected: ${amount} ${currency} for ${service}`);
-        showToast(`Premium Service Available: ${amount} ${currency} for ${service}`, 'info');
         
-        // Trigger payment flow
+        // Trigger payment flow (toast will be shown in handlePayment)
         setLoading(true);
         try {
           await handlePayment(
@@ -673,13 +945,6 @@ export default function ChatInterface({
     }
   };
 
-  const startPolling = () => {
-    if (!threadId || !sessionId) return;
-    
-    setPolling(true);
-    pollIntervalRef.current = setInterval(pollMessages, 5000); // Poll every 5 seconds (reduced from 2s)
-  };
-
   const sendUserMessage = async () => {
     if (!input.trim() || !sessionId || !threadId || !selectedAgent) return;
 
@@ -712,14 +977,8 @@ export default function ChatInterface({
         
         // Don't show user message yet - handlePayment will show it after wallet confirmation
         
-        const amount = response.paymentRequired.amount_usdc || response.paymentRequired.amount_sol;
-        const currency = response.paymentRequired.amount_usdc ?'USDC':'SOL';
-        const service = response.paymentRequired.service_type?.replace('_','') ||'this service';
-        
-        // Show toast for payment request
-        showToast(`Payment Required: ${amount} ${currency} for ${service}`,'info');
-        
         // Trigger wallet payment directly (no modal!)
+        // Toast will be shown in handlePayment
         await handlePayment(
           response.paymentRequired,
           messageContent,
@@ -760,16 +1019,7 @@ export default function ChatInterface({
       showToast(errorMessage,'error');
     } finally {
       setLoading(false);
-      
-      // Poll for agent response
-      if (!pollIntervalRef.current && threadId && sessionId) {
-        // Immediately poll to get agent response, then restart regular polling
-        pollMessages().then(() => {
-          if (!pollIntervalRef.current) {
-            startPolling();
-          }
-        });
-      }
+      // SSE connection handles updates automatically
     }
   };
 
@@ -804,7 +1054,11 @@ export default function ChatInterface({
           throw new Error('Wallet does not support transaction signing');
         }
 
-        showToast('Please sign the payment transaction in your wallet...','info');
+        // Show single payment required toast
+        const serviceName = isPremiumService 
+          ? paymentReq.service_type?.replace(/_/g, ' ') 
+          : 'contacting agent';
+        showToast(`Payment Required: ${amount} ${currency} for ${serviceName}`,'info');
 
         const { createUSDCTransaction } = await import('@/lib/x402-payload-client');
         const { PublicKey } = await import('@solana/web3.js');
@@ -833,39 +1087,39 @@ export default function ChatInterface({
           amount_usdc: amount
         };
 
-      // Show user's message immediately after wallet signs payment
+      // Show user's message and loading indicator together to avoid timing/ordering issues
+      const userMessageTimestamp = new Date();
       const userMessage: Message = {
-        id: `user-${Date.now()}`,
+        id: `optimistic-${Date.now()}`,
         senderId: 'sbf',
         sender: 'You (SBF)',
         content: originalMessageContent,
-        timestamp: new Date(),
+        timestamp: userMessageTimestamp,
         isAgent: false,
         mentions: [originalAgentId],
         isIntermediary: false
       };
 
-      setMessages(prev => [...prev, userMessage]);
-
-      // Show loading indicator
+      // Show loading indicator (timestamp slightly after user message to ensure proper ordering)
       const loadingMessageId = `loading-${Date.now()}`;
+      loadingMessageIdRef.current = loadingMessageId; // Store so we can remove it later
       const loadingMessage: Message = {
         id: loadingMessageId,
         senderId: 'system',
         sender: 'System',
-          content: '⏳ Processing payment and waiting for response...',
-        timestamp: new Date(),
+        content: '⏳ Processing payment and waiting for response...',
+        timestamp: new Date(userMessageTimestamp.getTime() + 1), // 1ms after user message
         isAgent: true,
         mentions: [],
         isIntermediary: false
       };
 
-      setMessages(prev => [...prev, loadingMessage]);
+      // Add both messages in a single update to prevent race conditions
+      setMessages(prev => [...prev, userMessage, loadingMessage]);
 
         // Send to /api/chat/send with X-PAYMENT header
         // The middleware will verify and settle the payment via CDP facilitator
-        showToast('Submitting payment...','info');
-
+        
         // For premium services, send a notification message
         // For regular messages, send the original content
       const messageContent = isPremiumService
@@ -899,11 +1153,8 @@ export default function ChatInterface({
 
       showToast('Payment successful!','success');
 
-      // Update messages with agent response
+      // Update messages with agent response if provided (otherwise SSE will handle it)
       if (retryResult.messages) {
-        // Remove loading message
-        setMessages(prev => prev.filter(m => m.id !== loadingMessageId));
-        
         // Process agent messages
         const newAgentMessages = retryResult.messages
           .filter((m: any) => m.senderId !=='sbf')
@@ -918,7 +1169,13 @@ export default function ChatInterface({
             isIntermediary: m.isIntermediary || false
           }));
 
-        setMessages(prev => [...prev, ...newAgentMessages]);
+        // Remove loading message and add agent response together
+        setMessages(prev => {
+          const withoutLoading = prev.filter(m => m.id !== loadingMessageId);
+          return [...withoutLoading, ...newAgentMessages];
+        });
+        loadingMessageIdRef.current = null; // Clear the ref
+        setLoading(false); // Stop loading now that we have the response
         }
       } else {
         // SOL payments (not currently supported for CDP facilitator)
@@ -927,13 +1184,19 @@ export default function ChatInterface({
 
     } catch (err: any) {
       console.error('Payment error:', err);
+      
+      // Remove loading message on error
+      if (loadingMessageIdRef.current) {
+        setMessages(prev => prev.filter(m => m.id !== loadingMessageIdRef.current));
+        loadingMessageIdRef.current = null;
+      }
+      
       if (err.message?.includes('User rejected')) {
         showToast('Payment cancelled by user','error');
       } else {
         showToast(err.message ||'Payment failed. Please try again.','error');
       }
-    } finally {
-      setLoading(false);
+      setLoading(false); // Only set loading false on error
     }
   };
 
@@ -984,68 +1247,29 @@ export default function ChatInterface({
         ))}
       </ToastContainer>
 
-      <div className="flex w-full max-h-[400px] border-[3px] border-white/30 rounded-xl bg-black/80 backdrop-blur-sm relative mt-20 pixel-art"        style={{
+      <div className="flex w-full max-h-[400px] md:max-h-[450px] border-[3px] border-white/30 rounded-xl bg-black/80 backdrop-blur-sm relative mt-6 pixel-art"        style={{
           boxShadow:'0 0 20px rgba(102, 182, 128, 0.3), inset 0 0 30px rgba(0, 0, 0, 0.5)'        }}
       >
         {/* Main Chat Area */}
         <div className="flex flex-col flex-1 min-w-0">
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-2">
-          {messages.map((message) => {
-            // Render intermediary messages differently
-            if (message.isIntermediary) {
-              const mentionedAgent = message.mentions?.[0];
-              return (
-                <div key={message.id} className="mx-4 my-1">
-                  <div className="bg-gray-800/50 border-l-2 border-yellow-500 rounded p-2">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-yellow-400 font-pixel text-[14px]">
-                        💬 {formatAgentName(message.senderId)} → {mentionedAgent ? formatAgentName(mentionedAgent) :'Agent'}
-                      </span>
-                    </div>
-                    <div className="text-gray-300 font-pixel text-[15px] pl-2 whitespace-pre-wrap break-words leading-relaxed">
-                      {stripDebugMarkers(message.content)}
-                    </div>
-                    <div className="font-pixel text-[12px] text-gray-500 mt-1 pl-2 opacity-50">
-                      {message.timestamp.toLocaleTimeString()}
-                    </div>
-                  </div>
-                </div>
-              );
-            }
-            
-            // Regular user/agent messages
-            const cleanContent = stripDebugMarkers(message.content);
-            
-            return (
-              <div
-                key={message.id}
-                className={`flex ${message.isAgent ?'justify-start':'justify-end'}`}
-              >
-                <div
-                  className={`max-w-[80%] p-3 rounded border ${
-                    message.isAgent
-                      ?'bg-gray-800/80 text-white border-white/20'                      :'bg-[#66b680]/80 text-white border-[#66b680]'                  }`}
-                >
-                  <div className="font-pixel text-[14px] mb-1 opacity-70">{message.sender}</div>
-                  <div className="font-pixel text-[15px] whitespace-pre-wrap break-words leading-relaxed">
-                    {cleanContent}
-                  </div>
-                  <div className="font-pixel text-[12px] opacity-50 mt-1">
-                    {message.timestamp.toLocaleTimeString()}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+          {messages.map((message) => (
+            <MessageItem 
+              key={message.id} 
+              message={message} 
+              formatAgentName={formatAgentName}
+              stripDebugMarkers={stripDebugMarkers}
+            />
+          ))}
 
         <div ref={messagesEndRef} />
       </div>
 
       {/* Input */}
-      <div className="p-3 border-t border-white/20">
+      <div className="p-2 sm:p-3 border-t border-white/20">
         {!connected && (
-          <div className="mb-2 p-2 bg-yellow-900/20 border border-yellow-500/50 rounded font-pixel text-yellow-400 text-[8px]">
+          <div className="mb-2 p-2 bg-yellow-900/20 border border-yellow-500/50 rounded font-pixel text-yellow-400 text-[8px] sm:text-[9px]">
              Connect wallet for payments
           </div>
         )}
@@ -1058,21 +1282,21 @@ export default function ChatInterface({
             onKeyPress={(e) => e.key ==='Enter'&& !loading && sendUserMessage()}
             placeholder={loading ? "⏳ Agent is thinking..." : "Message..."}
             disabled={loading || !sessionId || !threadId}
-            className="flex-1 bg-black/50 border-2 border-white/20 rounded px-3 py-2 text-white font-pixel text-[15px] placeholder-gray-500 focus:outline-none focus:border-[#66b680] disabled:opacity-50"
+            className="flex-1 bg-black/50 border-2 border-white/20 rounded px-2 sm:px-3 py-2 text-white font-pixel text-[13px] sm:text-[15px] placeholder-gray-500 focus:outline-none focus:border-[#66b680] disabled:opacity-50"
           />
           <button
             onClick={sendUserMessage}
             disabled={loading || !input.trim() || !sessionId || !threadId}
-            className="bg-[#66b680] hover:bg-[#7ac694] text-white font-pixel text-[15px] py-2 px-4 border-2 border-[#4a8c60] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 pixel-art"            style={{
+            className="bg-[#66b680] hover:bg-[#7ac694] text-white font-pixel text-[13px] sm:text-[15px] py-2 px-3 sm:px-4 border-2 border-[#4a8c60] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 sm:gap-2 pixel-art"            style={{
               boxShadow:'0 3px 0 #3a6c48',
               textShadow:'1px 1px 0 #3a6c48'            }}
           >
             {loading ? (
-              <Loader2 className="w-4 h-4 animate-spin"/>
+              <Loader2 className="w-3 h-3 sm:w-4 sm:h-4 animate-spin"/>
             ) : (
-              <Send className="w-4 h-4"/>
+              <Send className="w-3 h-3 sm:w-4 sm:h-4"/>
             )}
-            SEND
+            <span className="hidden sm:inline">SEND</span>
           </button>
         </div>
       </div>

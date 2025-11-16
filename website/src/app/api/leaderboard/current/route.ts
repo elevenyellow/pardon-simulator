@@ -7,12 +7,15 @@ export async function GET() {
     const weekId = getCurrentWeekId();
     const sessions = await scoringRepository.getLeaderboard(weekId, 100);
     
-    const entries = sessions.map((session, index) => ({
+    // Filter to only show users with 90+ points
+    const eligibleSessions = sessions.filter(session => session.currentScore >= 90);
+    
+    const entries = eligibleSessions.map((session, index) => ({
       rank: index + 1,
       username: session.user.username,
       walletAddress: session.user.walletAddress,
       score: session.currentScore,
-      prizeEligible: session.currentScore >= 90,
+      prizeEligible: true, // All returned users are prize eligible
     }));
     
     return NextResponse.json({
@@ -20,7 +23,7 @@ export async function GET() {
       weekId,
       weekDisplay: formatWeekId(weekId),
       totalPlayers: entries.length,
-      prizeEligible: entries.filter(e => e.prizeEligible).length,
+      prizeEligible: entries.length,
       entries,
     });
     

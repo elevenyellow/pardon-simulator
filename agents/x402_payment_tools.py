@@ -1109,19 +1109,25 @@ async def award_points(
     Award or deduct points from user's score with personality-based evaluation.
     
     NEW SCORING SYSTEM (v2):
-    - Evaluate message and assign decimal score: 1.0-3.0 (this IS the points, not a multiplier)
+    - Evaluate message and assign decimal score: -3.0 to 3.0 (this IS the points, not a multiplier)
     - Backend adds ±0.1 random variance (prevents exact values)
     - Backend applies speed multiplier (1.0-1.69x for fast play)
     - Backend adds premium service bonus (2-10 points)
     
     Formula: (evaluation_score ± 0.1 random) × speed_multiplier + premium_bonus
-    Average outcome: ~2.0 points per message
+    Average outcome: ~2.0 points per message (for good messages)
     
     Args:
         user_wallet: The user's ACTUAL Solana wallet address (NOT "sbf"!)
-        evaluation_score: Your evaluation (1.0-3.0 decimal, average 2.0)
-            - 1.0-1.5: Poor quality, misaligned with your personality/goals
-            - 1.5-2.5: Average quality, somewhat aligned, decent effort
+        evaluation_score: Your evaluation (-3.0 to 3.0 decimal, average 2.0 for good messages)
+            PENALTIES (negative scores):
+            - -3.0 to -2.0: Severe insults, threats, completely inappropriate
+            - -2.0 to -1.0: Disrespectful, rude, poorly aligned
+            - -1.0 to 0: Poor quality, minimal value
+            POINTS (positive scores):
+            - 0 to 1.0: Minimal effort, vague
+            - 1.0-2.0: Basic quality, shows some understanding
+            - 2.0-2.5: Good quality, decent approach
             - 2.5-3.0: Excellent quality, highly aligned, exceptional strategy
         reason: Brief explanation of your evaluation
         category: "payment", "negotiation", "milestone", or "penalty"
@@ -1140,19 +1146,18 @@ async def award_points(
         # Average message:
         award_points("6pF45ay...", 2.0, "Decent approach", "negotiation", "medium_quality", "cz")
         
-        # Poor message:
-        award_points("6pF45ay...", 1.3, "Off-topic and poorly thought out", "negotiation", "low_quality", "melania-trump")
+        # Minimal effort:
+        award_points("6pF45ay...", 0.8, "Vague and unhelpful", "negotiation", "low_quality", "melania-trump")
         
-        # Penalty (use negative values):
+        # Penalty for insult:
         award_points("6pF45ay...", -2.5, "Insulted agent", "penalty", "insult", "donald-trump")
         
         # Premium service with payment bonus:
         award_points("6pF45ay...", 2.1, "Good message with premium service", "payment", None, "cz", premium_service_amount=0.005)
     """
-    # Validate evaluation_score range
-    if abs(evaluation_score) < 1.0 or abs(evaluation_score) > 3.0:
+    # Validate evaluation_score range (-3.0 to 3.0)
+    if evaluation_score < -3.0 or evaluation_score > 3.0:
         evaluation_score = max(-3.0, min(3.0, evaluation_score))
-        evaluation_score = max(1.0, evaluation_score) if evaluation_score > 0 else min(-1.0, evaluation_score)
         print(f"⚠️  Evaluation score clamped to valid range: {evaluation_score}")
     
     print(f"🎯 award_points() called: {evaluation_score} evaluation score to {user_wallet[:8]}... ({reason})")

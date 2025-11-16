@@ -405,7 +405,7 @@ export default function Home() {
         {/* Logout Button */}
         <button
           onClick={handleLogout}
-          className="fixed top-5 right-5 px-8 py-3 font-pixel text-[10px] text-white bg-[#ff6b6b] border-[3px] border-[#ff4444] uppercase tracking-wide transition-all hover:bg-[#ff8888] active:translate-y-0.5 z-[10000] pixel-art"          style={{
+          className="fixed top-5 right-5 px-6 font-pixel text-[10px] text-white bg-[#ff6b6b] border-[3px] border-[#ff4444] uppercase tracking-wide transition-all hover:bg-[#ff8888] active:translate-y-0.5 z-[10000] pixel-art h-[44px]"          style={{
             boxShadow:'0 4px 0 #cc0000, 0 4px 10px rgba(0, 0, 0, 0.5), 0 0 15px rgba(255, 107, 107, 0.4)',
             textShadow:'1px 1px 0 #cc0000, 0 0 8px rgba(255, 107, 107, 0.8)'          }}
         >
@@ -427,9 +427,9 @@ export default function Home() {
           </div>
         ) : (
           /* Main Game Interface */
-          <div className="w-full max-w-[1400px] flex flex-col items-center gap-5">
+          <div className="w-full max-w-[1400px] flex flex-col items-center gap-3 px-2 md:px-4">
             {/* Character Selection & TV View */}
-            <div className="flex justify-center items-start gap-5 flex-shrink-0">
+            <div className="flex justify-center items-start gap-3 flex-shrink-0 w-full">
               {/* Agent Selector will be integrated here */}
               <AgentSelector 
                 selectedAgent={selectedAgent}
@@ -448,7 +448,7 @@ export default function Home() {
 
             {/* Chat Interface */}
             {selectedAgent && (
-              <div className="w-full max-w-[1200px]">
+              <div className="w-full max-w-[1200px] px-2 md:px-0">
                 <ChatInterface 
                   selectedAgent={selectedAgent}
                   threadId={threadId}
