@@ -1,0 +1,50 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies and AWS CLI
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    curl \
+    unzip \
+    && curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" \
+    && unzip awscliv2.zip \
+    && ./aws/install \
+    && rm -rf aws awscliv2.zip \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python AWS SDK
+RUN pip install --no-cache-dir boto3
+
+# Copy all agent directories and shared files
+COPY cz/ /app/cz/
+COPY trump-donald/ /app/trump-donald/
+COPY trump-melania/ /app/trump-melania/
+COPY trump-eric/ /app/trump-eric/
+COPY trump-donjr/ /app/trump-donjr/
+COPY trump-barron/ /app/trump-barron/
+
+# Copy shared x402 payment tools
+COPY x402_*.py /app/cz/
+COPY x402_*.py /app/trump-donald/
+COPY x402_*.py /app/trump-melania/
+COPY x402_*.py /app/trump-eric/
+COPY x402_*.py /app/trump-donjr/
+COPY x402_*.py /app/trump-barron/
+
+# Install dependencies for each agent
+RUN cd /app/cz && pip install --no-cache-dir poetry && poetry config virtualenvs.create false && poetry install --only main --no-root && \
+    cd /app/trump-donald && pip install --no-cache-dir poetry && poetry config virtualenvs.create false && poetry install --only main --no-root && \
+    cd /app/trump-melania && pip install --no-cache-dir poetry && poetry config virtualenvs.create false && poetry install --only main --no-root && \
+    cd /app/trump-eric && pip install --no-cache-dir poetry && poetry config virtualenvs.create false && poetry install --only main --no-root && \
+    cd /app/trump-donjr && pip install --no-cache-dir poetry && poetry config virtualenvs.create false && poetry install --only main --no-root && \
+    cd /app/trump-barron && pip install --no-cache-dir poetry && poetry config virtualenvs.create false && poetry install --only main --no-root
+
+# Copy startup script
+COPY fetch-and-start.sh /app/
+RUN chmod +x /app/fetch-and-start.sh
+
+# Default command (will be overridden with agent-specific path)
+CMD ["/app/fetch-and-start.sh"]
+
