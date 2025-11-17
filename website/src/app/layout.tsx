@@ -8,6 +8,25 @@ export const metadata: Metadata = {
   icons: {
     icon: '/assets/favicon.png',
   },
+  openGraph: {
+    title: 'Pardon Simulator',
+    description: 'You are SBF - Negotiate with the Trump family using crypto to secure your presidential pardon!',
+    images: [
+      {
+        url: '/assets/cover.png',
+        width: 1200,
+        height: 630,
+        alt: 'Pardon Simulator',
+      },
+    ],
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Pardon Simulator',
+    description: 'You are SBF - Negotiate with the Trump family using crypto to secure your presidential pardon!',
+    images: ['/assets/cover.png'],
+  },
 };
 
 export default function RootLayout({
