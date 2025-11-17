@@ -1,0 +1,253 @@
+version: '3.8'
+
+services:
+  coral-server:
+    build:
+      context: ./coral-server
+      dockerfile: Dockerfile
+    container_name: coral-server
+    ports:
+      - "5555:5555"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5555/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - pardon-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  agent-cz:
+    build:
+      context: ./agents
+      dockerfile: Dockerfile.agent
+    container_name: agent-cz
+    working_dir: /app/cz
+    command: ["/app/fetch-and-start.sh", "cz"]
+    environment:
+      - AGENT_NAME=cz
+      - CORAL_AGENT_ID=cz
+      - CORAL_SSE_URL=http://coral-server:5555/sse
+      - BACKEND_URL=${BACKEND_URL}
+      - MODEL_API_KEY=${MODEL_API_KEY}
+      - MODEL_NAME=${MODEL_NAME:-gpt-4o}
+      - SOLANA_PRIVATE_KEY=${SOLANA_PRIVATE_KEY_CZ}
+      - SOLANA_RPC_URL=${SOLANA_RPC_URL}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME:-pardon-simulator-configs}
+    depends_on:
+      coral-server:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - pardon-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  agent-sbf:
+    build:
+      context: ./agents
+      dockerfile: Dockerfile.agent
+    container_name: agent-sbf
+    working_dir: /app/sbf
+    command: ["/app/fetch-and-start.sh", "sbf"]
+    environment:
+      - AGENT_NAME=sbf
+      - CORAL_AGENT_ID=sbf
+      - CORAL_SSE_URL=http://coral-server:5555/sse
+      - BACKEND_URL=${BACKEND_URL}
+      - MODEL_API_KEY=${MODEL_API_KEY}
+      - MODEL_NAME=${MODEL_NAME:-gpt-4o}
+      - SOLANA_PRIVATE_KEY=${SOLANA_PRIVATE_KEY_SBF}
+      - SOLANA_RPC_URL=${SOLANA_RPC_URL}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME:-pardon-simulator-configs}
+    depends_on:
+      coral-server:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - pardon-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  agent-trump-donald:
+    build:
+      context: ./agents
+      dockerfile: Dockerfile.agent
+    container_name: agent-trump-donald
+    working_dir: /app/trump-donald
+    command: ["/app/fetch-and-start.sh", "trump-donald"]
+    environment:
+      - AGENT_NAME=trump-donald
+      - CORAL_AGENT_ID=trump-donald
+      - CORAL_SSE_URL=http://coral-server:5555/sse
+      - BACKEND_URL=${BACKEND_URL}
+      - MODEL_API_KEY=${MODEL_API_KEY}
+      - MODEL_NAME=${MODEL_NAME:-gpt-4o}
+      - SOLANA_PRIVATE_KEY=${SOLANA_PRIVATE_KEY_DONALD}
+      - SOLANA_RPC_URL=${SOLANA_RPC_URL}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME:-pardon-simulator-configs}
+    depends_on:
+      coral-server:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - pardon-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  agent-trump-melania:
+    build:
+      context: ./agents
+      dockerfile: Dockerfile.agent
+    container_name: agent-trump-melania
+    working_dir: /app/trump-melania
+    command: ["/app/fetch-and-start.sh", "trump-melania"]
+    environment:
+      - AGENT_NAME=trump-melania
+      - CORAL_AGENT_ID=trump-melania
+      - CORAL_SSE_URL=http://coral-server:5555/sse
+      - BACKEND_URL=${BACKEND_URL}
+      - MODEL_API_KEY=${MODEL_API_KEY}
+      - MODEL_NAME=${MODEL_NAME:-gpt-4o}
+      - SOLANA_PRIVATE_KEY=${SOLANA_PRIVATE_KEY_MELANIA}
+      - SOLANA_RPC_URL=${SOLANA_RPC_URL}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME:-pardon-simulator-configs}
+    depends_on:
+      coral-server:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - pardon-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  agent-trump-eric:
+    build:
+      context: ./agents
+      dockerfile: Dockerfile.agent
+    container_name: agent-trump-eric
+    working_dir: /app/trump-eric
+    command: ["/app/fetch-and-start.sh", "trump-eric"]
+    environment:
+      - AGENT_NAME=trump-eric
+      - CORAL_AGENT_ID=trump-eric
+      - CORAL_SSE_URL=http://coral-server:5555/sse
+      - BACKEND_URL=${BACKEND_URL}
+      - MODEL_API_KEY=${MODEL_API_KEY}
+      - MODEL_NAME=${MODEL_NAME:-gpt-4o}
+      - SOLANA_PRIVATE_KEY=${SOLANA_PRIVATE_KEY_ERIC}
+      - SOLANA_RPC_URL=${SOLANA_RPC_URL}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME:-pardon-simulator-configs}
+    depends_on:
+      coral-server:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - pardon-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  agent-trump-donjr:
+    build:
+      context: ./agents
+      dockerfile: Dockerfile.agent
+    container_name: agent-trump-donjr
+    working_dir: /app/trump-donjr
+    command: ["/app/fetch-and-start.sh", "trump-donjr"]
+    environment:
+      - AGENT_NAME=trump-donjr
+      - CORAL_AGENT_ID=trump-donjr
+      - CORAL_SSE_URL=http://coral-server:5555/sse
+      - BACKEND_URL=${BACKEND_URL}
+      - MODEL_API_KEY=${MODEL_API_KEY}
+      - MODEL_NAME=${MODEL_NAME:-gpt-4o}
+      - SOLANA_PRIVATE_KEY=${SOLANA_PRIVATE_KEY_DONJR}
+      - SOLANA_RPC_URL=${SOLANA_RPC_URL}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME:-pardon-simulator-configs}
+    depends_on:
+      coral-server:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - pardon-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  agent-trump-barron:
+    build:
+      context: ./agents
+      dockerfile: Dockerfile.agent
+    container_name: agent-trump-barron
+    working_dir: /app/trump-barron
+    command: ["/app/fetch-and-start.sh", "trump-barron"]
+    environment:
+      - AGENT_NAME=trump-barron
+      - CORAL_AGENT_ID=trump-barron
+      - CORAL_SSE_URL=http://coral-server:5555/sse
+      - BACKEND_URL=${BACKEND_URL}
+      - MODEL_API_KEY=${MODEL_API_KEY}
+      - MODEL_NAME=${MODEL_NAME:-gpt-4o}
+      - SOLANA_PRIVATE_KEY=${SOLANA_PRIVATE_KEY_BARRON}
+      - SOLANA_RPC_URL=${SOLANA_RPC_URL}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME:-pardon-simulator-configs}
+    depends_on:
+      coral-server:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - pardon-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  pardon-network:
+    driver: bridge
+

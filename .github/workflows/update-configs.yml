@@ -1,0 +1,72 @@
+name: Update Agent Configs
+
+on:
+  workflow_dispatch:
+    inputs:
+      agent:
+        description: 'Agent name (or "all" for all agents)'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - cz
+          - trump-donald
+          - trump-melania
+          - trump-eric
+          - trump-donjr
+          - trump-barron
+
+jobs:
+  upload-configs:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      
+      - name: Upload configs to SSM
+        run: |
+          chmod +x scripts/upload-configs.sh
+          
+          if [ "${{ github.event.inputs.agent }}" = "all" ]; then
+            echo "Uploading configs for all agents..."
+            ./scripts/upload-configs.sh
+          else
+            echo "Uploading configs for ${{ github.event.inputs.agent }}..."
+            AGENT="${{ github.event.inputs.agent }}"
+            FILES=("operational-private.txt" "personality-public.txt" "scoring-config.txt" "tool-descriptions.txt")
+            
+            for file in "${FILES[@]}"; do
+              filename="${file%.*}"
+              filepath="agents/${AGENT}/${file}"
+              
+              if [ -f "$filepath" ]; then
+                aws ssm put-parameter \
+                  --name "/pardon/agents/${AGENT}/${filename}" \
+                  --value file://"${filepath}" \
+                  --type "SecureString" \
+                  --overwrite \
+                  --region ${{ secrets.AWS_REGION }}
+                echo "✓ Uploaded ${file}"
+              fi
+            done
+          fi
+      
+      - name: Notify completion
+        run: |
+          echo "=========================================="
+          echo "✅ Configs uploaded to SSM!"
+          echo "=========================================="
+          echo ""
+          echo "To apply changes, restart the agent containers:"
+          echo "  ssh to EC2 and run:"
+          echo "  docker-compose restart agent-${{ github.event.inputs.agent }}"
+

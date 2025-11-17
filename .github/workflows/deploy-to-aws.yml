@@ -1,0 +1,107 @@
+name: Deploy to AWS EC2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'coral-server/**'
+      - 'agents/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/deploy-to-aws.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Configure AWS credentials (for SSM)
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      
+      - name: Upload configs to SSM
+        run: |
+          echo "Configs are expected to be already in SSM"
+          echo "To upload configs, run: ./scripts/upload-configs.sh locally"
+      
+      - name: Deploy to EC2
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          # Setup SSH
+          mkdir -p ~/.ssh
+          echo "$EC2_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          
+          # Add EC2 host to known_hosts
+          ssh-keyscan -H $EC2_HOST >> ~/.ssh/known_hosts
+          
+          echo "=========================================="
+          echo "🚀 Deploying to EC2: $EC2_HOST"
+          echo "=========================================="
+          
+          # Deploy
+          ssh -i ~/.ssh/deploy_key $EC2_USER@$EC2_HOST << 'ENDSSH'
+            set -e
+            
+            echo "📥 Pulling latest code..."
+            cd ~/pardon-simulator
+            git fetch origin
+            git pull origin main
+            echo "✓ Code updated"
+            echo ""
+            
+            echo "🛑 Stopping services..."
+            docker-compose down
+            echo "✓ Services stopped"
+            echo ""
+            
+            echo "🔨 Rebuilding containers..."
+            docker-compose build --no-cache
+            echo "✓ Containers built"
+            echo ""
+            
+            echo "🚀 Starting services..."
+            docker-compose up -d
+            echo "✓ Services started"
+            echo ""
+            
+            echo "⏳ Waiting for services..."
+            sleep 10
+            
+            echo "📊 Service Status:"
+            docker-compose ps
+            
+            echo ""
+            echo "📝 Recent Logs:"
+            docker-compose logs --tail=20
+          ENDSSH
+          
+          echo ""
+          echo "=========================================="
+          echo "✅ Deployment Complete!"
+          echo "=========================================="
+      
+      - name: Health Check
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          echo "Waiting 30 seconds for services to fully start..."
+          sleep 30
+          
+          echo "Checking Coral Server health..."
+          if curl -f http://$EC2_HOST:5555/health; then
+            echo "✅ Coral Server is healthy!"
+          else
+            echo "⚠️  Coral Server health check failed"
+            exit 1
+          fi
+

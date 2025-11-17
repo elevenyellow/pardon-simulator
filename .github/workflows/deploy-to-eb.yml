@@ -1,0 +1,109 @@
+name: Deploy to Elastic Beanstalk
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'coral-server/**'
+      - 'agents/**'
+      - 'docker-compose.yml'
+      - '.ebextensions/**'
+      - '.github/workflows/deploy-to-eb.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install EB CLI
+        run: |
+          pip install awsebcli
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      
+      - name: Upload configs to S3
+        run: |
+          echo "Configs should already be in S3"
+          echo "To upload manually, run: ./scripts/upload-configs.sh"
+      
+      - name: Configure EB CLI
+        run: |
+          mkdir -p ~/.aws
+          cat > ~/.aws/config << EOF
+          [profile eb-cli]
+          aws_access_key_id = ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_access_key = ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          region = ${{ secrets.AWS_REGION }}
+          EOF
+      
+      - name: Deploy to Elastic Beanstalk
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          echo "=========================================="
+          echo "🚀 Deploying to Elastic Beanstalk"
+          echo "=========================================="
+          
+          # Check EB application exists
+          eb status || echo "⚠️  Environment may not exist yet"
+          
+          # Deploy
+          eb deploy --staged
+          
+          echo ""
+          echo "✅ Deployment initiated!"
+      
+      - name: Wait for deployment
+        run: |
+          echo "⏳ Waiting for deployment to complete..."
+          
+          # Wait up to 10 minutes for deployment
+          for i in {1..60}; do
+            STATUS=$(eb health --view-request)
+            if echo "$STATUS" | grep -q "Ok"; then
+              echo "✅ Deployment successful!"
+              exit 0
+            fi
+            echo "  Still deploying... ($i/60)"
+            sleep 10
+          done
+          
+          echo "⚠️  Deployment taking longer than expected"
+          eb health
+      
+      - name: Verify deployment
+        run: |
+          echo "📊 Final Status:"
+          eb status
+          
+          echo ""
+          echo "🏥 Health Check:"
+          eb health --view-request || true
+          
+          echo ""
+          echo "📝 Recent Logs:"
+          eb logs --all | tail -100 || true
+      
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "❌ Deployment failed!"
+          echo "Check logs with: eb logs"
+          eb status || true
+

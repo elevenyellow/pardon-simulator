@@ -1,0 +1,273 @@
+name: Professional CI/CD - Build & Deploy to EB
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'coral-server/**'
+      - 'agents/**'
+      - 'docker-compose.yml'
+      - '.ebextensions/**'
+      - '.github/workflows/build-and-deploy-professional.yml'
+  workflow_dispatch:
+    inputs:
+      skip_build:
+        description: 'Skip Docker build (use existing images)'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: 640080112933.dkr.ecr.us-east-1.amazonaws.com
+  CORAL_SERVER_REPO: coral-server
+  AGENT_REPO: pardon-agent
+
+jobs:
+  build-and-push:
+    name: Build Docker Images & Push to ECR
+    runs-on: ubuntu-latest
+    if: ${{ !inputs.skip_build }}
+    
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+      
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v3
+      
+      - name: 🏷️ Generate image metadata
+        id: meta
+        run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          echo "tags=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "Image tag: ${SHORT_SHA}"
+      
+      - name: 🔐 Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: 🔑 Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+      
+      - name: 🏗️ Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      
+      - name: 🐳 Build and push Coral Server
+        uses: docker/build-push-action@v4
+        with:
+          context: ./coral-server
+          file: ./coral-server/Dockerfile
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.CORAL_SERVER_REPO }}:${{ steps.meta.outputs.tags }}
+            ${{ env.ECR_REGISTRY }}/${{ env.CORAL_SERVER_REPO }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: 🤖 Build and push Pardon Agent
+        uses: docker/build-push-action@v4
+        with:
+          context: ./agents
+          file: ./agents/Dockerfile.agent
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.AGENT_REPO }}:${{ steps.meta.outputs.tags }}
+            ${{ env.ECR_REGISTRY }}/${{ env.AGENT_REPO }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: ✅ Build complete
+        run: |
+          echo "🎉 Images built and pushed successfully!"
+          echo "Coral Server: ${{ env.ECR_REGISTRY }}/${{ env.CORAL_SERVER_REPO }}:${{ steps.meta.outputs.tags }}"
+          echo "Pardon Agent: ${{ env.ECR_REGISTRY }}/${{ env.AGENT_REPO }}:${{ steps.meta.outputs.tags }}"
+
+  deploy:
+    name: Deploy to Elastic Beanstalk
+    runs-on: ubuntu-latest
+    needs: [build-and-push]
+    if: ${{ always() && (needs.build-and-push.result == 'success' || inputs.skip_build) }}
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v3
+      
+      - name: 🔐 Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: 🔄 Update docker-compose.yml for ECR images
+        run: |
+          echo "📝 Updating docker-compose.yml to use ECR images..."
+          
+          # Create backup
+          cp docker-compose.yml docker-compose.yml.backup
+          
+          # Replace coral-server build with image
+          sed -i '/coral-server:/,/container_name: coral-server/ {
+            /build:/,/dockerfile: Dockerfile/d
+            /container_name: coral-server/i\    image: ${{ env.ECR_REGISTRY }}/${{ env.CORAL_SERVER_REPO }}:latest
+          }' docker-compose.yml
+          
+          # Replace agent builds with images (for all 7 agents)
+          for agent in cz sbf trump-donald trump-melania trump-eric trump-donjr trump-barron; do
+            sed -i "/agent-${agent}:/,/container_name: agent-${agent}/ {
+              /build:/,/dockerfile: Dockerfile.agent/d
+              /container_name: agent-${agent}/i\    image: ${{ env.ECR_REGISTRY }}/${{ env.AGENT_REPO }}:latest
+            }" docker-compose.yml
+          done
+          
+          echo "✅ docker-compose.yml updated"
+          echo "📄 Changes:"
+          diff docker-compose.yml.backup docker-compose.yml || true
+      
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: 📦 Install EB CLI
+        run: |
+          pip install --upgrade pip
+          pip install awsebcli
+      
+      - name: 🚀 Deploy to Elastic Beanstalk
+        run: |
+          echo "=========================================="
+          echo "🚀 Deploying to Elastic Beanstalk"
+          echo "Environment: pardon-production"
+          echo "Region: ${{ env.AWS_REGION }}"
+          echo "=========================================="
+          
+          # Check current status
+          eb status pardon-production || echo "⚠️ Environment status check failed"
+          
+          # Deploy with updated configuration
+          eb deploy pardon-production --timeout 20 --staged
+          
+          echo ""
+          echo "✅ Deployment command completed!"
+      
+      - name: ⏳ Wait for deployment to stabilize
+        run: |
+          echo "⏳ Waiting for deployment to complete and become healthy..."
+          echo "This may take 5-10 minutes..."
+          
+          MAX_ATTEMPTS=40
+          ATTEMPT=0
+          
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            echo ""
+            echo "🔍 Health check attempt $ATTEMPT/$MAX_ATTEMPTS..."
+            
+            # Get environment health
+            HEALTH=$(eb health pardon-production --view-request 2>&1 || echo "Error")
+            
+            # Check if deployment is healthy
+            if echo "$HEALTH" | grep -q "Ok\|Green"; then
+              echo "✅ Deployment is HEALTHY!"
+              exit 0
+            elif echo "$HEALTH" | grep -q "Severe\|Red"; then
+              echo "⚠️ Environment is unhealthy (attempt $ATTEMPT/$MAX_ATTEMPTS)"
+              echo "$HEALTH"
+            else
+              echo "📊 Status: $HEALTH"
+            fi
+            
+            # Wait before next check
+            sleep 15
+          done
+          
+          echo "⏰ Deployment timeout reached"
+          echo "📊 Final status:"
+          eb health pardon-production --view-request || true
+          exit 1
+      
+      - name: 🧪 Smoke test
+        run: |
+          echo "🧪 Running smoke tests..."
+          
+          # Get the CNAME
+          CNAME=$(eb status pardon-production | grep CNAME | awk '{print $2}')
+          echo "🌐 Testing URL: http://${CNAME}:5555/health"
+          
+          # Test health endpoint
+          for i in {1..5}; do
+            echo "Attempt $i/5..."
+            if curl -f --max-time 10 "http://${CNAME}:5555/health"; then
+              echo ""
+              echo "✅ Health check PASSED!"
+              exit 0
+            fi
+            echo "⚠️ Health check failed, retrying..."
+            sleep 5
+          done
+          
+          echo "❌ Smoke test failed after 5 attempts"
+          echo "Note: Service may still be starting up. Check manually:"
+          echo "  curl http://${CNAME}:5555/health"
+      
+      - name: 📊 Deployment summary
+        if: always()
+        run: |
+          echo ""
+          echo "=========================================="
+          echo "📊 DEPLOYMENT SUMMARY"
+          echo "=========================================="
+          echo ""
+          echo "🔗 Environment Details:"
+          eb status pardon-production || true
+          echo ""
+          echo "🏥 Health Status:"
+          eb health pardon-production --view-request || true
+          echo ""
+          echo "🌐 Your Coral Server URL:"
+          CNAME=$(eb status pardon-production | grep CNAME | awk '{print $2}')
+          echo "  http://${CNAME}:5555"
+          echo ""
+          echo "📝 Next Steps:"
+          echo "  1. Verify: curl http://${CNAME}:5555/health"
+          echo "  2. Update Vercel env: CORAL_SERVER_URL=http://${CNAME}:5555"
+          echo "  3. Test from Next.js backend"
+          echo ""
+      
+      - name: ❌ On failure - show logs
+        if: failure()
+        run: |
+          echo "❌ Deployment failed! Fetching logs..."
+          echo ""
+          eb logs pardon-production --all || true
+          echo ""
+          echo "🔍 Troubleshooting:"
+          echo "  1. Check logs: eb logs pardon-production"
+          echo "  2. SSH to instance: eb ssh pardon-production"
+          echo "  3. Check containers: docker-compose ps"
+          echo "  4. View container logs: docker-compose logs"
+
+  notify:
+    name: Send Notification
+    runs-on: ubuntu-latest
+    needs: [build-and-push, deploy]
+    if: always()
+    
+    steps:
+      - name: 📢 Deployment Status
+        run: |
+          if [ "${{ needs.deploy.result }}" == "success" ]; then
+            echo "🎉 ✅ DEPLOYMENT SUCCESSFUL!"
+            echo "Your Coral Server is now running!"
+          else
+            echo "❌ DEPLOYMENT FAILED"
+            echo "Check the logs above for details"
+            exit 1
+          fi
+
