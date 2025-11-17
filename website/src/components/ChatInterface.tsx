@@ -187,7 +187,8 @@ export default function ChatInterface({
           type: 'score_update',
           current_score: currentScore,
           delta: 0, // Will be calculated later
-          reason: reason
+          reason: reason,
+          category: 'unknown' // Category not available in text format
         };
       }
     } catch (e) {
@@ -230,6 +231,7 @@ export default function ChatInterface({
         // Convert to PaymentRequest format expected by PaymentModal
         const paymentRequest: PaymentRequest = {
           type: 'x402_payment_required',
+          http_status: 402,
           recipient: parsed.recipient?.id || 'treasury',
           recipient_address: parsed.recipient_address || parsed.recipient?.address,
           amount_sol: 0,
@@ -238,6 +240,8 @@ export default function ChatInterface({
           reason: parsed.reason || 'Premium service',
           timestamp: parsed.timestamp || Date.now(),
           payment_id: parsed.payment_id,
+          blockchain: 'solana',
+          network: 'mainnet-beta',
         };
         
         // Remove payment request XML from message, keep the surrounding text
@@ -385,7 +389,7 @@ export default function ChatInterface({
             // Track pending payment requests from agent messages
             let pendingPaymentRequest: { request: PaymentRequest; messageId: string } | null = null;
             
-            const newMessages = data.messages.map((m: any) => {
+            const newMessages: Message[] = data.messages.map((m: any) => {
               const isFromUser = m.senderId === 'sbf';
               const mentionsUser = m.mentions?.includes('sbf');
               const isIntermediary = !isFromUser && !mentionsUser;
@@ -460,27 +464,39 @@ export default function ChatInterface({
               
               const trulyNew = uniqueNew.filter(m => !replacedServerIds.has(m.id));
               
-              // If we have new agent messages and there's a pending loading message, remove it
-              const hasNewAgentMessages = trulyNew.some(m => m.isAgent && m.senderId !== 'system');
-              let withoutLoading = updated;
-              if (hasNewAgentMessages && loadingMessageIdRef.current) {
-                withoutLoading = updated.filter(m => m.id !== loadingMessageIdRef.current);
-                loadingMessageIdRef.current = null;
-                setLoading(false); // Stop loading when agent response arrives via SSE
-              }
+              // Merge with the new messages
+              const merged = [...updated, ...trulyNew];
               
-              const merged = [...withoutLoading, ...trulyNew];
+              // AGGRESSIVE CLEANUP: Remove ALL system loading messages if ANY real agent message exists
+              const realAgentMessages = merged.filter(m => 
+                m.isAgent && 
+                m.senderId !== 'system' && 
+                !m.id.startsWith('loading-')
+              );
+              
+              let finalMessages = merged;
+              if (realAgentMessages.length > 0) {
+                // Remove ALL system messages (loading messages)
+                finalMessages = merged.filter(m => m.senderId !== 'system');
+                
+                // Clear the loading ref and state
+                if (loadingMessageIdRef.current) {
+                  console.log('[SSE] Removing ALL system messages - agent response detected');
+                  loadingMessageIdRef.current = null;
+                  setLoading(false);
+                }
+              }
               
               if (publicKey && threadId && trulyNew.length > 0) {
-                cacheConversation(publicKey.toString(), threadId, merged, selectedAgent);
+                cacheConversation(publicKey.toString(), threadId, finalMessages, selectedAgent);
               }
               
-              return merged;
+              return finalMessages;
             });
             
             // Trigger payment flow if we detected a payment request
             if (pendingPaymentRequest && publicKey && sessionId && threadId) {
-              const { request, messageId } = pendingPaymentRequest;
+              const { request, messageId }: { request: PaymentRequest; messageId: string } = pendingPaymentRequest;
               
               console.log(`[SSE] Triggering payment flow for message ${messageId}`);
               
@@ -504,9 +520,9 @@ export default function ChatInterface({
               ).catch((error: any) => {
                 console.error('[SSE Premium Service] Payment error:', error);
                 showToast(error.message || 'Payment failed', 'error');
-              }).finally(() => {
-                setLoading(false);
+                setLoading(false); // Only clear loading on error
               });
+              // Note: loading stays true until agent response arrives via SSE
             }
           }
         } catch (e) {
@@ -701,7 +717,7 @@ export default function ChatInterface({
       // Track if we found a new payment request that needs to be processed
       let pendingPaymentRequest: { request: PaymentRequest; messageId: string } | null = null;
       
-      const allMessages = coralMessages
+      const allMessages: Message[] = coralMessages
         .map((m: any) => {
           const isFromUser = m.senderId === 'sbf';
           const mentionsUser = m.mentions?.includes('sbf');
@@ -825,22 +841,8 @@ export default function ChatInterface({
         
         const trulyNew = newMessages.filter(m => !replacedServerIds.has(m.id));
         
-        // If we have new agent messages and there's a pending loading message, remove it
-        const hasNewAgentMessages = trulyNew.some(m => m.isAgent && m.senderId !== 'system');
-        let withoutLoading = updated;
-        if (hasNewAgentMessages && loadingMessageIdRef.current) {
-          withoutLoading = updated.filter(m => m.id !== loadingMessageIdRef.current);
-          loadingMessageIdRef.current = null;
-          setLoading(false); // Stop loading when agent response arrives via polling
-        }
-        
-        // Return early if no new messages
-        if (trulyNew.length === 0) {
-          return withoutLoading;
-        }
-        
         // Add new messages and sort only when necessary
-        const merged = [...withoutLoading, ...trulyNew];
+        const merged = [...updated, ...trulyNew];
         const sorted = merged.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
         
         // Final deduplication pass to ensure no duplicate IDs (React key constraint)
@@ -851,12 +853,32 @@ export default function ChatInterface({
           return acc;
         }, [] as Message[]);
         
-        //  Cache the updated conversation if any new messages were added
-        if (trulyNew.length > 0 && publicKey && threadId) {
-          cacheConversation(publicKey.toString(), threadId, deduplicatedById, selectedAgent);
+        // AGGRESSIVE CLEANUP: Remove ALL system loading messages if ANY real agent message exists
+        const realAgentMessages = deduplicatedById.filter(m => 
+          m.isAgent && 
+          m.senderId !== 'system' && 
+          !m.id.startsWith('loading-')
+        );
+        
+        let finalMessages = deduplicatedById;
+        if (realAgentMessages.length > 0) {
+          // Remove ALL system messages (loading messages)
+          finalMessages = deduplicatedById.filter(m => m.senderId !== 'system');
+          
+          // Clear the loading ref and state
+          if (loadingMessageIdRef.current) {
+            console.log('[Polling] Removing ALL system messages - agent response detected');
+            loadingMessageIdRef.current = null;
+            setLoading(false);
+          }
         }
         
-        return deduplicatedById;
+        //  Cache the updated conversation if any new messages were added
+        if (trulyNew.length > 0 && publicKey && threadId) {
+          cacheConversation(publicKey.toString(), threadId, finalMessages, selectedAgent);
+        }
+        
+        return finalMessages;
       });
 
       // If we found a new payment request, trigger the payment flow
@@ -867,7 +889,7 @@ export default function ChatInterface({
       console.log('[Payment Flow] threadId:', threadId);
       
       if (pendingPaymentRequest && publicKey && sessionId && threadId) {
-        const { request, messageId } = pendingPaymentRequest;
+        const { request, messageId }: { request: PaymentRequest; messageId: string } = pendingPaymentRequest;
         
         console.log(`[Payment Flow] Triggering payment flow for message ${messageId}`);
         
@@ -896,15 +918,11 @@ export default function ChatInterface({
             threadId,
             selectedAgent
           );
+          // Note: loading stays true until agent response arrives via SSE/polling
         } catch (error: any) {
           console.error('[Premium Service] Payment error:', error);
           showToast(error.message || 'Payment failed', 'error');
-        } finally {
-          setLoading(false);
-          // Resume polling
-          if (!pollIntervalRef.current) {
-            startPolling();
-          }
+          setLoading(false); // Only clear loading on error
         }
       } else {
         console.log('[Payment Flow] Not triggering payment flow - missing requirements');
@@ -923,7 +941,6 @@ export default function ChatInterface({
         
         // Clear all state
         setSessionId(null);
-        setThreadId(null);
         setMessages([]);
         sessionInitializedRef.current = false;
         
@@ -1012,15 +1029,16 @@ export default function ChatInterface({
         return updated;
       });
       
+      // Keep loading true - will be set to false when agent responds via SSE/polling
+      
     } catch (err: any) {
       console.error('Send message error:', err);
       
       const errorMessage = err.message ||'Failed to send message';
       showToast(errorMessage,'error');
-    } finally {
-      setLoading(false);
-      // SSE connection handles updates automatically
+      setLoading(false); // Only clear loading on error
     }
+    // Note: loading stays true until agent response arrives via SSE/polling
   };
 
   const handlePayment = async (
@@ -1169,14 +1187,25 @@ export default function ChatInterface({
             isIntermediary: m.isIntermediary || false
           }));
 
-        // Remove loading message and add agent response together
-        setMessages(prev => {
-          const withoutLoading = prev.filter(m => m.id !== loadingMessageId);
-          return [...withoutLoading, ...newAgentMessages];
-        });
-        loadingMessageIdRef.current = null; // Clear the ref
-        setLoading(false); // Stop loading now that we have the response
+        // Only remove loading message if we received actual agent messages
+        if (newAgentMessages.length > 0) {
+          console.log('[Payment] Received agent messages from backend, removing loading message');
+          setMessages(prev => {
+            const withoutLoading = prev.filter(m => m.id !== loadingMessageId);
+            return [...withoutLoading, ...newAgentMessages];
+          });
+          
+          loadingMessageIdRef.current = null; // Clear the ref
+          setLoading(false); // Stop loading now that we have the response
+        } else {
+          // No agent messages yet - keep loading message and wait for SSE to deliver the response
+          console.log('[Payment] No agent messages in backend response, waiting for SSE');
         }
+      } else {
+        // No messages in response (normal since backend returns immediately)
+        // Loading message will be removed when SSE delivers the agent response
+        console.log('[Payment] Backend returned successfully, waiting for agent response via SSE');
+      }
       } else {
         // SOL payments (not currently supported for CDP facilitator)
         throw new Error('SOL payments not currently supported. Please use USDC.');

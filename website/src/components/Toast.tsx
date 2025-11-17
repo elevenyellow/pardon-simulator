@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from'react';
+import { createPortal } from'react-dom';
 import { X, CheckCircle, AlertCircle, Info, Loader2 } from'lucide-react';
 
 export type ToastType ='success'|'error'|'info'|'loading';
@@ -80,12 +81,18 @@ export function Toast({ id, message, type, onClose, duration = 5000 }: ToastProp
 }
 
 export function ToastContainer({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="fixed top-4 right-4 z-[10001] flex flex-col gap-2 pointer-events-none">
+  // Use portal to render at document body level, bypassing any stacking context issues
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  
+  return createPortal(
+    <div className="fixed top-4 right-4 z-[99999] flex flex-col gap-2 pointer-events-none">
       <div className="pointer-events-auto">
         {children}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

@@ -136,8 +136,8 @@ export default function PaymentModal({
   const displayAmount = isUSDC ? paymentRequest.amount_usdc : paymentRequest.amount_sol;
   const displayCurrency = isUSDC ? 'USDC' : 'SOL';
   const usdEstimate = isUSDC 
-    ? displayAmount.toFixed(2) 
-    : (paymentRequest.amount_sol * 200).toFixed(2);
+    ? (displayAmount || 0).toFixed(2) 
+    : ((paymentRequest.amount_sol || 0) * 200).toFixed(2);
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
