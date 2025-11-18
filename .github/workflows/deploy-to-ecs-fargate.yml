@@ -83,25 +83,13 @@ jobs:
           echo "Coral Server: ${{ steps.login-ecr.outputs.registry }}/coral-server:${{ steps.meta.outputs.tags }}"
           echo "Pardon Agent: ${{ steps.login-ecr.outputs.registry }}/pardon-agent:${{ steps.meta.outputs.tags }}"
       
-      - name: 🔐 Derive public addresses from private keys
-        id: derive-addresses
-        env:
-          SOLANA_PRIVATE_KEY_CZ: ${{ secrets.SOLANA_PRIVATE_KEY_CZ }}
-          SOLANA_PRIVATE_KEY_SBF: ${{ secrets.SOLANA_PRIVATE_KEY_SBF }}
-          SOLANA_PRIVATE_KEY_TRUMP_DONALD: ${{ secrets.SOLANA_PRIVATE_KEY_TRUMP_DONALD }}
-          SOLANA_PRIVATE_KEY_TRUMP_MELANIA: ${{ secrets.SOLANA_PRIVATE_KEY_TRUMP_MELANIA }}
-          SOLANA_PRIVATE_KEY_TRUMP_ERIC: ${{ secrets.SOLANA_PRIVATE_KEY_TRUMP_ERIC }}
-          SOLANA_PRIVATE_KEY_TRUMP_DONJR: ${{ secrets.SOLANA_PRIVATE_KEY_TRUMP_DONJR }}
-          SOLANA_PRIVATE_KEY_TRUMP_BARRON: ${{ secrets.SOLANA_PRIVATE_KEY_TRUMP_BARRON }}
+      - name: 🔐 Load public addresses from secrets
+        id: load-addresses
         run: |
-          echo "🔐 Installing solders..."
-          pip3 install --quiet solders
+          echo "🔐 Loading public addresses from GitHub Secrets..."
           
-          echo "🔐 Deriving public addresses..."
-          python3 scripts/derive-public-addresses.py > /tmp/public_addresses.json
-          
-          echo "✅ Public addresses derived:"
-          cat /tmp/public_addresses.json
+          # Public addresses are stored directly in secrets (no derivation needed)
+          echo "✅ Public addresses loaded from secrets"
       
       - name: 📋 Update task definition with new images and secrets
         id: task-def
@@ -109,12 +97,19 @@ jobs:
           MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
           HELIUS_API_KEY: ${{ secrets.HELIUS_API_KEY }}
           SOLANA_PRIVATE_KEY_CZ: ${{ secrets.SOLANA_PRIVATE_KEY_CZ }}
+          SOLANA_PUBLIC_ADDRESS_CZ: ${{ secrets.SOLANA_PUBLIC_ADDRESS_CZ }}
           SOLANA_PRIVATE_KEY_SBF: ${{ secrets.SOLANA_PRIVATE_KEY_SBF }}
+          SOLANA_PUBLIC_ADDRESS_SBF: ${{ secrets.SOLANA_PUBLIC_ADDRESS_SBF }}
           SOLANA_PRIVATE_KEY_TRUMP_DONALD: ${{ secrets.SOLANA_PRIVATE_KEY_TRUMP_DONALD }}
+          SOLANA_PUBLIC_ADDRESS_TRUMP_DONALD: ${{ secrets.SOLANA_PUBLIC_ADDRESS_TRUMP_DONALD }}
           SOLANA_PRIVATE_KEY_TRUMP_MELANIA: ${{ secrets.SOLANA_PRIVATE_KEY_TRUMP_MELANIA }}
+          SOLANA_PUBLIC_ADDRESS_TRUMP_MELANIA: ${{ secrets.SOLANA_PUBLIC_ADDRESS_TRUMP_MELANIA }}
           SOLANA_PRIVATE_KEY_TRUMP_ERIC: ${{ secrets.SOLANA_PRIVATE_KEY_TRUMP_ERIC }}
+          SOLANA_PUBLIC_ADDRESS_TRUMP_ERIC: ${{ secrets.SOLANA_PUBLIC_ADDRESS_TRUMP_ERIC }}
           SOLANA_PRIVATE_KEY_TRUMP_DONJR: ${{ secrets.SOLANA_PRIVATE_KEY_TRUMP_DONJR }}
+          SOLANA_PUBLIC_ADDRESS_TRUMP_DONJR: ${{ secrets.SOLANA_PUBLIC_ADDRESS_TRUMP_DONJR }}
           SOLANA_PRIVATE_KEY_TRUMP_BARRON: ${{ secrets.SOLANA_PRIVATE_KEY_TRUMP_BARRON }}
+          SOLANA_PUBLIC_ADDRESS_TRUMP_BARRON: ${{ secrets.SOLANA_PUBLIC_ADDRESS_TRUMP_BARRON }}
         run: |
           echo "📋 Fetching current task definition..."
           
@@ -125,17 +120,14 @@ jobs:
             --query 'taskDefinition' \
             --output json)
           
-          # Load public addresses
-          PUBLIC_ADDRS=$(cat /tmp/public_addresses.json)
-          
-          # Extract individual addresses for jq
-          ADDR_CZ=$(echo "$PUBLIC_ADDRS" | jq -r '.cz')
-          ADDR_SBF=$(echo "$PUBLIC_ADDRS" | jq -r '.sbf')
-          ADDR_DONALD=$(echo "$PUBLIC_ADDRS" | jq -r '."trump-donald"')
-          ADDR_MELANIA=$(echo "$PUBLIC_ADDRS" | jq -r '."trump-melania"')
-          ADDR_ERIC=$(echo "$PUBLIC_ADDRS" | jq -r '."trump-eric"')
-          ADDR_DONJR=$(echo "$PUBLIC_ADDRS" | jq -r '."trump-donjr"')
-          ADDR_BARRON=$(echo "$PUBLIC_ADDRS" | jq -r '."trump-barron"')
+          # Use public addresses from secrets (no derivation needed)
+          ADDR_CZ="$SOLANA_PUBLIC_ADDRESS_CZ"
+          ADDR_SBF="$SOLANA_PUBLIC_ADDRESS_SBF"
+          ADDR_DONALD="$SOLANA_PUBLIC_ADDRESS_TRUMP_DONALD"
+          ADDR_MELANIA="$SOLANA_PUBLIC_ADDRESS_TRUMP_MELANIA"
+          ADDR_ERIC="$SOLANA_PUBLIC_ADDRESS_TRUMP_ERIC"
+          ADDR_DONJR="$SOLANA_PUBLIC_ADDRESS_TRUMP_DONJR"
+          ADDR_BARRON="$SOLANA_PUBLIC_ADDRESS_TRUMP_BARRON"
           
           # Build Solana RPC URL with Helius key
           SOLANA_RPC_URL="https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}"
