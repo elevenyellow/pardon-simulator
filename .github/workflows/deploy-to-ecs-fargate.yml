@@ -108,9 +108,12 @@ jobs:
             del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)
           ')
           
+          # Save to temporary file
+          echo "$NEW_TASK_DEF" > /tmp/task-definition.json
+          
           echo "📋 Registering new task definition..."
-          TASK_DEF_ARN=$(echo "$NEW_TASK_DEF" | aws ecs register-task-definition \
-            --cli-input-json file:///dev/stdin \
+          TASK_DEF_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file:///tmp/task-definition.json \
             --region ${{ env.AWS_REGION }} \
             --query 'taskDefinition.taskDefinitionArn' \
             --output text)
