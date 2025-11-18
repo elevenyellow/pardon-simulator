@@ -71,11 +71,10 @@ jobs:
           file: ./agents/Dockerfile.agent.minimal
           platforms: linux/amd64
           push: true
+          no-cache: true
           tags: |
             ${{ env.ECR_REGISTRY }}/pardon-agent:${{ steps.meta.outputs.tags }}
             ${{ env.ECR_REGISTRY }}/pardon-agent:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
       
       - name: ✅ Build complete
         run: |
