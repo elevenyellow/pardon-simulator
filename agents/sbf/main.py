@@ -391,12 +391,17 @@ async def create_agent(coral_tools, sbf_tools):
         "max_tokens": int(os.getenv("MODEL_MAX_TOKENS", "8000"))
     }
     
+    # Add reasoning_effort for GPT-5.1+ models (optional, only if explicitly set)
+    reasoning_effort = os.getenv("MODEL_REASONING_EFFORT")
+    if reasoning_effort and reasoning_effort.strip():
+        model_kwargs["reasoning_effort"] = reasoning_effort  # e.g., "none" for fast responses
+    
     base_url = os.getenv("MODEL_BASE_URL")
     if base_url and base_url.strip():
         model_kwargs["base_url"] = base_url
     
     model = init_chat_model(**model_kwargs)
-    return AgentExecutor(agent=create_tool_calling_agent(model, combined, prompt), tools=combined, verbose=True, handle_parsing_errors=True)
+    return AgentExecutor(agent=create_tool_calling_agent(model, combined, prompt), tools=combined, verbose=False, handle_parsing_errors=True)
 
 async def main():
     global wallet

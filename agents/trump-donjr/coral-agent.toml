@@ -1,5 +1,5 @@
 [agent]
-name = "donjr-trump"
+name = "trump-donjr"
 version = "1.0.0"
 description = "Donald Trump Jr - Outspoken and aggressive supporter. Passionate about deals and winning. Competitive with siblings."
 
@@ -11,7 +11,7 @@ type = "string"
 
 [options.MODEL_NAME]
 type = "string"
-default = "gpt-4o"
+default = "gpt-5.1"
 
 [options.MODEL_PROVIDER]
 type = "string"
@@ -19,11 +19,11 @@ default = "openai"
 
 [options.MODEL_MAX_TOKENS]
 type = "string"
-default = "8000"
+default = "3500"
 
 [options.MODEL_TEMPERATURE]
 type = "string"
-default = "0.8"
+default = "0.6"
 
 [options.TIMEOUT_MS]
 type = "string"

@@ -14,8 +14,8 @@ default = ""
 
 [options.MODEL_NAME]
 type = "string"
-description = "What model to use (e.g 'gpt-4o', 'grok-2')"
-default = "gpt-4o"
+description = "What model to use (e.g 'gpt-4o', 'gpt-5.1', 'grok-2')"
+default = "gpt-5.1"
 
 [options.MODEL_PROVIDER]
 type = "string"
@@ -25,12 +25,12 @@ default = "openai"
 [options.MODEL_MAX_TOKENS]
 type = "string"
 description = "Max tokens to use"
-default = "8000"
+default = "3500"
 
 [options.MODEL_TEMPERATURE]
 type = "string"
 description = "What model temperature to use"
-default = "0.7"
+default = "0.6"
 
 [options.TIMEOUT_MS]
 type = "string"

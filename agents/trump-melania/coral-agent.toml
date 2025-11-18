@@ -1,5 +1,5 @@
 [agent]
-name = "melania-trump"
+name = "trump-melania"
 version = "1.0.0"
 description = "Melania Trump - Elegant and diplomatic. Focuses on family unity and values. Has her own fortune and acts as mediator in family negotiations."
 
@@ -13,7 +13,7 @@ description = "Base58 encoded Solana private key"
 
 [options.MODEL_NAME]
 type = "string"
-default = "gpt-4o"
+default = "gpt-5.1"
 
 [options.MODEL_PROVIDER]
 type = "string"
@@ -21,7 +21,7 @@ default = "openai"
 
 [options.MODEL_MAX_TOKENS]
 type = "string"
-default = "8000"
+default = "3500"
 
 [options.MODEL_TEMPERATURE]
 type = "string"

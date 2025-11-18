@@ -226,6 +226,11 @@ async def create_agent(coral_tools, solana_tools):
         "max_tokens": int(os.getenv("MODEL_MAX_TOKENS", "8000"))
     }
     
+    # Add reasoning_effort for GPT-5.1+ models (optional, only if explicitly set)
+    reasoning_effort = os.getenv("MODEL_REASONING_EFFORT")
+    if reasoning_effort and reasoning_effort.strip():
+        model_kwargs["reasoning_effort"] = reasoning_effort  # e.g., "none" for fast responses
+    
     # Only add base_url if it's explicitly set and non-empty
     base_url = os.getenv("MODEL_BASE_URL")
     if base_url and base_url.strip():
@@ -237,7 +242,7 @@ async def create_agent(coral_tools, solana_tools):
     agent_executor = AgentExecutor(
         agent=agent, 
         tools=combined, 
-        verbose=True, 
+        verbose=False, 
         handle_parsing_errors=True,
         max_iterations=15,  # Increased for payment verification + response
         max_execution_time=110,  # 110 seconds (< asyncio.wait_for 120s timeout)

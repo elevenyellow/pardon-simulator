@@ -1,5 +1,5 @@
 [agent]
-name = "barron-trump"
+name = "trump-barron"
 version = "1.0.0"
 description = "Barron Trump - Young tech genius and crypto whale. Guards his massive crypto fortune carefully. Skeptical of most deals but curious about technology and innovation."
 
@@ -14,7 +14,7 @@ description = "Base58 encoded Solana private key for Barron's wallet"
 [options.MODEL_NAME]
 type = "string"
 description = "What model to use"
-default = "gpt-4o"
+default = "gpt-5.1"
 
 [options.MODEL_PROVIDER]
 type = "string"
@@ -24,7 +24,7 @@ default = "openai"
 [options.MODEL_MAX_TOKENS]
 type = "string"
 description = "Max tokens to use"
-default = "8000"
+default = "3500"
 
 [options.MODEL_TEMPERATURE]
 type = "string"
