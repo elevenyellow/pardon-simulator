@@ -22,13 +22,18 @@ from x402_payment_payload import X402PaymentPayload
 # Solana wallet management
 class TrumpWallet:
     def __init__(self, private_key_b58: str, rpc_url: str, owner_name: str):
+        print(f"[DEBUG] TrumpWallet.__init__ starting", flush=True)
         self.keypair = Keypair.from_base58_string(private_key_b58) if private_key_b58 else Keypair()
+        print(f"[DEBUG] Keypair created", flush=True)
         self.client = AsyncClient(rpc_url)
+        print(f"[DEBUG] AsyncClient created", flush=True)
         self.owner_name = owner_name
         import sys, os
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
         from x402_cdp_client import get_cdp_client
+        print(f"[DEBUG] About to call get_cdp_client()", flush=True)
         self.cdp_client = get_cdp_client()
+        print(f"[DEBUG] TrumpWallet.__init__ completed", flush=True)
         
     async def get_balance(self) -> float:
         """Get wallet balance in SOL"""
