@@ -14,7 +14,7 @@ model User {
   id              String    @id @default(cuid())
   walletAddress   String    @unique
   username        String    // Auto-generated from wallet
-  totalScore      Int       @default(0)
+  totalScore      Float     @default(0)
   createdAt       DateTime  @default(now())
   
   sessions        Session[]
@@ -26,7 +26,7 @@ model Session {
   id              String    @id @default(cuid())
   userId          String
   coralSessionId  String    // Coral Server session ID
-  currentScore    Int       @default(0)
+  currentScore    Float     @default(0)
   startTime       DateTime  @default(now())
   endTime         DateTime?
   weekId          String    // Format: "2024-W45"
@@ -73,8 +73,8 @@ model Score {
   userId          String
   sessionId       String
   threadId        String?
-  delta           Int       // +5, +10, +20, etc. (can be negative for penalties)
-  currentScore    Int       // Score after this delta
+  delta           Float     // Decimal scores (e.g., 1.8, 2.3, -2.1)
+  currentScore    Float     // Score after this delta
   reason          String    // "Payment to CZ: +10" or "Insulted agent: -15"
   category        String    // "payment", "negotiation", "milestone", "penalty"
   subcategory     String?   // "insult", "quality_message", "combo", "spam", etc.
@@ -96,7 +96,7 @@ model LeaderboardEntry {
   id              String    @id @default(cuid())
   userId          String
   weekId          String    // "2024-W45"
-  finalScore      Int
+  finalScore      Float
   rank            Int
   prizeAmount     Decimal?  @db.Decimal(10, 4)
   createdAt       DateTime  @default(now())

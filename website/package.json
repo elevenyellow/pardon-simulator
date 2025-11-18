@@ -10,6 +10,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
+    "postinstall": "prisma generate && prisma migrate deploy",
     "db:reset": "node reset-database.js --force",
     "db:studio": "prisma studio",
     "db:check-scores": "node check-user-scores.js",
