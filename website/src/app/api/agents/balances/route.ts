@@ -11,11 +11,11 @@ if (!SOLANA_RPC_URL) {
 // Load agent wallet addresses from environment variables
 // NOTE:'sbf'is NOT included - SBF is user-controlled via browser wallet
 const AGENT_WALLETS: Record<string, string> = {
-'donald-trump': process.env.WALLET_DONALD_TRUMP!,
-'melania-trump': process.env.WALLET_MELANIA_TRUMP!,
-'eric-trump': process.env.WALLET_ERIC_TRUMP!,
-'donjr-trump': process.env.WALLET_DONJR_TRUMP!,
-'barron-trump': process.env.WALLET_BARRON_TRUMP!,
+'trump-donald': process.env.WALLET_DONALD_TRUMP!,
+'trump-melania': process.env.WALLET_MELANIA_TRUMP!,
+'trump-eric': process.env.WALLET_ERIC_TRUMP!,
+'trump-donjr': process.env.WALLET_DONJR_TRUMP!,
+'trump-barron': process.env.WALLET_BARRON_TRUMP!,
 'cz': process.env.WALLET_CZ!
 };
 

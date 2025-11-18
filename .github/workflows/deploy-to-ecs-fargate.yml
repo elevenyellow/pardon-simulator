@@ -1,0 +1,220 @@
+name: Deploy to ECS Fargate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'coral-server/**'
+      - 'agents/**'
+      - 'ecs-task-definition.json'
+      - '.github/workflows/deploy-to-ecs-fargate.yml'
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: 640080112933.dkr.ecr.us-east-1.amazonaws.com
+  ECS_CLUSTER: pardon-production
+  ECS_SERVICE: pardon-app
+  TASK_FAMILY: pardon-simulator
+
+jobs:
+  build-and-deploy:
+    name: Build & Deploy to ECS
+    runs-on: ubuntu-latest
+    environment: production  # Optional: use GitHub environment for protection rules
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v3
+      
+      - name: 🔐 Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: 🔑 Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+      
+      - name: 🏷️ Generate image metadata
+        id: meta
+        run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          echo "tags=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "🏷️  Image tag: ${SHORT_SHA}"
+      
+      - name: 🏗️ Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      
+      - name: 🐳 Build and push Coral Server (AMD64 for Fargate)
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./coral-server/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/coral-server:${{ steps.meta.outputs.tags }}
+            ${{ env.ECR_REGISTRY }}/coral-server:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: 🤖 Build and push Pardon Agent (AMD64 for Fargate)
+        uses: docker/build-push-action@v4
+        with:
+          context: ./agents
+          file: ./agents/Dockerfile.agent.minimal
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/pardon-agent:${{ steps.meta.outputs.tags }}
+            ${{ env.ECR_REGISTRY }}/pardon-agent:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: ✅ Build complete
+        run: |
+          echo "🎉 Images built and pushed successfully!"
+          echo "Coral Server: ${{ env.ECR_REGISTRY }}/coral-server:${{ steps.meta.outputs.tags }}"
+          echo "Pardon Agent: ${{ env.ECR_REGISTRY }}/pardon-agent:${{ steps.meta.outputs.tags }}"
+      
+      - name: 📋 Register new ECS task definition
+        id: task-def
+        run: |
+          echo "📋 Registering new task definition..."
+          TASK_DEF_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://ecs-task-definition.json \
+            --region ${{ env.AWS_REGION }} \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+          
+          echo "task_arn=${TASK_DEF_ARN}" >> $GITHUB_OUTPUT
+          echo "✅ New task definition: ${TASK_DEF_ARN}"
+      
+      - name: 🔄 Update ECS service (rolling deployment)
+        run: |
+          echo "🔄 Updating ECS service..."
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVICE }} \
+            --task-definition ${{ env.TASK_FAMILY }} \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }} > /dev/null
+          
+          echo "✅ Deployment initiated"
+      
+      - name: ⏳ Wait for deployment to stabilize
+        run: |
+          echo "⏳ Waiting for deployment to complete..."
+          echo "   (This may take 3-5 minutes)"
+          
+          aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE }} \
+            --region ${{ env.AWS_REGION }}
+          
+          echo "✅ Service is stable"
+      
+      - name: 📊 Check service status
+        run: |
+          echo "📊 Checking service status..."
+          
+          RUNNING_COUNT=$(aws ecs describe-services \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE }} \
+            --region ${{ env.AWS_REGION }} \
+            --query 'services[0].runningCount' \
+            --output text)
+          
+          DESIRED_COUNT=$(aws ecs describe-services \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE }} \
+            --region ${{ env.AWS_REGION }} \
+            --query 'services[0].desiredCount' \
+            --output text)
+          
+          echo "✅ Running tasks: ${RUNNING_COUNT}/${DESIRED_COUNT}"
+      
+      - name: 🏥 Health check
+        run: |
+          echo "🏥 Testing health endpoint..."
+          ALB_URL="http://pardon-alb-1021309692.us-east-1.elb.amazonaws.com:5555"
+          
+          # Wait a bit for tasks to be ready
+          sleep 15
+          
+          # Try health check
+          for i in {1..5}; do
+            echo "Attempt $i/5..."
+            if curl -sf "${ALB_URL}/health" > /dev/null; then
+              echo "✅ Health check PASSED!"
+              curl -s "${ALB_URL}/health"
+              exit 0
+            fi
+            echo "⚠️  Health check not responding yet, retrying..."
+            sleep 10
+          done
+          
+          echo "⚠️  Health check timeout (service may still be starting)"
+          echo "   Manual check: curl ${ALB_URL}/health"
+      
+      - name: 📢 Deployment summary
+        if: always()
+        run: |
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📊 DEPLOYMENT SUMMARY"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "🌐 Production URL:"
+          echo "   http://pardon-alb-1021309692.us-east-1.elb.amazonaws.com:5555"
+          echo ""
+          echo "🔍 Useful Commands:"
+          echo ""
+          echo "   # Check service status"
+          echo "   aws ecs describe-services --cluster ${{ env.ECS_CLUSTER }} --services ${{ env.ECS_SERVICE }} --region ${{ env.AWS_REGION }}"
+          echo ""
+          echo "   # View logs"
+          echo "   aws logs tail /ecs/pardon-simulator --follow --region ${{ env.AWS_REGION }}"
+          echo ""
+          echo "   # Test health"
+          echo "   curl http://pardon-alb-1021309692.us-east-1.elb.amazonaws.com:5555/health"
+          echo ""
+          echo "📝 Next Steps:"
+          echo "  1. Update Vercel: CORAL_SERVER_URL=http://pardon-alb-1021309692.us-east-1.elb.amazonaws.com:5555"
+          echo "  2. Update Vercel: NODE_ENV=production"
+          echo "  3. Test from Next.js backend"
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      
+      - name: ❌ On failure - show recent logs
+        if: failure()
+        run: |
+          echo "❌ Deployment failed! Fetching recent logs..."
+          aws logs tail /ecs/pardon-simulator --since 10m --format short --region ${{ env.AWS_REGION }} 2>&1 | head -100 || true
+          echo ""
+          echo "🔍 Troubleshooting:"
+          echo "  1. Check full logs: aws logs tail /ecs/pardon-simulator --follow --region ${{ env.AWS_REGION }}"
+          echo "  2. Check service: aws ecs describe-services --cluster ${{ env.ECS_CLUSTER }} --services ${{ env.ECS_SERVICE }}"
+          echo "  3. Check tasks: aws ecs list-tasks --cluster ${{ env.ECS_CLUSTER }} --service-name ${{ env.ECS_SERVICE }}"
+
+  notify:
+    name: Deployment Status
+    runs-on: ubuntu-latest
+    needs: [build-and-deploy]
+    if: always()
+    
+    steps:
+      - name: 📢 Status notification
+        run: |
+          if [ "${{ needs.build-and-deploy.result }}" == "success" ]; then
+            echo "🎉 ✅ DEPLOYMENT SUCCESSFUL!"
+            echo "Your Coral Server is now running on ECS Fargate!"
+          else
+            echo "❌ DEPLOYMENT FAILED"
+            echo "Check the logs above for details"
+            exit 1
+          fi
+

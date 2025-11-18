@@ -6,13 +6,21 @@ Collection of scripts for deploying and managing Pardon Simulator on AWS.
 
 ## 📁 Scripts Overview
 
-### Elastic Beanstalk (Recommended)
+### ECS Fargate (Recommended)
+
+| Script | Purpose | Usage |
+|--------|---------|-------|
+| `build-and-push.sh` | Build & push Docker images to ECR | `./scripts/build-and-push.sh` |
+| `deploy-ecs.sh` | Deploy to ECS Fargate | `./scripts/deploy-ecs.sh` |
+
+### Elastic Beanstalk
 
 | Script | Purpose | Usage |
 |--------|---------|-------|
 | `eb-init.sh` | Initialize EB application | `./scripts/eb-init.sh` |
 | `eb-create.sh` | Create EB environment | `./scripts/eb-create.sh` |
 | `eb-deploy.sh` | Deploy to EB | `./scripts/eb-deploy.sh` |
+| `deploy-production.sh` | Deploy to EB production | `./scripts/deploy-production.sh` |
 | `eb-update-config.sh` | Update agent config | `./scripts/eb-update-config.sh cz operational-private.txt` |
 | `eb-scale.sh` | Scale instances | `./scripts/eb-scale.sh 2` |
 
@@ -34,6 +42,25 @@ Collection of scripts for deploying and managing Pardon Simulator on AWS.
 ---
 
 ## 🚀 Quick Reference
+
+### ECS Fargate Workflow (Recommended)
+
+```bash
+# First time setup - see docs/ECS_DEPLOYMENT.md for cluster/service creation
+
+# Build and push images
+./scripts/build-and-push.sh
+
+# Deploy to ECS
+./scripts/deploy-ecs.sh
+
+# Or use GitHub Actions (auto-deploys on push to main)
+git push origin main
+
+# Monitor
+aws ecs describe-services --cluster pardon-production --services pardon-app
+aws logs tail /ecs/pardon-simulator --follow
+```
 
 ### Elastic Beanstalk Workflow
 
@@ -93,6 +120,73 @@ export S3_BUCKET_NAME=pardon-simulator-configs
 ---
 
 ## 📝 Detailed Script Documentation
+
+### build-and-push.sh
+
+**Purpose:** Build Docker images and push to AWS ECR
+
+**What it does:**
+- Builds coral-server image for AMD64 (Fargate compatible)
+- Builds pardon-agent image for AMD64 (Fargate compatible)
+- Pushes both images to ECR with `:latest` and `:$GIT_SHA` tags
+- Logs into ECR automatically
+
+**Usage:**
+```bash
+./scripts/build-and-push.sh
+```
+
+**Prerequisites:**
+- Docker running
+- AWS CLI configured
+- ECR repositories created
+- Sufficient disk space for builds
+
+**Takes 5-10 minutes** depending on your machine
+
+---
+
+### deploy-ecs.sh
+
+**Purpose:** Deploy to AWS ECS Fargate
+
+**What it does:**
+- Checks for `ecs-task-definition.json`
+- Registers new task definition with ECS
+- Updates service to use new task definition
+- Forces new deployment
+
+**Usage:**
+```bash
+./scripts/deploy-ecs.sh
+```
+
+**Prerequisites:**
+- `ecs-task-definition.json` configured (copy from `.example`)
+- ECS cluster and service created
+- Images pushed to ECR
+
+**Takes 3-5 minutes** for rolling deployment
+
+---
+
+### deploy-production.sh
+
+**Purpose:** Deploy to Elastic Beanstalk production
+
+**What it does:**
+- Deploys to EB environment `pardon-production`
+- Shows health status after deployment
+- Displays production URL
+
+**Usage:**
+```bash
+./scripts/deploy-production.sh
+```
+
+**Takes 3-5 minutes**
+
+---
 
 ### eb-init.sh
 
@@ -300,7 +394,7 @@ aws iam get-user-policy --user-name pardon-deploy-user --policy-name PardonDeplo
 
 ## 📚 More Information
 
-- **EB Migration Guide:** [ELASTIC_BEANSTALK_MIGRATION.md](../ELASTIC_BEANSTALK_MIGRATION.md)
-- **EB Quick Start:** [ELASTIC_BEANSTALK_QUICKSTART.md](../ELASTIC_BEANSTALK_QUICKSTART.md)
-- **EC2 Deployment:** [DEPLOYMENT.md](../DEPLOYMENT.md)
+- **ECS Fargate Deployment:** [docs/ECS_DEPLOYMENT.md](../docs/ECS_DEPLOYMENT.md)
+- **GitHub Actions CI/CD:** [docs/GITHUB_ACTIONS_SETUP.md](../docs/GITHUB_ACTIONS_SETUP.md)
+- **Configuration Reference:** [docs/CONFIGURATION.md](../docs/CONFIGURATION.md)
 - **General Setup:** [docs/DEPLOYMENT_GUIDE.md](../docs/DEPLOYMENT_GUIDE.md)

@@ -26,11 +26,11 @@ export async function GET(request: NextRequest) {
     // Validate agent name (security: prevent path traversal)
     const validAgents = [
 'cz',
-'donald-trump',
-'melania-trump',
-'eric-trump',
-'donjr-trump',
-'barron-trump',
+'trump-donald',
+'trump-melania',
+'trump-eric',
+'trump-donjr',
+'trump-barron',
 'sbf'    ];
     
     if (!validAgents.includes(agentParam)) {
@@ -43,11 +43,11 @@ export async function GET(request: NextRequest) {
     // Map agent param to directory name
     const agentDirMap: Record<string, string> = {
 'cz':'cz',
-'donald-trump':'trump-donald',
-'melania-trump':'trump-melania',
-'eric-trump':'trump-eric',
-'donjr-trump':'trump-donjr',
-'barron-trump':'trump-barron',
+'trump-donald':'trump-donald',
+'trump-melania':'trump-melania',
+'trump-eric':'trump-eric',
+'trump-donjr':'trump-donjr',
+'trump-barron':'trump-barron',
 'sbf':'sbf'    };
     
     const agentDir = agentDirMap[agentParam];
@@ -108,11 +108,11 @@ export async function GET(request: NextRequest) {
  */
 export async function OPTIONS(request: NextRequest) {
   const agents = [
-    { id:'donald-trump', name:'Donald Trump', title:'President of the United States'},
-    { id:'melania-trump', name:'Melania Trump', title:'First Lady'},
-    { id:'eric-trump', name:'Eric Trump', title:'Executive VP, Trump Organization'},
-    { id:'donjr-trump', name:'Donald Trump Jr', title:'Political Activist'},
-    { id:'barron-trump', name:'Barron Trump', title:'Crypto Prodigy'},
+    { id:'trump-donald', name:'Donald Trump', title:'President of the United States'},
+    { id:'trump-melania', name:'Melania Trump', title:'First Lady'},
+    { id:'trump-eric', name:'Eric Trump', title:'Executive VP, Trump Organization'},
+    { id:'trump-donjr', name:'Donald Trump Jr', title:'Political Activist'},
+    { id:'trump-barron', name:'Barron Trump', title:'Crypto Prodigy'},
     { id:'cz', name:'Changpeng Zhao (CZ)', title:'Binance Founder'},
     { id:'sbf', name:'Sam Bankman-Fried (SBF)', title:'Former FTX CEO'}
   ];

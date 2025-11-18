@@ -10,12 +10,12 @@ interface Agent {
 }
 
 const agents: Agent[] = [
-  { id:'donald-trump', name:'DONALD TRUMP', image:'/assets/img1.png'},
-  { id:'barron-trump', name:'BARRON TRUMP', image:'/assets/img2.jpg'},
+  { id:'trump-donald', name:'DONALD TRUMP', image:'/assets/img1.png'},
+  { id:'trump-barron', name:'BARRON TRUMP', image:'/assets/img2.jpg'},
   { id:'cz', name:'CZ (CHANGPENG ZHAO)', image:'/assets/img3.jpg'},
-  { id:'donjr-trump', name:'DONALD JR', image:'/assets/img4.jpg'},
-  { id:'eric-trump', name:'ERIC TRUMP', image:'/assets/img5.jpg'},
-  { id:'melania-trump', name:'MELANIA TRUMP', image:'/assets/img6.jpg'},
+  { id:'trump-donjr', name:'DONALD JR', image:'/assets/img4.jpg'},
+  { id:'trump-eric', name:'ERIC TRUMP', image:'/assets/img5.jpg'},
+  { id:'trump-melania', name:'MELANIA TRUMP', image:'/assets/img6.jpg'},
 ];
 
 export default function AgentSelector({ 

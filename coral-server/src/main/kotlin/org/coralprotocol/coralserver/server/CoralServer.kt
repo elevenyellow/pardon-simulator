@@ -195,6 +195,7 @@ class CoralServer(
             }
             routing {
                 // api
+                healthRoutes()
                 debugApiRoutes(localSessionManager)
                 sessionApiRoutes(registry, localSessionManager, devmode)
                 messageApiRoutes(mcpServersByTransportId, localSessionManager, remoteSessionManager)

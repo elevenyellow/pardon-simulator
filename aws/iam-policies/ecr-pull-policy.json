@@ -21,8 +21,8 @@
         "ecr:DescribeImages"
       ],
       "Resource": [
-        "arn:aws:ecr:us-east-1:640080112933:repository/coral-server",
-        "arn:aws:ecr:us-east-1:640080112933:repository/pardon-agent"
+        "arn:aws:ecr:us-east-1:YOUR_ACCOUNT_ID:repository/coral-server",
+        "arn:aws:ecr:us-east-1:YOUR_ACCOUNT_ID:repository/pardon-agent"
       ]
     }
   ]

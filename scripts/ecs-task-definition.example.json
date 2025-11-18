@@ -1,0 +1,275 @@
+{
+  "family": "pardon-simulator",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "2048",
+  "memory": "4096",
+  "executionRoleArn": "arn:aws:iam::YOUR_ACCOUNT_ID:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::YOUR_ACCOUNT_ID:role/ecsTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "coral-server",
+      "image": "YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/coral-server:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 5555,
+          "protocol": "tcp"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/pardon-simulator",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "coral-server"
+        }
+      }
+    },
+    {
+      "name": "agent-cz",
+      "image": "YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/pardon-agent:latest",
+      "essential": false,
+      "command": ["/app/fetch-and-start.sh", "cz"],
+      "workingDirectory": "/app/cz",
+      "environment": [
+        {"name": "AGENT_NAME", "value": "cz"},
+        {"name": "CORAL_AGENT_ID", "value": "cz"},
+        {"name": "CORAL_SSE_URL", "value": "http://localhost:5555/sse/v1/devmode/app/priv/production-main"},
+        {"name": "MODEL_API_KEY", "value": "YOUR_OPENAI_API_KEY_HERE"},
+        {"name": "MODEL_NAME", "value": "gpt-4o"},
+        {"name": "MODEL_PROVIDER", "value": "openai"},
+        {"name": "MODEL_TEMPERATURE", "value": "0.7"},
+        {"name": "MODEL_MAX_TOKENS", "value": "8000"},
+        {"name": "TIMEOUT_MS", "value": "300"},
+        {"name": "SOLANA_RPC_URL", "value": "https://mainnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY"},
+        {"name": "SOLANA_PRIVATE_KEY", "value": "YOUR_CZ_SOLANA_PRIVATE_KEY_BASE58"},
+        {"name": "AWS_REGION", "value": "us-east-1"}
+      ],
+      "dependsOn": [
+        {
+          "containerName": "coral-server",
+          "condition": "START"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/pardon-simulator",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "agent-cz"
+        }
+      }
+    },
+    {
+      "name": "agent-sbf",
+      "image": "YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/pardon-agent:latest",
+      "essential": false,
+      "command": ["/app/fetch-and-start.sh", "sbf"],
+      "workingDirectory": "/app/sbf",
+      "environment": [
+        {"name": "AGENT_NAME", "value": "sbf"},
+        {"name": "CORAL_AGENT_ID", "value": "sbf"},
+        {"name": "CORAL_SSE_URL", "value": "http://localhost:5555/sse/v1/devmode/app/priv/production-main"},
+        {"name": "MODEL_API_KEY", "value": "YOUR_OPENAI_API_KEY_HERE"},
+        {"name": "MODEL_NAME", "value": "gpt-4o"},
+        {"name": "MODEL_PROVIDER", "value": "openai"},
+        {"name": "MODEL_TEMPERATURE", "value": "0.7"},
+        {"name": "MODEL_MAX_TOKENS", "value": "8000"},
+        {"name": "TIMEOUT_MS", "value": "300"},
+        {"name": "SOLANA_RPC_URL", "value": "https://mainnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY"},
+        {"name": "SOLANA_PRIVATE_KEY", "value": "YOUR_SBF_SOLANA_PRIVATE_KEY_BASE58"},
+        {"name": "AWS_REGION", "value": "us-east-1"}
+      ],
+      "dependsOn": [
+        {
+          "containerName": "coral-server",
+          "condition": "START"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/pardon-simulator",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "agent-sbf"
+        }
+      }
+    },
+    {
+      "name": "agent-trump-donald",
+      "image": "YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/pardon-agent:latest",
+      "essential": false,
+      "command": ["/app/fetch-and-start.sh", "trump-donald"],
+      "workingDirectory": "/app/trump-donald",
+      "environment": [
+        {"name": "AGENT_NAME", "value": "trump-donald"},
+        {"name": "CORAL_AGENT_ID", "value": "trump-donald"},
+        {"name": "CORAL_SSE_URL", "value": "http://localhost:5555/sse/v1/devmode/app/priv/production-main"},
+        {"name": "MODEL_API_KEY", "value": "YOUR_OPENAI_API_KEY_HERE"},
+        {"name": "MODEL_NAME", "value": "gpt-4o"},
+        {"name": "MODEL_PROVIDER", "value": "openai"},
+        {"name": "MODEL_TEMPERATURE", "value": "0.7"},
+        {"name": "MODEL_MAX_TOKENS", "value": "8000"},
+        {"name": "TIMEOUT_MS", "value": "300"},
+        {"name": "SOLANA_RPC_URL", "value": "https://mainnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY"},
+        {"name": "SOLANA_PRIVATE_KEY", "value": "YOUR_DONALD_SOLANA_PRIVATE_KEY_BASE58"},
+        {"name": "AWS_REGION", "value": "us-east-1"}
+      ],
+      "dependsOn": [
+        {
+          "containerName": "coral-server",
+          "condition": "START"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/pardon-simulator",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "agent-trump-donald"
+        }
+      }
+    },
+    {
+      "name": "agent-trump-melania",
+      "image": "YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/pardon-agent:latest",
+      "essential": false,
+      "command": ["/app/fetch-and-start.sh", "trump-melania"],
+      "workingDirectory": "/app/trump-melania",
+      "environment": [
+        {"name": "AGENT_NAME", "value": "trump-melania"},
+        {"name": "CORAL_AGENT_ID", "value": "trump-melania"},
+        {"name": "CORAL_SSE_URL", "value": "http://localhost:5555/sse/v1/devmode/app/priv/production-main"},
+        {"name": "MODEL_API_KEY", "value": "YOUR_OPENAI_API_KEY_HERE"},
+        {"name": "MODEL_NAME", "value": "gpt-4o"},
+        {"name": "MODEL_PROVIDER", "value": "openai"},
+        {"name": "MODEL_TEMPERATURE", "value": "0.7"},
+        {"name": "MODEL_MAX_TOKENS", "value": "8000"},
+        {"name": "TIMEOUT_MS", "value": "300"},
+        {"name": "SOLANA_RPC_URL", "value": "https://mainnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY"},
+        {"name": "SOLANA_PRIVATE_KEY", "value": "YOUR_MELANIA_SOLANA_PRIVATE_KEY_BASE58"},
+        {"name": "AWS_REGION", "value": "us-east-1"}
+      ],
+      "dependsOn": [
+        {
+          "containerName": "coral-server",
+          "condition": "START"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/pardon-simulator",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "agent-trump-melania"
+        }
+      }
+    },
+    {
+      "name": "agent-trump-eric",
+      "image": "YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/pardon-agent:latest",
+      "essential": false,
+      "command": ["/app/fetch-and-start.sh", "trump-eric"],
+      "workingDirectory": "/app/trump-eric",
+      "environment": [
+        {"name": "AGENT_NAME", "value": "trump-eric"},
+        {"name": "CORAL_AGENT_ID", "value": "trump-eric"},
+        {"name": "CORAL_SSE_URL", "value": "http://localhost:5555/sse/v1/devmode/app/priv/production-main"},
+        {"name": "MODEL_API_KEY", "value": "YOUR_OPENAI_API_KEY_HERE"},
+        {"name": "MODEL_NAME", "value": "gpt-4o"},
+        {"name": "MODEL_PROVIDER", "value": "openai"},
+        {"name": "MODEL_TEMPERATURE", "value": "0.7"},
+        {"name": "MODEL_MAX_TOKENS", "value": "8000"},
+        {"name": "TIMEOUT_MS", "value": "300"},
+        {"name": "SOLANA_RPC_URL", "value": "https://mainnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY"},
+        {"name": "SOLANA_PRIVATE_KEY", "value": "YOUR_ERIC_SOLANA_PRIVATE_KEY_BASE58"},
+        {"name": "AWS_REGION", "value": "us-east-1"}
+      ],
+      "dependsOn": [
+        {
+          "containerName": "coral-server",
+          "condition": "START"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/pardon-simulator",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "agent-trump-eric"
+        }
+      }
+    },
+    {
+      "name": "agent-trump-donjr",
+      "image": "YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/pardon-agent:latest",
+      "essential": false,
+      "command": ["/app/fetch-and-start.sh", "trump-donjr"],
+      "workingDirectory": "/app/trump-donjr",
+      "environment": [
+        {"name": "AGENT_NAME", "value": "trump-donjr"},
+        {"name": "CORAL_AGENT_ID", "value": "trump-donjr"},
+        {"name": "CORAL_SSE_URL", "value": "http://localhost:5555/sse/v1/devmode/app/priv/production-main"},
+        {"name": "MODEL_API_KEY", "value": "YOUR_OPENAI_API_KEY_HERE"},
+        {"name": "MODEL_NAME", "value": "gpt-4o"},
+        {"name": "MODEL_PROVIDER", "value": "openai"},
+        {"name": "MODEL_TEMPERATURE", "value": "0.7"},
+        {"name": "MODEL_MAX_TOKENS", "value": "8000"},
+        {"name": "TIMEOUT_MS", "value": "300"},
+        {"name": "SOLANA_RPC_URL", "value": "https://mainnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY"},
+        {"name": "SOLANA_PRIVATE_KEY", "value": "YOUR_DONJR_SOLANA_PRIVATE_KEY_BASE58"},
+        {"name": "AWS_REGION", "value": "us-east-1"}
+      ],
+      "dependsOn": [
+        {
+          "containerName": "coral-server",
+          "condition": "START"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/pardon-simulator",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "agent-trump-donjr"
+        }
+      }
+    },
+    {
+      "name": "agent-trump-barron",
+      "image": "YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/pardon-agent:latest",
+      "essential": false,
+      "command": ["/app/fetch-and-start.sh", "trump-barron"],
+      "workingDirectory": "/app/trump-barron",
+      "environment": [
+        {"name": "AGENT_NAME", "value": "trump-barron"},
+        {"name": "CORAL_AGENT_ID", "value": "trump-barron"},
+        {"name": "CORAL_SSE_URL", "value": "http://localhost:5555/sse/v1/devmode/app/priv/production-main"},
+        {"name": "MODEL_API_KEY", "value": "YOUR_OPENAI_API_KEY_HERE"},
+        {"name": "MODEL_NAME", "value": "gpt-4o"},
+        {"name": "MODEL_PROVIDER", "value": "openai"},
+        {"name": "MODEL_TEMPERATURE", "value": "0.7"},
+        {"name": "MODEL_MAX_TOKENS", "value": "8000"},
+        {"name": "TIMEOUT_MS", "value": "300"},
+        {"name": "SOLANA_RPC_URL", "value": "https://mainnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY"},
+        {"name": "SOLANA_PRIVATE_KEY", "value": "YOUR_BARRON_SOLANA_PRIVATE_KEY_BASE58"},
+        {"name": "AWS_REGION", "value": "us-east-1"}
+      ],
+      "dependsOn": [
+        {
+          "containerName": "coral-server",
+          "condition": "START"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/pardon-simulator",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "agent-trump-barron"
+        }
+      }
+    }
+  ]
+}

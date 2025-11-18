@@ -56,6 +56,8 @@ MANIFEST
 .env
 .env.local
 .env.*.local
+.aws.secrets
+.ecs-production-url.txt
 venv/
 env/
 ENV/
@@ -124,6 +126,8 @@ vite.config.ts.timestamp-*
 
 # Logs
 logs
+logs.txt
+nextjs.log
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -160,19 +164,38 @@ coverage/
 
 # Configuration files with sensitive data
 config.local.toml
-.env.production.local
-.env.development.local
 secrets.toml
 *secrets*
 *.key
 *.pem
 
+# Root-level environment files (production deployment)
+.env.production
+.env.development
+.env.production.local
+.env.development.local
+
+# Agent-specific environment files (local dev per-agent)
+agents/*/.env
+agents/*/.env.local
+
+# Website environment files (Next.js)
+website/.env
+website/.env.local
+website/.env.production
+website/.env.development
+
 # Agent session configuration with API keys and private keys
 agents-session-configuration.json
 trump-game-frontend/public/agents-session-configuration.json
 
-# Agent wallet addresses (generated from private keys)
+# Agent wallet addresses (generated from private keys - now redundant but kept for safety)
 agent_wallets.json
+agents/agent_wallets.json
+
+# ECS/AWS deployment files (may contain secrets)
+scripts/ecs-task-definition.json
+.ecs-production-url.txt
 
 # Premium services pricing configuration
 agents/premium_services.json

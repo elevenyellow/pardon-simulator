@@ -15,7 +15,7 @@ import {
 interface Message {
   id: string;
   sender: string;
-  senderId: string;  // Original agent ID (e.g.,"donald-trump")
+  senderId: string;  // Original agent ID (e.g.,"trump-donald")
   content: string;
   timestamp: Date;
   isAgent: boolean;
@@ -217,6 +217,8 @@ export default function ChatInterface({
       .replace(/\n*Your (?:current )?score is (?:now )?[\d.]+[,.]?\s*[^\n]*(?:\n(?![A-Z])[^\n]*)*\./gs, '')
       // Remove standalone sentences about score/points at end of paragraphs
       .replace(/\s+Your (?:current )?score is (?:now )?[\d.]+[,.]?\s*[^\n.]*\./g, '')
+      // Remove @mentions at the start of messages (e.g., "@sbf " or "@trump-donald ")
+      .replace(/^@[a-z0-9-]+\s+/i, '')
       .trim();
   };
 
@@ -467,24 +469,24 @@ export default function ChatInterface({
               // Merge with the new messages
               const merged = [...updated, ...trulyNew];
               
-              // AGGRESSIVE CLEANUP: Remove ALL system loading messages if ANY real agent message exists
-              const realAgentMessages = merged.filter(m => 
+              // SMART CLEANUP: Only remove loading message if we received a NEW agent response
+              // Check if there are any truly new agent messages (not system, not loading)
+              const newAgentMessages = trulyNew.filter(m => 
                 m.isAgent && 
                 m.senderId !== 'system' && 
                 !m.id.startsWith('loading-')
               );
               
               let finalMessages = merged;
-              if (realAgentMessages.length > 0) {
-                // Remove ALL system messages (loading messages)
+              if (newAgentMessages.length > 0) {
+                // We got a NEW agent response, so remove the loading message
+                console.log('[SSE] NEW agent response detected, removing system messages');
+                console.log('[SSE] loadingMessageIdRef.current:', loadingMessageIdRef.current);
                 finalMessages = merged.filter(m => m.senderId !== 'system');
                 
                 // Clear the loading ref and state
-                if (loadingMessageIdRef.current) {
-                  console.log('[SSE] Removing ALL system messages - agent response detected');
-                  loadingMessageIdRef.current = null;
-                  setLoading(false);
-                }
+                loadingMessageIdRef.current = null;
+                setLoading(false);
               }
               
               if (publicKey && threadId && trulyNew.length > 0) {
@@ -853,24 +855,25 @@ export default function ChatInterface({
           return acc;
         }, [] as Message[]);
         
-        // AGGRESSIVE CLEANUP: Remove ALL system loading messages if ANY real agent message exists
-        const realAgentMessages = deduplicatedById.filter(m => 
+        // SMART CLEANUP: Only remove loading message if we received a NEW agent response
+        // Check if there are any new agent messages (not in previous state)
+        const previousIds = new Set(messages.map(m => m.id));
+        const newAgentMessages = deduplicatedById.filter(m => 
           m.isAgent && 
           m.senderId !== 'system' && 
-          !m.id.startsWith('loading-')
+          !m.id.startsWith('loading-') &&
+          !previousIds.has(m.id)
         );
         
         let finalMessages = deduplicatedById;
-        if (realAgentMessages.length > 0) {
-          // Remove ALL system messages (loading messages)
+        if (newAgentMessages.length > 0) {
+          // We got a NEW agent response, so remove the loading message
+          console.log('[Polling] NEW agent response detected, removing system messages');
+          console.log('[Polling] loadingMessageIdRef.current:', loadingMessageIdRef.current);
           finalMessages = deduplicatedById.filter(m => m.senderId !== 'system');
           
-          // Clear the loading ref and state
-          if (loadingMessageIdRef.current) {
-            console.log('[Polling] Removing ALL system messages - agent response detected');
-            loadingMessageIdRef.current = null;
-            setLoading(false);
-          }
+          loadingMessageIdRef.current = null;
+          setLoading(false);
         }
         
         //  Cache the updated conversation if any new messages were added
@@ -1166,8 +1169,8 @@ export default function ChatInterface({
 
       const retryResult = await retryResponse.json();
 
-      console.log('Payment verified and settled');
-      console.log('Agent response received');
+      console.log('[Payment] Payment verified and settled');
+      console.log('[Payment] Message sent to agent, waiting for response...');
 
       showToast('Payment successful!','success');
 
@@ -1231,30 +1234,53 @@ export default function ChatInterface({
 
   const getWelcomeMessage = (agent: string): string => {
     const messages: Record<string, string> = {
-'donald-trump':"I'm Donald Trump, and I make the BEST deals. What can I do for you?",
-'melania-trump':"Hello, I'm Melania. How can I help you today?",
-'eric-trump':"Hey, I'm Eric. Let's talk business!",
-'donjr-trump':"Don Jr here. What's up?",
-'barron-trump':"Hi, I'm Barron. What do you need?",
+'trump-donald':"I'm Donald Trump, and I make the BEST deals. What can I do for you?",
+'trump-melania':"Hello, I'm Melania. How can I help you today?",
+'trump-eric':"Hey, I'm Eric. Let's talk business!",
+'trump-donjr':"Don Jr here. What's up?",
+'trump-barron':"Hi, I'm Barron. What do you need?",
 'cz':"Build.",
     };
     return messages[agent] ||`Hello! I'm ${agent}.`;
   };
 
   const formatAgentName = (agentId: string): string => {
+    // Special handling for CZ
+    if (agentId === 'cz') {
+      return 'CZ';
+    }
+    
+    // For Trump family members, format as "FirstName Trump" (e.g., "Melania Trump")
+    if (agentId.startsWith('trump-')) {
+      const firstName = agentId.split('-')[1];
+      
+      // Special cases
+      if (firstName === 'donald') {
+        return 'Donald Trump';
+      }
+      if (firstName === 'donjr') {
+        return 'Donald Trump Jr';
+      }
+      
+      // For others like Melania, Eric, Barron - use "FirstName Trump"
+      const formattedFirstName = firstName.charAt(0).toUpperCase() + firstName.slice(1);
+      return `${formattedFirstName} Trump`;
+    }
+    
+    // Fallback for other agents
     return agentId
       .split('-')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join('');
+      .join(' ');
   };
 
   const getAgentColor = (agentId: string): string => {
     const colors: Record<string, string> = {
-'donald-trump':'bg-gradient-to-r from-red-900 to-red-800 border-red-700',
-'melania-trump':'bg-gradient-to-r from-pink-900 to-pink-800 border-pink-700',
-'eric-trump':'bg-gradient-to-r from-blue-900 to-blue-800 border-blue-700',
-'donjr-trump':'bg-gradient-to-r from-orange-900 to-orange-800 border-orange-700',
-'barron-trump':'bg-gradient-to-r from-purple-900 to-purple-800 border-purple-700',
+'trump-donald':'bg-gradient-to-r from-red-900 to-red-800 border-red-700',
+'trump-melania':'bg-gradient-to-r from-pink-900 to-pink-800 border-pink-700',
+'trump-eric':'bg-gradient-to-r from-blue-900 to-blue-800 border-blue-700',
+'trump-donjr':'bg-gradient-to-r from-orange-900 to-orange-800 border-orange-700',
+'trump-barron':'bg-gradient-to-r from-purple-900 to-purple-800 border-purple-700',
 'cz':'bg-gradient-to-r from-yellow-900 to-yellow-800 border-yellow-700',
     };
     return colors[agentId] ||'bg-gray-800 border-gray-700';

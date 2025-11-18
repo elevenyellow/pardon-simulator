@@ -19,33 +19,35 @@ Complete setup instructions for the Pardon Simulator project.
 
 ### Step 1: Setup Environment Files
 
-Copy and configure the agent session configuration:
+**For detailed configuration options, see [CONFIGURATION.md](./CONFIGURATION.md)**
+
+Copy and configure your environment files:
 
 ```bash
-# Copy example configuration
+# Copy agent session configuration
 cp agents-session-configuration.example.json agents-session-configuration.json
+
+# Copy website environment file
+cd website
+cp .env.example .env
+cd ..
 
 # Edit with your API keys
 nano agents-session-configuration.json
+nano website/.env
 ```
 
-Add your API keys:
+Add your API keys to **agents-session-configuration.json**:
 - OpenAI API key (or other LLM provider)
-- Helius RPC URL
-- Solana private keys for each agent
+- Helius RPC URL with your API key
+- Solana private keys for each agent (generate with `solana-keygen new`)
+- Public wallet addresses (derive from private keys)
 
-Then run the setup script:
-
-```bash
-# Create all environment files from configuration
-./setup-local-env.sh
-```
-
-This automatically extracts and configures:
-- OpenAI API key for all agents
-- Helius RPC URL for blockchain access
-- Solana private keys for each agent
-- Coral Server URLs for communication
+Add your configuration to **website/.env**:
+- Database URL (PostgreSQL)
+- Helius API key
+- Coral Server URL (usually `http://localhost:5555`)
+- Agent wallet public addresses (same as above)
 
 ### Step 2: Start Services
 
@@ -87,6 +89,31 @@ Wait for:
 2. Connect your Solana wallet (Phantom or Solflare)
 3. Start chatting with the Trump family agents!
 4. Negotiate, pay, and try to secure that pardon!
+
+---
+
+## Configuration Files
+
+Pardon Simulator uses multiple configuration approaches depending on your deployment scenario.
+
+**For complete configuration documentation, see [CONFIGURATION.md](./CONFIGURATION.md)**
+
+### Configuration Methods
+
+1. **Website-Initiated (Recommended for Local Dev)**
+   - Use `agents-session-configuration.json` to define all agents
+   - Website spawns agents automatically when creating sessions
+   - Best for full system testing
+
+2. **Individual Agent .env Files (Advanced)**
+   - Create `.env` file in each agent directory
+   - Run agents manually for debugging
+   - See `agents/.env.example` for template
+
+3. **Production (Docker Compose)**
+   - Use root `.env.production` file
+   - All secrets passed as environment variables
+   - See `.env.production.example` for template
 
 ---
 
@@ -158,7 +185,7 @@ SOLANA_RPC_URL=https://mainnet.helius-rpc.com/?api-key=YOUR-HELIUS-API-KEY
 DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/pardon_simulator
 
 # Coral Server URL (can be public)
-NEXT_PUBLIC_CORAL_SERVER_URL=http://localhost:5555
+CORAL_SERVER_URL=http://localhost:5555
 ```
 
 **Security Warning:**
@@ -400,7 +427,7 @@ The `./setup-local-env.sh` script creates:
 **Frontend Configuration (`website/.env.local`):**
 ```env
 SOLANA_RPC_URL=https://mainnet.helius-rpc.com/?api-key=YOUR-KEY
-NEXT_PUBLIC_CORAL_SERVER_URL=http://localhost:5555
+CORAL_SERVER_URL=http://localhost:5555
 DATABASE_URL=postgresql://...
 WALLET_DONALD_TRUMP=...
 WALLET_MELANIA_TRUMP=...

@@ -13,7 +13,7 @@
  */
 
 // DEPRECATED: Don't use NEXT_PUBLIC_ for sensitive URLs!
-const BASE_URL = process.env.NEXT_PUBLIC_CORAL_SERVER_URL ||'http://localhost:5555';
+const BASE_URL = process.env.CORAL_SERVER_URL ||'http://localhost:5555';
 const APPLICATION_ID ='app';
 const PRIVACY_KEY ='debug';
 

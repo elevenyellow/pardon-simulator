@@ -93,27 +93,8 @@ class TrumpWallet:
 
 wallet = None
 
-# Load agent wallet addresses from agent_wallets.json
-# This file is generated from private keys by setup-local-env.sh
-def load_agent_wallets():
-    """Load agent wallet addresses from agent_wallets.json"""
-    wallet_file = os.path.join(os.path.dirname(__file__), "..", "agent_wallets.json")
-    
-    if os.path.exists(wallet_file):
-        try:
-            with open(wallet_file, 'r') as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"WARNING:  Warning: Failed to load agent_wallets.json: {e}")
-            return {}
-    else:
-        print(f"WARNING:  Warning: agent_wallets.json not found")
-        print("   Run ./setup-local-env.sh to generate it")
-        return {}
-
-# Agent wallet directory (for cross-agent transactions)
-# NOTE: "sbf" is NOT included - SBF is user-controlled via browser wallet
-AGENT_WALLETS = load_agent_wallets()
+# Agent wallet addresses loaded from environment variables via x402_payment_tools.py
+# The reload_agent_wallets() function is called in main() after .env is loaded
 
 def get_tools_description(tools): return "\n".join(f"Tool: {tool.name}" for tool in tools)
 

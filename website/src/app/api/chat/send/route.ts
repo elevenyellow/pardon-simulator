@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from'next/server';
 import { Connection, Transaction, VersionedTransaction } from'@solana/web3.js';
+import bs58 from'bs58';
 import { prisma } from'@/lib/prisma';
 import { withRetry } from'@/lib/db-retry';
 import { standardRateLimiter } from'@/lib/middleware/rate-limit';
@@ -307,17 +308,65 @@ async function handlePOST(request: NextRequest) {
             }
           }
           
-          if (settleResponse.status === 500 || isHtmlError) {
-            console.warn('CDP backend error (500) - transaction may have succeeded');
+          if (settleResponse.status >= 500 || isHtmlError) {
+            console.warn(`CDP backend error (${settleResponse.status}) - attempting on-chain verification as fallback`);
             
-            settlementResult = {
-              success: true,
-              transaction: null,
-              network:'solana',
-              payer: frontendPayload.from,
-              cdpError: errorData.errorMessage,
-              correlationId: errorData.correlationId,
-              note:'Payment likely succeeded but CDP had a backend error. Check blockchain for confirmation.'            };
+            try {
+              // Decode the transaction to extract the signature
+              const txBuffer = Buffer.from(transactionBase64, 'base64');
+              let signature: string;
+              
+              try {
+                const versionedTx = VersionedTransaction.deserialize(txBuffer);
+                signature = bs58.encode(versionedTx.signatures[0]);
+              } catch (e) {
+                const legacyTx = Transaction.from(txBuffer);
+                signature = bs58.encode(legacyTx.signature!);
+              }
+              
+              console.log('[CDP Fallback] Extracted transaction signature:', signature);
+              console.log('[CDP Fallback] Waiting 3s for transaction to settle on-chain...');
+              
+              // Wait for transaction to potentially settle
+              await new Promise(resolve => setTimeout(resolve, 3000));
+              
+              // Verify the transaction on-chain using Helius RPC
+              const connection = new Connection(SOLANA_RPC_URL!, 'confirmed');
+              console.log('[CDP Fallback] Checking transaction on-chain...');
+              
+              const txInfo = await connection.getTransaction(signature, {
+                maxSupportedTransactionVersion: 0,
+                commitment: 'confirmed'
+              });
+              
+              if (!txInfo) {
+                console.error('[CDP Fallback] Transaction not found on-chain');
+                throw new Error('Transaction not found on blockchain after CDP error');
+              }
+              
+              if (txInfo.meta?.err) {
+                console.error('[CDP Fallback] Transaction failed on-chain:', txInfo.meta.err);
+                throw new Error(`Transaction failed on blockchain: ${JSON.stringify(txInfo.meta.err)}`);
+              }
+              
+              console.log('[CDP Fallback] ✅ Transaction verified successfully on-chain!');
+              console.log('[CDP Fallback] Block time:', new Date(txInfo.blockTime! * 1000).toISOString());
+              
+              settlementResult = {
+                success: true,
+                transaction: signature,
+                network: 'solana',
+                payer: frontendPayload.from,
+                solanaExplorer: `https://explorer.solana.com/tx/${signature}`,
+                note: 'Verified on-chain (CDP had backend error)',
+                cdpError: errorData.errorMessage,
+                verifiedViaFallback: true
+              };
+              
+            } catch (fallbackError: any) {
+              console.error('[CDP Fallback] On-chain verification failed:', fallbackError.message);
+              throw new Error(`CDP error (${settleResponse.status}) and on-chain verification failed: ${fallbackError.message}`);
+            }
           } else {
             // Don't include full HTML in error message
             const errorMessage = isHtmlError 

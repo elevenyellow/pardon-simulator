@@ -14,8 +14,25 @@ export async function POST() {
     console.log('Creating Coral session...');
     console.log('Coral Server URL:', CORAL_SERVER_URL);
     
-    // Load session config from file system
-    const configPath = path.join(process.cwd(),'../agents-session-configuration.json');
+    // Check if connecting to production ECS server (where agents are already running)
+    // vs local docker-compose server (where agents need to be spawned)
+    const isConnectingToProductionServer = CORAL_SERVER_URL.includes('amazonaws.com') || 
+                                           CORAL_SERVER_URL.includes('pardon-alb');
+    
+    if (isConnectingToProductionServer) {
+      // Production ECS: Agents are already connected to "production-main" session
+      // Just return this session ID without trying to create/spawn agents
+      const sessionId = 'production-main';
+      console.log(`Connecting to PRODUCTION ECS - Using well-known session: ${sessionId}`);
+      
+      return NextResponse.json({
+        sessionId,
+      });
+    }
+    
+    // Local docker-compose: Create new session with agents
+    console.log(`Connecting to LOCAL server - Creating new session with agents`);
+    const configPath = path.join(process.cwd(), '../agents-session-configuration.json');
     const sessionConfig = JSON.parse(fs.readFileSync(configPath,'utf-8'));
     
     console.log('Session config loaded');

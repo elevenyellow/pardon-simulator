@@ -31,6 +31,32 @@ fun Routing.connectionSseRoutes(servers: ConcurrentMap<String, Server>, localSes
         )
     }
 
+    // Simple /sse endpoint for agents (production ECS containers)
+    // They connect with query params: ?agentId=xxx&applicationId=xxx&privacyKey=xxx&coralSessionId=xxx
+    sse("/sse") {
+        val appId = call.request.queryParameters["applicationId"] ?: "app"
+        val privKey = call.request.queryParameters["privacyKey"] ?: "priv"
+        val sessionId = call.request.queryParameters["coralSessionId"] ?: call.request.queryParameters["sessionId"] ?: ""
+        
+        // Create parameters map from query params
+        val params = io.ktor.http.parametersOf(
+            "applicationId" to listOf(appId),
+            "privacyKey" to listOf(privKey),
+            "coralSessionId" to listOf(sessionId),
+            "agentId" to listOf(call.request.queryParameters["agentId"] ?: ""),
+            "agentDescription" to listOf(call.request.queryParameters["agentDescription"] ?: "")
+        )
+        
+        handleSseConnection(
+            "coral://" + call.request.host() + ":" + call.request.port() + "/sse",
+            params,
+            this,
+            servers,
+            localSessionManager,
+            false
+        )
+    }
+
     sse("/sse/v1/{applicationId}/{privacyKey}/{coralSessionId}") {
         handleSseConnection()
     }
