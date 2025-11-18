@@ -322,7 +322,11 @@ async def main():
     
     print(f" Barron Trump Agent Starting...")
     print(f" Wallet Address: {str(wallet.keypair.pubkey())}")
-    balance = await wallet.get_balance()
+    try:
+        balance = await asyncio.wait_for(wallet.get_balance(), timeout=5.0)
+    except (asyncio.TimeoutError, Exception) as e:
+        print(f"⚠️  Balance check failed: {e} - continuing anyway")
+        balance = 0.0
     print(f" Crypto Empire: {balance:.4f} SOL")
 
     base_url = os.getenv("CORAL_SSE_URL")

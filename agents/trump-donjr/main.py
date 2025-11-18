@@ -260,7 +260,12 @@ async def main():
     if not rpc_url:
         raise ValueError("SOLANA_RPC_URL environment variable is required. Get your Helius API key from https://www.helius.dev/")
     wallet = TrumpWallet(os.getenv("SOLANA_PRIVATE_KEY", ""), rpc_url, "DonJr")
-    print(f" Don Jr Agent | {str(wallet.keypair.pubkey())} | {await wallet.get_balance():.4f} SOL")
+    try:
+        balance = await asyncio.wait_for(wallet.get_balance(), timeout=5.0)
+    except (asyncio.TimeoutError, Exception) as e:
+        print(f"⚠️  Balance check failed: {e} - continuing anyway")
+        balance = 0.0
+    print(f" Don Jr Agent | {str(wallet.keypair.pubkey())} | {balance:.4f} SOL")
     
     client = MultiServerMCPClient(connections={"coral": {"transport": "sse",
         "url": f"{os.getenv('CORAL_SSE_URL')}?{urllib.parse.urlencode({'agentId': os.getenv('CORAL_AGENT_ID'), 'agentDescription': 'Donald Trump Jr - Aggressive deal-maker and family advocate'})}",

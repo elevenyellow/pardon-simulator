@@ -330,7 +330,12 @@ async def main():
     if not rpc_url:
         raise ValueError("SOLANA_RPC_URL environment variable is required. Get your Helius API key from https://www.helius.dev/")
     wallet = TrumpWallet(os.getenv("SOLANA_PRIVATE_KEY", ""), rpc_url, "Melania")
-    print(f" Melania Trump Agent | Wallet: {str(wallet.keypair.pubkey())} | Balance: {await wallet.get_balance():.4f} SOL")
+    try:
+        balance = await asyncio.wait_for(wallet.get_balance(), timeout=5.0)
+    except (asyncio.TimeoutError, Exception) as e:
+        print(f"⚠️  Balance check failed: {e} - continuing anyway")
+        balance = 0.0
+    print(f" Melania Trump Agent | Wallet: {str(wallet.keypair.pubkey())} | Balance: {balance:.4f} SOL")
     
     coral_params = {"agentId": os.getenv("CORAL_AGENT_ID"), "agentDescription": "Melania Trump - Elegant diplomat and family protector. Thoughtful with money and relationships."}
     CORAL_URL = f"{os.getenv('CORAL_SSE_URL')}?{urllib.parse.urlencode(coral_params)}"

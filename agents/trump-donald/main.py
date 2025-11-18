@@ -326,8 +326,14 @@ async def main():
         print("[OK] Wallet initialized")
         
         print(f" Wallet Address: {str(wallet.keypair.pubkey())}")
-        balance = await wallet.get_balance()
-        print(f" Initial Balance: {balance:.4f} SOL")
+        # Skip balance check during initialization to avoid hanging - will check when needed
+        try:
+            balance = await asyncio.wait_for(wallet.get_balance(), timeout=5.0)
+            print(f" Initial Balance: {balance:.4f} SOL")
+        except asyncio.TimeoutError:
+            print("⚠️  Balance check timed out (Helius RPC slow) - continuing anyway")
+        except Exception as e:
+            print(f"⚠️  Balance check failed: {e} - continuing anyway")
     except Exception as e:
         print(f"[ERROR] FATAL ERROR during initialization: {e}")
         traceback.print_exc()

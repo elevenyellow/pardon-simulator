@@ -296,7 +296,11 @@ async def main():
     if not rpc_url:
         raise ValueError("SOLANA_RPC_URL environment variable is required. Get your Helius API key from https://www.helius.dev/")
     wallet = CryptoWallet(os.getenv("SOLANA_PRIVATE_KEY", ""), rpc_url, "CZ")
-    balance = await wallet.get_balance()
+    try:
+        balance = await asyncio.wait_for(wallet.get_balance(), timeout=5.0)
+    except (asyncio.TimeoutError, Exception) as e:
+        print(f"⚠️  Balance check failed: {e} - continuing anyway")
+        balance = 0.0
     print(f" CHANGPENG ZHAO (CZ) Agent")
     print(f"[POLITICS] Status: PARDONED by Trump")
     print(f" Wallet: {str(wallet.keypair.pubkey())}")
