@@ -35,6 +35,41 @@
       ]
     },
     {
+      "Sid": "ECRFullAccess",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:GetAuthorizationToken",
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:BatchGetImage",
+        "ecr:PutImage",
+        "ecr:InitiateLayerUpload",
+        "ecr:UploadLayerPart",
+        "ecr:CompleteLayerUpload",
+        "ecr:DescribeRepositories",
+        "ecr:ListImages",
+        "ecr:DescribeImages"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ECSFullAccess",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:RegisterTaskDefinition",
+        "ecs:DeregisterTaskDefinition",
+        "ecs:DescribeTaskDefinition",
+        "ecs:DescribeServices",
+        "ecs:UpdateService",
+        "ecs:ListTasks",
+        "ecs:DescribeTasks",
+        "ecs:ListServices",
+        "ecs:DescribeClusters",
+        "ecs:ListClusters"
+      ],
+      "Resource": "*"
+    },
+    {
       "Sid": "ElasticBeanstalkFullAccess",
       "Effect": "Allow",
       "Action": [
@@ -96,6 +131,8 @@
         "logs:DescribeLogGroups",
         "logs:DescribeLogStreams",
         "logs:GetLogEvents",
+        "logs:FilterLogEvents",
+        "logs:TailLogs",
         "logs:PutRetentionPolicy"
       ],
       "Resource": "*"
@@ -113,6 +150,8 @@
       "Resource": [
         "arn:aws:iam::*:role/aws-elasticbeanstalk-ec2-role",
         "arn:aws:iam::*:role/aws-elasticbeanstalk-service-role",
+        "arn:aws:iam::*:role/ecsTaskExecutionRole",
+        "arn:aws:iam::*:role/ecsTaskRole",
         "arn:aws:iam::*:instance-profile/aws-elasticbeanstalk-ec2-role"
       ]
     },

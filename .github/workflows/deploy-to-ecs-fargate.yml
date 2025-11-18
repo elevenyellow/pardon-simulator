@@ -6,13 +6,11 @@ on:
     paths:
       - 'coral-server/**'
       - 'agents/**'
-      - 'ecs-task-definition.json'
       - '.github/workflows/deploy-to-ecs-fargate.yml'
   workflow_dispatch:
 
 env:
   AWS_REGION: us-east-1
-  ECR_REGISTRY: 640080112933.dkr.ecr.us-east-1.amazonaws.com
   ECS_CLUSTER: pardon-production
   ECS_SERVICE: pardon-app
   TASK_FAMILY: pardon-simulator
@@ -37,6 +35,10 @@ jobs:
       - name: 🔑 Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
+      
+      - name: 🏷️ Set ECR registry from login
+        run: |
+          echo "ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}" >> $GITHUB_ENV
       
       - name: 🏷️ Generate image metadata
         id: meta
@@ -77,15 +79,37 @@ jobs:
       - name: ✅ Build complete
         run: |
           echo "🎉 Images built and pushed successfully!"
-          echo "Coral Server: ${{ env.ECR_REGISTRY }}/coral-server:${{ steps.meta.outputs.tags }}"
-          echo "Pardon Agent: ${{ env.ECR_REGISTRY }}/pardon-agent:${{ steps.meta.outputs.tags }}"
+          echo "Coral Server: ${{ steps.login-ecr.outputs.registry }}/coral-server:${{ steps.meta.outputs.tags }}"
+          echo "Pardon Agent: ${{ steps.login-ecr.outputs.registry }}/pardon-agent:${{ steps.meta.outputs.tags }}"
       
-      - name: 📋 Register new ECS task definition
+      - name: 📋 Update task definition with new images
         id: task-def
         run: |
+          echo "📋 Fetching current task definition..."
+          
+          # Get the current task definition (without ARN, revision, etc.)
+          TASK_DEF=$(aws ecs describe-task-definition \
+            --task-definition ${{ env.TASK_FAMILY }} \
+            --region ${{ env.AWS_REGION }} \
+            --query 'taskDefinition' \
+            --output json)
+          
+          # Update image tags in the task definition
+          NEW_TASK_DEF=$(echo "$TASK_DEF" | jq --arg TAG "${{ steps.meta.outputs.tags }}" --arg REGISTRY "${{ steps.login-ecr.outputs.registry }}" '
+            .containerDefinitions |= map(
+              if .name == "coral-server" then
+                .image = $REGISTRY + "/coral-server:" + $TAG
+              elif (.name | startswith("agent-")) then
+                .image = $REGISTRY + "/pardon-agent:" + $TAG
+              else . end
+            ) |
+            # Remove fields that cannot be included in registration
+            del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)
+          ')
+          
           echo "📋 Registering new task definition..."
-          TASK_DEF_ARN=$(aws ecs register-task-definition \
-            --cli-input-json file://ecs-task-definition.json \
+          TASK_DEF_ARN=$(echo "$NEW_TASK_DEF" | aws ecs register-task-definition \
+            --cli-input-json file:///dev/stdin \
             --region ${{ env.AWS_REGION }} \
             --query 'taskDefinition.taskDefinitionArn' \
             --output text)
@@ -139,8 +163,19 @@ jobs:
       
       - name: 🏥 Health check
         run: |
-          echo "🏥 Testing health endpoint..."
-          ALB_URL="http://pardon-alb-1021309692.us-east-1.elb.amazonaws.com:5555"
+          echo "🏥 Getting ALB URL..."
+          ALB_DNS=$(aws elbv2 describe-load-balancers \
+            --query 'LoadBalancers[?contains(LoadBalancerName, `pardon-alb`)].DNSName' \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+          
+          if [ -z "$ALB_DNS" ]; then
+            echo "⚠️  Could not find ALB, skipping health check"
+            exit 0
+          fi
+          
+          ALB_URL="http://${ALB_DNS}:5555"
+          echo "Testing: ${ALB_URL}/health"
           
           # Wait a bit for tasks to be ready
           sleep 15
@@ -163,13 +198,20 @@ jobs:
       - name: 📢 Deployment summary
         if: always()
         run: |
+          ALB_DNS=$(aws elbv2 describe-load-balancers \
+            --query 'LoadBalancers[?contains(LoadBalancerName, `pardon-alb`)].DNSName' \
+            --output text \
+            --region ${{ env.AWS_REGION }} || echo "Not found")
+          
+          ALB_URL="http://${ALB_DNS}:5555"
+          
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "📊 DEPLOYMENT SUMMARY"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
           echo "🌐 Production URL:"
-          echo "   http://pardon-alb-1021309692.us-east-1.elb.amazonaws.com:5555"
+          echo "   ${ALB_URL}"
           echo ""
           echo "🔍 Useful Commands:"
           echo ""
@@ -180,10 +222,10 @@ jobs:
           echo "   aws logs tail /ecs/pardon-simulator --follow --region ${{ env.AWS_REGION }}"
           echo ""
           echo "   # Test health"
-          echo "   curl http://pardon-alb-1021309692.us-east-1.elb.amazonaws.com:5555/health"
+          echo "   curl ${ALB_URL}/health"
           echo ""
           echo "📝 Next Steps:"
-          echo "  1. Update Vercel: CORAL_SERVER_URL=http://pardon-alb-1021309692.us-east-1.elb.amazonaws.com:5555"
+          echo "  1. Update Vercel: CORAL_SERVER_URL=${ALB_URL}"
           echo "  2. Update Vercel: NODE_ENV=production"
           echo "  3. Test from Next.js backend"
           echo ""

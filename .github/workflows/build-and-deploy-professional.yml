@@ -19,7 +19,6 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  ECR_REGISTRY: 640080112933.dkr.ecr.us-east-1.amazonaws.com
   CORAL_SERVER_REPO: coral-server
   AGENT_REPO: pardon-agent
 
@@ -64,8 +63,8 @@ jobs:
           file: ./coral-server/Dockerfile
           push: true
           tags: |
-            ${{ env.ECR_REGISTRY }}/${{ env.CORAL_SERVER_REPO }}:${{ steps.meta.outputs.tags }}
-            ${{ env.ECR_REGISTRY }}/${{ env.CORAL_SERVER_REPO }}:latest
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.CORAL_SERVER_REPO }}:${{ steps.meta.outputs.tags }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.CORAL_SERVER_REPO }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
       
@@ -76,16 +75,16 @@ jobs:
           file: ./agents/Dockerfile.agent
           push: true
           tags: |
-            ${{ env.ECR_REGISTRY }}/${{ env.AGENT_REPO }}:${{ steps.meta.outputs.tags }}
-            ${{ env.ECR_REGISTRY }}/${{ env.AGENT_REPO }}:latest
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.AGENT_REPO }}:${{ steps.meta.outputs.tags }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.AGENT_REPO }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
       
       - name: ✅ Build complete
         run: |
           echo "🎉 Images built and pushed successfully!"
-          echo "Coral Server: ${{ env.ECR_REGISTRY }}/${{ env.CORAL_SERVER_REPO }}:${{ steps.meta.outputs.tags }}"
-          echo "Pardon Agent: ${{ env.ECR_REGISTRY }}/${{ env.AGENT_REPO }}:${{ steps.meta.outputs.tags }}"
+          echo "Coral Server: ${{ steps.login-ecr.outputs.registry }}/${{ env.CORAL_SERVER_REPO }}:${{ steps.meta.outputs.tags }}"
+          echo "Pardon Agent: ${{ steps.login-ecr.outputs.registry }}/${{ env.AGENT_REPO }}:${{ steps.meta.outputs.tags }}"
 
   deploy:
     name: Deploy to Elastic Beanstalk
@@ -104,9 +103,14 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
       
+      - name: 🔑 Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+      
       - name: 🔄 Update docker-compose.yml for ECR images
         run: |
           echo "📝 Updating docker-compose.yml to use ECR images..."
+          ECR_REGISTRY="${{ steps.login-ecr.outputs.registry }}"
           
           # Create backup
           cp docker-compose.yml docker-compose.yml.backup
@@ -114,14 +118,14 @@ jobs:
           # Replace coral-server build with image
           sed -i '/coral-server:/,/container_name: coral-server/ {
             /build:/,/dockerfile: Dockerfile/d
-            /container_name: coral-server/i\    image: ${{ env.ECR_REGISTRY }}/${{ env.CORAL_SERVER_REPO }}:latest
+            /container_name: coral-server/i\    image: '"${ECR_REGISTRY}"'/${{ env.CORAL_SERVER_REPO }}:latest
           }' docker-compose.yml
           
           # Replace agent builds with images (for all 7 agents)
           for agent in cz sbf trump-donald trump-melania trump-eric trump-donjr trump-barron; do
             sed -i "/agent-${agent}:/,/container_name: agent-${agent}/ {
               /build:/,/dockerfile: Dockerfile.agent/d
-              /container_name: agent-${agent}/i\    image: ${{ env.ECR_REGISTRY }}/${{ env.AGENT_REPO }}:latest
+              /container_name: agent-${agent}/i\    image: '"${ECR_REGISTRY}"'/${{ env.AGENT_REPO }}:latest
             }" docker-compose.yml
           done
           
