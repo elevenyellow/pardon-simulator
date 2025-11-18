@@ -17,11 +17,6 @@ if (!SOLANA_RPC_URL) {
   throw new Error('SOLANA_RPC_URL environment variable is required. Get your Helius API key from https://www.helius.dev/');
 }
 
-// CDP Facilitator cache (saves 1-2s on repeat messages)
-let cachedFacilitator: any = null;
-let facilitatorCacheTime = 0;
-const FACILITATOR_CACHE_TTL = 3600000; // 1 hour
-
 interface PaymentRequest {
   type:'x402_payment_required';
   recipient: string;
@@ -182,88 +177,81 @@ async function handlePOST(request: NextRequest) {
           }
         };
         
-        const now = Date.now();
-        if (!cachedFacilitator || now - facilitatorCacheTime > FACILITATOR_CACHE_TTL) {
-          const cdpKeyId = process.env.CDP_API_KEY_ID;
-          let cdpKeySecret = process.env.CDP_API_KEY_SECRET ||'';
-          
-          cdpKeySecret = cdpKeySecret
-            .trim()
-            .replace(/\\n/g,'\n')
-            .replace(/^["']|["']$/g,'')
-            .replace(/\r/g,'');
-          
-          const pemMatch = cdpKeySecret.match(/-----BEGIN ([A-Z ]+)-----\s*([\s\S]*?)\s*-----END \1-----/);
-          
-          if (!pemMatch) {
-            throw new Error('Invalid PEM format - could not parse key structure');
-          }
-          
-          const keyType = pemMatch[1];
-          let keyBody = pemMatch[2];
-          keyBody = keyBody.replace(/\s+/g,'');
-          
-          const keyBodyLines: string[] = [];
-          for (let i = 0; i < keyBody.length; i += 64) {
-            keyBodyLines.push(keyBody.substring(i, i + 64));
-          }
-          
-          cdpKeySecret = [
-`-----BEGIN ${keyType}-----`,
-            ...keyBodyLines,
-`-----END ${keyType}-----`          ].join('\n');
-          
-          if (keyType ==='EC PRIVATE KEY') {
-            try {
-              const crypto = require('crypto');
-              const key = crypto.createPrivateKey({
-                key: cdpKeySecret,
-                format:'pem',
-                type:'sec1'              });
-              
-              cdpKeySecret = key.export({
-                format:'pem',
-                type:'pkcs8'              }).toString();
-            } catch (convError: any) {
-              console.error('Key conversion failed:', convError.message);
-              throw new Error(`Failed to convert EC key to PKCS8: ${convError.message}`);
-            }
-          }
-          
-          try {
-            const crypto = require('crypto');
-            
-            let cryptoKey;
-            try {
-              cryptoKey = crypto.createPrivateKey({
-                key: cdpKeySecret,
-                format:'pem',
-                type:'pkcs8'              });
-            } catch (pkcs8Error) {
-              cryptoKey = crypto.createPrivateKey({
-                key: cdpKeySecret,
-                format:'pem',
-                type:'sec1'              });
-            }
-            
-            cdpKeySecret = cryptoKey.export({
-              format:'pem',
-              type:'pkcs8'            }).toString();
-            
-            const { importPKCS8 } = require('jose');
-            await importPKCS8(cdpKeySecret,'ES256');
-            
-          } catch (error: any) {
-            console.error('Key processing failed:', error.message);
-            throw new Error(`Key processing failed: ${error.message}`);
-          }
-          
-          cachedFacilitator = createFacilitatorConfig(cdpKeyId, cdpKeySecret);
-          facilitatorCacheTime = now;
-          console.log('[CDP] Facilitator config cached');
+        const cdpKeyId = process.env.CDP_API_KEY_ID;
+        let cdpKeySecret = process.env.CDP_API_KEY_SECRET ||'';
+        
+        cdpKeySecret = cdpKeySecret
+          .trim()
+          .replace(/\\n/g,'\n')
+          .replace(/^["']|["']$/g,'')
+          .replace(/\r/g,'');
+        
+        const pemMatch = cdpKeySecret.match(/-----BEGIN ([A-Z ]+)-----\s*([\s\S]*?)\s*-----END \1-----/);
+        
+        if (!pemMatch) {
+          throw new Error('Invalid PEM format - could not parse key structure');
         }
         
-        const facilitator = cachedFacilitator;
+        const keyType = pemMatch[1];
+        let keyBody = pemMatch[2];
+        keyBody = keyBody.replace(/\s+/g,'');
+        
+        const keyBodyLines: string[] = [];
+        for (let i = 0; i < keyBody.length; i += 64) {
+          keyBodyLines.push(keyBody.substring(i, i + 64));
+        }
+        
+        cdpKeySecret = [
+`-----BEGIN ${keyType}-----`,
+          ...keyBodyLines,
+`-----END ${keyType}-----`        ].join('\n');
+        
+        if (keyType ==='EC PRIVATE KEY') {
+          try {
+            const crypto = require('crypto');
+            const key = crypto.createPrivateKey({
+              key: cdpKeySecret,
+              format:'pem',
+              type:'sec1'            });
+            
+            cdpKeySecret = key.export({
+              format:'pem',
+              type:'pkcs8'            }).toString();
+          } catch (convError: any) {
+            console.error('Key conversion failed:', convError.message);
+            throw new Error(`Failed to convert EC key to PKCS8: ${convError.message}`);
+          }
+        }
+        
+        try {
+          const crypto = require('crypto');
+          
+          let cryptoKey;
+          try {
+            cryptoKey = crypto.createPrivateKey({
+              key: cdpKeySecret,
+              format:'pem',
+              type:'pkcs8'            });
+          } catch (pkcs8Error) {
+            cryptoKey = crypto.createPrivateKey({
+              key: cdpKeySecret,
+              format:'pem',
+              type:'sec1'            });
+          }
+          
+          cdpKeySecret = cryptoKey.export({
+            format:'pem',
+            type:'pkcs8'          }).toString();
+          
+          const { importPKCS8 } = require('jose');
+          await importPKCS8(cdpKeySecret,'ES256');
+          
+        } catch (error: any) {
+          console.error('Key processing failed:', error.message);
+          throw new Error(`Key processing failed: ${error.message}`);
+        }
+        
+        const facilitator = createFacilitatorConfig(cdpKeyId, cdpKeySecret);
         const authHeaders = await facilitator.createAuthHeaders?.();
         if (!authHeaders) {
           throw new Error('Failed to create authentication headers');
