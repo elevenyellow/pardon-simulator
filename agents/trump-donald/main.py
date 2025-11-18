@@ -434,12 +434,6 @@ async def main():
             # Now have the LLM process the mentions and respond
             if mentions_result and "No new mentions" not in str(mentions_result):
                 print("[BOT] Processing mentions with LLM...")
-                import sys
-                sys.stderr.write("="*80 + "\n")
-                sys.stderr.write(" ENTERING TRY BLOCK - NEW CODE VERSION 3!\n")
-                sys.stderr.write(f" Python file: {__file__}\n")
-                sys.stderr.write("="*80 + "\n")
-                sys.stderr.flush()
                 try:
                     # Use asyncio.wait_for to enforce a hard timeout
                     # 120 seconds allows for:
