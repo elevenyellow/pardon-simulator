@@ -99,6 +99,31 @@ if [ -f "agents/premium_services.json" ]; then
 else
   echo "  ⚠ agents/premium_services.json not found, skipping"
 fi
+echo ""
+
+# Upload shared templates (required by all agents at startup)
+echo "📦 Uploading shared templates"
+SHARED_FILES=("operational-template.txt" "personality-template.txt" "scoring-mandate.txt" "agent-comms-note.txt")
+
+for file in "${SHARED_FILES[@]}"; do
+  filepath="agents/shared/${file}"
+  
+  if [ -f "$filepath" ]; then
+    echo -n "  Uploading ${file}... "
+    if output=$(aws s3 cp "${filepath}" \
+      "s3://${BUCKET_NAME}/shared/${file}" \
+      --region "${REGION}" \
+      --sse AES256 2>&1); then
+      echo "✓"
+    else
+      echo "❌"
+      echo "  Error: ${output}"
+      exit 1
+    fi
+  else
+    echo "  ⚠ ${filepath} not found, skipping"
+  fi
+done
 
 echo ""
 echo "=========================================="
@@ -106,6 +131,9 @@ echo "✅ All configs uploaded successfully!"
 echo "=========================================="
 echo ""
 echo "Next steps:"
-echo "  1. Deploy to EC2: ./scripts/deploy-to-aws.sh"
+echo "  1. Deploy to ECS: Push to main branch (GitHub Actions)"
 echo "  2. Or restart agents: docker-compose restart"
+echo ""
+echo "🔒 Note: Shared templates are now in S3 at:"
+echo "   s3://${BUCKET_NAME}/shared/*"
 

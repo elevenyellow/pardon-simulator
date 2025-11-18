@@ -83,25 +83,154 @@ jobs:
           echo "Coral Server: ${{ steps.login-ecr.outputs.registry }}/coral-server:${{ steps.meta.outputs.tags }}"
           echo "Pardon Agent: ${{ steps.login-ecr.outputs.registry }}/pardon-agent:${{ steps.meta.outputs.tags }}"
       
-      - name: 📋 Update task definition with new images
+      - name: 🔐 Derive public addresses from private keys
+        id: derive-addresses
+        env:
+          SOLANA_PRIVATE_KEY_CZ: ${{ secrets.SOLANA_PRIVATE_KEY_CZ }}
+          SOLANA_PRIVATE_KEY_SBF: ${{ secrets.SOLANA_PRIVATE_KEY_SBF }}
+          SOLANA_PRIVATE_KEY_TRUMP_DONALD: ${{ secrets.SOLANA_PRIVATE_KEY_TRUMP_DONALD }}
+          SOLANA_PRIVATE_KEY_TRUMP_MELANIA: ${{ secrets.SOLANA_PRIVATE_KEY_TRUMP_MELANIA }}
+          SOLANA_PRIVATE_KEY_TRUMP_ERIC: ${{ secrets.SOLANA_PRIVATE_KEY_TRUMP_ERIC }}
+          SOLANA_PRIVATE_KEY_TRUMP_DONJR: ${{ secrets.SOLANA_PRIVATE_KEY_TRUMP_DONJR }}
+          SOLANA_PRIVATE_KEY_TRUMP_BARRON: ${{ secrets.SOLANA_PRIVATE_KEY_TRUMP_BARRON }}
+        run: |
+          echo "🔐 Installing solders..."
+          pip3 install --quiet solders
+          
+          echo "🔐 Deriving public addresses..."
+          python3 scripts/derive-public-addresses.py > /tmp/public_addresses.json
+          
+          echo "✅ Public addresses derived:"
+          cat /tmp/public_addresses.json
+      
+      - name: 📋 Update task definition with new images and secrets
         id: task-def
+        env:
+          MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
+          HELIUS_API_KEY: ${{ secrets.HELIUS_API_KEY }}
+          SOLANA_PRIVATE_KEY_CZ: ${{ secrets.SOLANA_PRIVATE_KEY_CZ }}
+          SOLANA_PRIVATE_KEY_SBF: ${{ secrets.SOLANA_PRIVATE_KEY_SBF }}
+          SOLANA_PRIVATE_KEY_TRUMP_DONALD: ${{ secrets.SOLANA_PRIVATE_KEY_TRUMP_DONALD }}
+          SOLANA_PRIVATE_KEY_TRUMP_MELANIA: ${{ secrets.SOLANA_PRIVATE_KEY_TRUMP_MELANIA }}
+          SOLANA_PRIVATE_KEY_TRUMP_ERIC: ${{ secrets.SOLANA_PRIVATE_KEY_TRUMP_ERIC }}
+          SOLANA_PRIVATE_KEY_TRUMP_DONJR: ${{ secrets.SOLANA_PRIVATE_KEY_TRUMP_DONJR }}
+          SOLANA_PRIVATE_KEY_TRUMP_BARRON: ${{ secrets.SOLANA_PRIVATE_KEY_TRUMP_BARRON }}
         run: |
           echo "📋 Fetching current task definition..."
           
-          # Get the current task definition (without ARN, revision, etc.)
+          # Get the current task definition
           TASK_DEF=$(aws ecs describe-task-definition \
             --task-definition ${{ env.TASK_FAMILY }} \
             --region ${{ env.AWS_REGION }} \
             --query 'taskDefinition' \
             --output json)
           
-          # Update image tags in the task definition
-          NEW_TASK_DEF=$(echo "$TASK_DEF" | jq --arg TAG "${{ steps.meta.outputs.tags }}" --arg REGISTRY "${{ steps.login-ecr.outputs.registry }}" '
+          # Load public addresses
+          PUBLIC_ADDRS=$(cat /tmp/public_addresses.json)
+          
+          # Extract individual addresses for jq
+          ADDR_CZ=$(echo "$PUBLIC_ADDRS" | jq -r '.cz')
+          ADDR_SBF=$(echo "$PUBLIC_ADDRS" | jq -r '.sbf')
+          ADDR_DONALD=$(echo "$PUBLIC_ADDRS" | jq -r '."trump-donald"')
+          ADDR_MELANIA=$(echo "$PUBLIC_ADDRS" | jq -r '."trump-melania"')
+          ADDR_ERIC=$(echo "$PUBLIC_ADDRS" | jq -r '."trump-eric"')
+          ADDR_DONJR=$(echo "$PUBLIC_ADDRS" | jq -r '."trump-donjr"')
+          ADDR_BARRON=$(echo "$PUBLIC_ADDRS" | jq -r '."trump-barron"')
+          
+          # Build Solana RPC URL with Helius key
+          SOLANA_RPC_URL="https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}"
+          
+          echo "📋 Updating images and injecting secrets..."
+          
+          # Update images and inject secrets
+          NEW_TASK_DEF=$(echo "$TASK_DEF" | jq \
+            --arg TAG "${{ steps.meta.outputs.tags }}" \
+            --arg REGISTRY "${{ steps.login-ecr.outputs.registry }}" \
+            --arg MODEL_KEY "$MODEL_API_KEY" \
+            --arg RPC_URL "$SOLANA_RPC_URL" \
+            --arg CZ_PRIV "$SOLANA_PRIVATE_KEY_CZ" \
+            --arg CZ_PUB "$ADDR_CZ" \
+            --arg SBF_PRIV "$SOLANA_PRIVATE_KEY_SBF" \
+            --arg SBF_PUB "$ADDR_SBF" \
+            --arg DONALD_PRIV "$SOLANA_PRIVATE_KEY_TRUMP_DONALD" \
+            --arg DONALD_PUB "$ADDR_DONALD" \
+            --arg MELANIA_PRIV "$SOLANA_PRIVATE_KEY_TRUMP_MELANIA" \
+            --arg MELANIA_PUB "$ADDR_MELANIA" \
+            --arg ERIC_PRIV "$SOLANA_PRIVATE_KEY_TRUMP_ERIC" \
+            --arg ERIC_PUB "$ADDR_ERIC" \
+            --arg DONJR_PRIV "$SOLANA_PRIVATE_KEY_TRUMP_DONJR" \
+            --arg DONJR_PUB "$ADDR_DONJR" \
+            --arg BARRON_PRIV "$SOLANA_PRIVATE_KEY_TRUMP_BARRON" \
+            --arg BARRON_PUB "$ADDR_BARRON" \
+            '
             .containerDefinitions |= map(
+              # Update coral-server image
               if .name == "coral-server" then
                 .image = $REGISTRY + "/coral-server:" + $TAG
-              elif (.name | startswith("agent-")) then
-                .image = $REGISTRY + "/pardon-agent:" + $TAG
+              # Update agent images and inject secrets
+              elif .name == "agent-cz" then
+                .image = $REGISTRY + "/pardon-agent:" + $TAG |
+                .environment |= map(
+                  if .name == "MODEL_API_KEY" then .value = $MODEL_KEY
+                  elif .name == "SOLANA_RPC_URL" then .value = $RPC_URL
+                  elif .name == "SOLANA_PRIVATE_KEY" then .value = $CZ_PRIV
+                  elif .name == "SOLANA_PUBLIC_ADDRESS" then .value = $CZ_PUB
+                  else . end
+                )
+              elif .name == "agent-sbf" then
+                .image = $REGISTRY + "/pardon-agent:" + $TAG |
+                .environment |= map(
+                  if .name == "MODEL_API_KEY" then .value = $MODEL_KEY
+                  elif .name == "SOLANA_RPC_URL" then .value = $RPC_URL
+                  elif .name == "SOLANA_PRIVATE_KEY" then .value = $SBF_PRIV
+                  elif .name == "SOLANA_PUBLIC_ADDRESS" then .value = $SBF_PUB
+                  else . end
+                )
+              elif .name == "agent-trump-donald" then
+                .image = $REGISTRY + "/pardon-agent:" + $TAG |
+                .environment |= map(
+                  if .name == "MODEL_API_KEY" then .value = $MODEL_KEY
+                  elif .name == "SOLANA_RPC_URL" then .value = $RPC_URL
+                  elif .name == "SOLANA_PRIVATE_KEY" then .value = $DONALD_PRIV
+                  elif .name == "SOLANA_PUBLIC_ADDRESS" then .value = $DONALD_PUB
+                  else . end
+                )
+              elif .name == "agent-trump-melania" then
+                .image = $REGISTRY + "/pardon-agent:" + $TAG |
+                .environment |= map(
+                  if .name == "MODEL_API_KEY" then .value = $MODEL_KEY
+                  elif .name == "SOLANA_RPC_URL" then .value = $RPC_URL
+                  elif .name == "SOLANA_PRIVATE_KEY" then .value = $MELANIA_PRIV
+                  elif .name == "SOLANA_PUBLIC_ADDRESS" then .value = $MELANIA_PUB
+                  else . end
+                )
+              elif .name == "agent-trump-eric" then
+                .image = $REGISTRY + "/pardon-agent:" + $TAG |
+                .environment |= map(
+                  if .name == "MODEL_API_KEY" then .value = $MODEL_KEY
+                  elif .name == "SOLANA_RPC_URL" then .value = $RPC_URL
+                  elif .name == "SOLANA_PRIVATE_KEY" then .value = $ERIC_PRIV
+                  elif .name == "SOLANA_PUBLIC_ADDRESS" then .value = $ERIC_PUB
+                  else . end
+                )
+              elif .name == "agent-trump-donjr" then
+                .image = $REGISTRY + "/pardon-agent:" + $TAG |
+                .environment |= map(
+                  if .name == "MODEL_API_KEY" then .value = $MODEL_KEY
+                  elif .name == "SOLANA_RPC_URL" then .value = $RPC_URL
+                  elif .name == "SOLANA_PRIVATE_KEY" then .value = $DONJR_PRIV
+                  elif .name == "SOLANA_PUBLIC_ADDRESS" then .value = $DONJR_PUB
+                  else . end
+                )
+              elif .name == "agent-trump-barron" then
+                .image = $REGISTRY + "/pardon-agent:" + $TAG |
+                .environment |= map(
+                  if .name == "MODEL_API_KEY" then .value = $MODEL_KEY
+                  elif .name == "SOLANA_RPC_URL" then .value = $RPC_URL
+                  elif .name == "SOLANA_PRIVATE_KEY" then .value = $BARRON_PRIV
+                  elif .name == "SOLANA_PUBLIC_ADDRESS" then .value = $BARRON_PUB
+                  else . end
+                )
               else . end
             ) |
             # Remove fields that cannot be included in registration

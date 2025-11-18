@@ -43,6 +43,25 @@ else
 fi
 
 echo ""
+echo "📥 Fetching shared templates (REQUIRED)..."
+mkdir -p /app/shared
+SHARED_FILES=("operational-template.txt" "personality-template.txt" "scoring-mandate.txt" "agent-comms-note.txt")
+
+for file in "${SHARED_FILES[@]}"; do
+  s3_path="s3://${BUCKET_NAME}/shared/${file}"
+  
+  echo -n "  Fetching ${file}... "
+  
+  if aws s3 cp "${s3_path}" "/app/shared/${file}" --region ${REGION} --quiet 2>/dev/null; then
+    echo "✓"
+  else
+    echo "❌ REQUIRED FILE MISSING!"
+    echo "Run: ./scripts/upload-configs.sh to upload shared templates"
+    exit 1
+  fi
+done
+
+echo ""
 echo "✅ Configs loaded successfully!"
 echo ""
 echo "🚀 Starting ${AGENT_NAME} agent..."
