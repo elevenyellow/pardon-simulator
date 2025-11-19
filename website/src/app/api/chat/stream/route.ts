@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
   }
 
   const encoder = new TextEncoder();
-  let intervalId: NodeJS.Timeout;
+  let timeoutId: NodeJS.Timeout;
   let heartbeatId: NodeJS.Timeout;
   
   const stream = new ReadableStream({
@@ -23,8 +23,10 @@ export async function GET(request: NextRequest) {
       controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'connected' })}\n\n`));
       
       let lastMessageCount = 0;
+      let pollInterval = 300; // Start with fast polling (300ms)
+      let consecutiveEmptyPolls = 0;
       
-      intervalId = setInterval(async () => {
+      const poll = async () => {
         try {
           const response = await fetch(
             `${CORAL_SERVER_URL}/api/v1/debug/thread/app/priv/${sessionId}/${threadId}/messages`
@@ -51,27 +53,55 @@ export async function GET(request: NextRequest) {
                 })}\n\n`)
               );
               console.log(`[SSE Poll] Sent ${newMessages.length} messages to client via SSE`);
+              
+              // Reset to fast polling when new messages arrive
+              pollInterval = 300;
+              consecutiveEmptyPolls = 0;
+            } else {
+              // No new messages - adjust polling interval based on idle time
+              consecutiveEmptyPolls++;
+              
+              if (consecutiveEmptyPolls < 10) {
+                // First 5 seconds: poll every 500ms
+                pollInterval = 500;
+              } else if (consecutiveEmptyPolls < 30) {
+                // Next 20 seconds: poll every 1000ms
+                pollInterval = 1000;
+              } else {
+                // After 30 seconds: poll every 2000ms
+                pollInterval = 2000;
+              }
             }
           } else {
             console.error(`[SSE Poll] Failed to fetch messages: ${response.status} ${response.statusText}`);
+            // Back off on errors
+            pollInterval = 2000;
           }
         } catch (err) {
           console.error('[SSE] Error polling messages:', err);
+          // Back off on errors
+          pollInterval = 2000;
         }
-      }, 1000);
+        
+        // Schedule next poll with current interval
+        timeoutId = setTimeout(poll, pollInterval);
+      };
+      
+      // Start polling
+      poll();
       
       heartbeatId = setInterval(() => {
         controller.enqueue(encoder.encode(': heartbeat\n\n'));
       }, 30000);
       
       request.signal.addEventListener('abort', () => {
-        clearInterval(intervalId);
+        clearTimeout(timeoutId);
         clearInterval(heartbeatId);
         controller.close();
       });
     },
     cancel() {
-      if (intervalId) clearInterval(intervalId);
+      if (timeoutId) clearTimeout(timeoutId);
       if (heartbeatId) clearInterval(heartbeatId);
     }
   });
