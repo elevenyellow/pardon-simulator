@@ -36,10 +36,7 @@ export async function GET(request: NextRequest) {
       prisma.serviceUsage.findMany({
         where,
         orderBy: { lastUsedAt: 'desc' },
-        take: 100,
-        include: {
-          // We don't have direct user relation, but we can get it via sessionId
-        }
+        take: 100
       }),
       
       // Group by service type

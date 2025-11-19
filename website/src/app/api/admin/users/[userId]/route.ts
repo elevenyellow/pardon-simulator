@@ -5,10 +5,12 @@ import { validateId } from '@/lib/admin/validation';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
+  const { userId } = await params;
+  
   // Validate user ID
-  const idValidation = validateId(params.userId);
+  const idValidation = validateId(userId);
   if (!idValidation.valid) {
     return NextResponse.json({ error: idValidation.error }, { status: 400 });
   }
@@ -16,13 +18,13 @@ export async function GET(
   const { admin, error } = await requireAdminAuthWithResource(
     request, 
     'view_user',
-    params.userId
+    userId
   );
   if (error) return error;
 
   try {
     const user = await prisma.user.findUnique({
-      where: { id: params.userId },
+      where: { id: userId },
       include: {
         sessions: {
           orderBy: { startTime: 'desc' },

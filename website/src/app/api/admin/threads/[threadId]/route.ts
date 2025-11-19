@@ -4,18 +4,20 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { threadId: string } }
+  { params }: { params: Promise<{ threadId: string }> }
 ) {
+  const { threadId } = await params;
+  
   const { admin, error } = await requireAdminAuthWithResource(
     request,
     'view_thread',
-    params.threadId
+    threadId
   );
   if (error) return error;
 
   try {
     const thread = await prisma.thread.findUnique({
-      where: { id: params.threadId },
+      where: { id: threadId },
       include: {
         messages: {
           orderBy: { timestamp: 'asc' }

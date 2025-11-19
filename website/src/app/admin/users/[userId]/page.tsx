@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 
 interface UserDetail {
@@ -16,18 +16,22 @@ interface UserDetail {
   leaderboardEntries: any[];
 }
 
-export default function UserDetailPage({ params }: { params: { userId: string } }) {
+export default function UserDetailPage() {
   const router = useRouter();
+  const params = useParams();
+  const userId = params.userId as string;
   const [user, setUser] = useState<UserDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchUser();
-  }, [params.userId]);
+    if (userId) {
+      fetchUser();
+    }
+  }, [userId]);
 
   const fetchUser = async () => {
     try {
-      const res = await fetch(`/api/admin/users/${params.userId}`);
+      const res = await fetch(`/api/admin/users/${userId}`);
       if (!res.ok) {
         throw new Error('Failed to fetch user');
       }
