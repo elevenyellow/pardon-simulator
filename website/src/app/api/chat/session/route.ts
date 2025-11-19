@@ -20,69 +20,61 @@ export async function POST() {
                                            CORAL_SERVER_URL.includes('pardon-alb');
     
     if (isConnectingToProductionServer) {
-      // Production ECS: Ensure "production-main" session exists
-      // If it doesn't exist, create it - agents will connect to it automatically
+      // Production ECS: Agents auto-create "production-main" session when they connect
+      // via the /sse/v1/devmode/ endpoint. We just need to wait for it to exist.
       const sessionId = 'production-main';
-      console.log(`Connecting to PRODUCTION ECS - Ensuring session: ${sessionId}`);
+      console.log(`Connecting to PRODUCTION ECS - Checking session: ${sessionId}`);
       
       try {
-        // Check if the session exists
-        const sessionsResponse = await fetch(`${CORAL_SERVER_URL}/api/v1/sessions`, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
-        });
-
-        if (!sessionsResponse.ok) {
-          console.error('Failed to fetch sessions:', sessionsResponse.status, sessionsResponse.statusText);
-          throw new Error(`Failed to check sessions: ${sessionsResponse.status} ${sessionsResponse.statusText}`);
-        }
-
-        const activeSessions = await sessionsResponse.json();
-        console.log('Active sessions:', activeSessions);
-
-        if (!activeSessions.includes(sessionId)) {
-          console.log(`Session "${sessionId}" not found. Creating it now...`);
-          
-          // Create the session - agents will connect to it when they start
-          // Use minimal config - just enough to create the session
-          // Agents will register themselves when they connect
-          const createResponse = await fetch(`${CORAL_SERVER_URL}/api/v1/sessions`, {
-            method: 'POST',
+        // Check if the session exists - poll with retries for agents to connect
+        const maxRetries = 3;
+        const retryDelay = 2000; // 2 seconds
+        
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+          const sessionsResponse = await fetch(`${CORAL_SERVER_URL}/api/v1/sessions`, {
+            method: 'GET',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              sessionId: sessionId,
-              applicationId: 'app',
-              privacyKey: 'priv',
-              agentGraphRequest: {
-                agents: [],  // Empty - agents will register on connection
-                customTools: {},
-                groups: []
-              }
-            }),
           });
 
-          if (!createResponse.ok) {
-            const errorText = await createResponse.text();
-            console.error('Failed to create session:', createResponse.status, errorText);
-            throw new Error(`Failed to create session: ${createResponse.status} ${createResponse.statusText}`);
+          if (!sessionsResponse.ok) {
+            console.error('Failed to fetch sessions:', sessionsResponse.status, sessionsResponse.statusText);
+            throw new Error(`Failed to check sessions: ${sessionsResponse.status} ${sessionsResponse.statusText}`);
           }
 
-          const sessionData = await createResponse.json();
-          console.log(`✓ Session "${sessionId}" created successfully:`, sessionData);
-        } else {
-          console.log(`✓ Session "${sessionId}" already exists`);
+          const activeSessions = await sessionsResponse.json();
+          console.log(`Active sessions (attempt ${attempt}/${maxRetries}):`, activeSessions);
+
+          if (activeSessions.includes(sessionId)) {
+            console.log(`✓ Session "${sessionId}" is active`);
+            return NextResponse.json({ sessionId });
+          }
+
+          // Session not found yet
+          if (attempt < maxRetries) {
+            console.log(`Session "${sessionId}" not found yet. Agents may still be connecting. Retrying in ${retryDelay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
+          }
         }
 
-        return NextResponse.json({
-          sessionId,
-        });
+        // After all retries, session still doesn't exist
+        console.error(`Session "${sessionId}" not found after ${maxRetries} attempts`);
+        return NextResponse.json(
+          { 
+            error: 'session_not_ready',
+            message: `Session "${sessionId}" is not available yet. Agents may still be starting up.`,
+            details: 'Please wait a moment and try again. If this persists, check that agent containers are running.',
+            sessionId: null
+          },
+          { status: 503 } // Service Unavailable - temporary condition
+        );
+
       } catch (error: any) {
-        console.error('Session management error:', error);
+        console.error('Session check error:', error);
         return NextResponse.json(
           { 
             error: 'session_error', 
             message: error.message,
-            details: 'Failed to ensure production session is available. Please try again.'
+            details: 'Failed to connect to Coral Server. Please try again.'
           },
           { status: 500 }
         );
