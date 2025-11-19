@@ -58,7 +58,7 @@ export async function POST(
 
     // Forward to Coral Server
     const coralResponse = await fetch(
-`${CORAL_SERVER_URL}/api/v1/debug/thread/sendMessage/app/debug/${sessionId}/sbf`,
+`${CORAL_SERVER_URL}/api/v1/debug/thread/sendMessage/app/priv/${sessionId}/sbf`,
       {
         method:'POST',
         headers: {'Content-Type':'application/json'},
@@ -78,7 +78,7 @@ export async function POST(
     await new Promise(resolve => setTimeout(resolve, 3000)); // Wait for agent to process
 
     const messagesResponse = await fetch(
-`${CORAL_SERVER_URL}/api/v1/debug/thread/app/debug/${sessionId}/${threadId}/messages`    );
+`${CORAL_SERVER_URL}/api/v1/debug/thread/app/priv/${sessionId}/${threadId}/messages`    );
 
     if (!messagesResponse.ok) {
       throw new Error(`Failed to get messages: ${messagesResponse.statusText}`);

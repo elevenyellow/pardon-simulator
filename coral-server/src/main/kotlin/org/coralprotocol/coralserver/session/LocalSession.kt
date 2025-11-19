@@ -240,8 +240,11 @@ class LocalSession(
 
         val message = Message.create(thread, sender, content, mentions)
         thread.messages.add(message)
+        logger.info { "[LocalSession.sendMessage] Added message to thread ${threadId.take(8)}...: from=${senderId}, mentions=${mentions}, messageId=${message.id}, threadMessageCount=${thread.messages.size}" }
+        
         eventBus.emit(SessionEvent.MessageSent(threadId, message.resolve()))
         notifyMentionedAgents(message)
+        logger.info { "[LocalSession.sendMessage] Notified mentioned agents: ${mentions}" }
         return message
     }
 

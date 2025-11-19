@@ -429,8 +429,9 @@ async function handlePOST(request: NextRequest) {
     }
     
     // Try to send the message
+    console.log(`[Send API] Sending message to Coral: thread=${threadId.slice(0, 8)}..., agent=${agentId}, contentLength=${contentWithWallet.length}`);
     let sendResponse = await fetch(
-`${CORAL_SERVER_URL}/api/v1/debug/thread/sendMessage/app/debug/${sessionId}/sbf`,
+      `${CORAL_SERVER_URL}/api/v1/debug/thread/sendMessage/app/priv/${sessionId}/sbf`,
       {
         method:'POST',
         headers: {'Content-Type':'application/json'},
@@ -441,6 +442,7 @@ async function handlePOST(request: NextRequest) {
         }),
       }
     );
+    console.log(`[Send API] Coral sendMessage response: ${sendResponse.status} ${sendResponse.statusText}`);
 
     // If we get 404, try to restore the session and retry
     if (!sendResponse.ok && sendResponse.status === 404) {
@@ -456,7 +458,7 @@ async function handlePOST(request: NextRequest) {
           
           // Retry the send
           sendResponse = await fetch(
-`${CORAL_SERVER_URL}/api/v1/debug/thread/sendMessage/app/debug/${sessionId}/sbf`,
+`${CORAL_SERVER_URL}/api/v1/debug/thread/sendMessage/app/priv/${sessionId}/sbf`,
             {
               method:'POST',
               headers: {'Content-Type':'application/json'},
@@ -498,6 +500,8 @@ async function handlePOST(request: NextRequest) {
       userWallet
     });
 
+    console.log(`[Send API] Message saved to database, returning success to client`);
+
     // Return immediately - frontend will get updates via SSE
     const response = NextResponse.json({
       success: true,
@@ -533,7 +537,7 @@ export async function POST(request: NextRequest) {
 async function getMessageCount(sessionId: string, threadId: string): Promise<number> {
   try {
     const response = await fetch(
-`${CORAL_SERVER_URL}/api/v1/debug/thread/app/debug/${sessionId}/${threadId}/messages`    );
+`${CORAL_SERVER_URL}/api/v1/debug/thread/app/priv/${sessionId}/${threadId}/messages`    );
     if (!response.ok) return 0;
     const data = await response.json();
     return (data.messages || []).length;

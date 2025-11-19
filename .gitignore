@@ -229,3 +229,4 @@ uv.lock
 # Coral specific
 registry.local.toml
 application.local.yaml
+backups/

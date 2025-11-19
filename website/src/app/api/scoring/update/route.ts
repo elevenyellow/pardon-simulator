@@ -227,22 +227,22 @@ export async function GET(request: NextRequest) {
 
 /**
  * Generate contextual feedback based on score
+ * Updated for increased difficulty (40-50 messages to win)
  */
 function generateFeedback(score: number, delta: number): string {
   if (score >= 90) {
     return"Qualified for prizes! You've reached 90+ points. Keep pushing for the top spot!";
-  } else if (score >= 80) {
+  } else if (score >= 70) {
     const pointsNeeded = 90 - score;
-    return`Almost there! ${pointsNeeded} more points to qualify for prizes.`;
-  } else if (score >= 60) {
-    const pointsNeeded = 90 - score;
-    return`Good work! ${pointsNeeded} more points to qualify for prizes.`;
-  } else if (score >= 40) {
-    return"Making progress. Try different strategies—maybe use intermediaries?";
-  } else if (score >= 20) {
-    return"Slow start. Consider paying for intel or introductions to build momentum.";
+    return`Almost there! ${pointsNeeded} more points to qualify. Make sure you've talked to at least 3 different agents.`;
+  } else if (score >= 50) {
+    return`Halfway there! Focus on quality interactions and try talking to multiple agents for bonus points.`;
+  } else if (score >= 30) {
+    return"Building momentum. Premium services can accelerate your progress significantly.";
+  } else if (score >= 15) {
+    return"Slow start. Try different agents - Melania or CZ might be good entry points.";
   } else {
-    return"You need a new strategy. Talk to Melania first, then approach Trump with leverage.";
+    return"You need a stronger strategy. Focus on quality over quantity and consider premium intel.";
   }
 }
 

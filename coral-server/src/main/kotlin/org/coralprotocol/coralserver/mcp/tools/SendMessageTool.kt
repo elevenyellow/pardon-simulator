@@ -11,6 +11,9 @@ import org.coralprotocol.coralserver.mcp.tools.models.McpToolResult
 import org.coralprotocol.coralserver.mcp.tools.models.SendMessageInput
 import org.coralprotocol.coralserver.models.resolve
 import org.coralprotocol.coralserver.server.CoralAgentIndividualMcp
+import mu.KotlinLogging
+
+private val logger = KotlinLogging.logger {}
 
 internal class SendMessageTool: McpTool<SendMessageInput>() {
     override val name: McpToolName
@@ -45,12 +48,16 @@ internal class SendMessageTool: McpTool<SendMessageInput>() {
         get() = SendMessageInput.serializer()
 
     override suspend fun execute(mcpServer: CoralAgentIndividualMcp, arguments: SendMessageInput): McpToolResult {
-
-        return McpToolResult.SendMessageSuccess(mcpServer.localSession.sendMessage(
+        logger.info { "[SendMessageTool] Agent ${mcpServer.connectedAgentId} calling coral_send_message: threadId=${arguments.threadId.take(8)}..., mentions=${arguments.mentions}, contentLength=${arguments.content.length}" }
+        
+        val result = mcpServer.localSession.sendMessage(
             threadId = arguments.threadId,
             senderId = mcpServer.connectedAgentId,
             content = arguments.content,
             mentions = arguments.mentions
-        ).resolve())
+        ).resolve()
+        
+        logger.info { "[SendMessageTool] Message sent successfully, messageId=${result.id}" }
+        return McpToolResult.SendMessageSuccess(result)
     }
 }

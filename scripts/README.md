@@ -24,12 +24,15 @@ Collection of scripts for deploying and managing Pardon Simulator on AWS.
 | `eb-update-config.sh` | Update agent config | `./scripts/eb-update-config.sh cz operational-private.txt` |
 | `eb-scale.sh` | Scale instances | `./scripts/eb-scale.sh 2` |
 
-### Config Management (Both EB and EC2)
+### Config Management
 
 | Script | Purpose | Usage |
 |--------|---------|-------|
-| `upload-configs.sh` | Upload all configs to S3 | `./scripts/upload-configs.sh` |
+| `upload-configs.sh` | Upload all configs to S3 (with versioning) | `./scripts/upload-configs.sh` |
 | `update-single-config.sh` | Update single config | `./scripts/update-single-config.sh cz operational-private.txt` |
+| `backup-configs.sh` | Create local snapshot (no S3) | `./scripts/backup-configs.sh` |
+| `restore-configs.sh` | Restore from local snapshot | `./scripts/restore-configs.sh 2024-11-19_14-30-00` |
+| `list-config-versions.sh` | List all snapshots (local & S3) | `./scripts/list-config-versions.sh` |
 
 ### EC2 (Legacy - Still Supported)
 
@@ -389,6 +392,208 @@ pip install awsebcli
 # Check IAM policy includes S3 access
 aws iam get-user-policy --user-name pardon-deploy-user --policy-name PardonDeployPolicy
 ```
+
+---
+
+## 🗂️ Configuration Versioning & Backup
+
+### Overview
+
+Every time you upload configs to S3, a **complete snapshot** is automatically created both locally and in S3. This allows you to:
+- Track configuration history over time
+- Quickly restore previous versions
+- Compare changes between versions
+- Rollback after problematic updates
+
+### Automatic Versioning
+
+When you run `./scripts/upload-configs.sh`, the system automatically:
+
+1. **Creates local backup** in `/backups/YYYY-MM-DD_HH-MM-SS/`
+2. **Uploads to S3 current/** (active configs used by agents)
+3. **Uploads to S3 versions/YYYY-MM-DD_HH-MM-SS/** (snapshot archive)
+
+**Example:**
+```bash
+./scripts/upload-configs.sh
+# Creates:
+# - backups/2024-11-19_14-30-00/  (local)
+# - s3://bucket/current/           (active)
+# - s3://bucket/versions/2024-11-19_14-30-00/  (snapshot)
+```
+
+### Backup Structure
+
+Each snapshot contains a complete copy of all configuration files:
+
+```
+backups/2024-11-19_14-30-00/
+├── agents/
+│   ├── cz/
+│   │   ├── personality-public.txt
+│   │   ├── operational-private.txt
+│   │   ├── scoring-config.txt
+│   │   └── tool-descriptions.txt
+│   ├── sbf/
+│   └── ... (all 7 agents)
+├── shared/
+│   ├── operational-template.txt
+│   ├── personality-template.txt
+│   ├── scoring-mandate.txt
+│   └── agent-comms-note.txt
+├── premium_services.json
+└── agents-session-configuration.json
+```
+
+### Common Tasks
+
+#### List All Available Versions
+
+```bash
+./scripts/list-config-versions.sh
+```
+
+**Output:**
+```
+📁 Local Snapshots:
+  📦 2024-11-19_14-30-00
+     Date: 2024-11-19 at 14:30:00
+     Size: 256K (34 files)
+
+☁️ S3 Snapshots:
+  ☁️ 2024-11-19_16-45-00
+     Date: 2024-11-19 at 16:45:00
+     Location: s3://pardon-simulator-configs/versions/2024-11-19_16-45-00/
+```
+
+#### Create Manual Backup (Without S3 Upload)
+
+```bash
+./scripts/backup-configs.sh
+```
+
+Use this when:
+- You want to save current state before making risky changes
+- You're testing locally and don't want to upload yet
+- You want an extra safety net
+
+#### Restore From Local Snapshot
+
+```bash
+# List available snapshots
+./scripts/list-config-versions.sh
+
+# Restore specific version
+./scripts/restore-configs.sh 2024-11-19_14-30-00
+
+# You'll be prompted to confirm before overwriting current files
+```
+
+#### Restore From S3 Snapshot
+
+```bash
+# Restore entire snapshot from S3
+aws s3 sync s3://pardon-simulator-configs/versions/2024-11-19_14-30-00/ . \
+  --region us-east-1 \
+  --exclude ".git/*"
+
+# Then upload to make it current
+./scripts/upload-configs.sh
+```
+
+#### Compare Two Versions
+
+```bash
+# Compare two local snapshots
+diff -r backups/2024-11-19_14-30-00/ backups/2024-11-19_16-45-00/
+
+# Compare specific file across versions
+diff backups/2024-11-19_14-30-00/agents/cz/operational-private.txt \
+     backups/2024-11-19_16-45-00/agents/cz/operational-private.txt
+```
+
+### Rollback Procedure
+
+If you need to rollback after a bad config update:
+
+**Option 1: Quick Local Rollback**
+```bash
+# 1. Find the last good version
+./scripts/list-config-versions.sh
+
+# 2. Restore it
+./scripts/restore-configs.sh 2024-11-19_14-30-00
+
+# 3. Restart agents to apply
+docker-compose restart
+
+# 4. Upload to S3 if needed
+./scripts/upload-configs.sh
+```
+
+**Option 2: Rollback from S3**
+```bash
+# 1. List S3 versions
+./scripts/list-config-versions.sh
+
+# 2. Download old version from S3
+aws s3 sync s3://pardon-simulator-configs/versions/2024-11-19_14-30-00/ . \
+  --region us-east-1 \
+  --exclude ".git/*"
+
+# 3. Upload to make it current
+./scripts/upload-configs.sh
+
+# 4. Force ECS to restart with new configs
+aws ecs update-service \
+  --cluster pardon-production \
+  --service pardon-app \
+  --force-new-deployment \
+  --region us-east-1
+```
+
+### Backup Retention
+
+**Local backups:**
+- Stored in `/backups/` directory
+- Not in git (excluded by .gitignore)
+- Clean up old versions manually when disk space is low:
+  ```bash
+  # Remove backups older than 30 days
+  find backups/ -type d -mtime +30 -exec rm -rf {} +
+  ```
+
+**S3 backups:**
+- Stored indefinitely by default
+- To save costs, consider adding S3 lifecycle policy to archive old versions:
+  ```bash
+  # Example: Move versions older than 90 days to Glacier
+  aws s3api put-bucket-lifecycle-configuration \
+    --bucket pardon-simulator-configs \
+    --lifecycle-configuration file://lifecycle-policy.json
+  ```
+
+### Best Practices
+
+1. **Before major changes:** Always create a manual backup
+   ```bash
+   ./scripts/backup-configs.sh
+   ```
+
+2. **Test locally first:** Use restore to test old configs locally before deploying
+
+3. **Document changes:** Add notes about what changed in each version
+   ```bash
+   # Example workflow
+   ./scripts/backup-configs.sh
+   vim agents/cz/operational-private.txt  # Make changes
+   git commit -m "CZ: Updated payment flow logic"
+   ./scripts/upload-configs.sh
+   ```
+
+4. **Keep critical snapshots:** Download and archive critical versions separately
+
+5. **Regular cleanup:** Clean old local backups monthly to save disk space
 
 ---
 

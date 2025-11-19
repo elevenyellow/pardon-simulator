@@ -152,30 +152,119 @@ async def request_premium_service(
     from_agent: str,
     to_agent: str, 
     service_type: str,
-    details: str = ""
+    details: str = "",
+    custom_amount: Optional[float] = None
 ) -> str:
     """
     Request a premium service from another agent that requires payment.
     
     Uses x402 protocol standard v1.0 for compatibility with x402scan.com
     
+    IMPORTANT: Some services accept variable amounts (donations, bribes, gifts, campaign_contribution).
+    For these services, you MUST provide a custom_amount parameter.
+    
     Args:
-        from_agent: Your agent name
-        to_agent: Agent providing the service
-        service_type: Type of service (insider_info)
+        from_agent: Your agent name (usually "sbf" for user)
+        to_agent: Agent providing the service (e.g., "donald-trump", "cz")
+        service_type: Type of service - Fixed-price: insider_info, strategy_advice, 
+                     connection_intro, private_deal, pardon_recommendation
+                     Variable-amount: donation, bribe, campaign_contribution, gift
         details: Additional details about what you need
+        custom_amount: Required for variable-amount services (donation, bribe, etc.). 
+                      The amount in USDC that the user wants to pay (e.g., 0.25 for $0.25)
     
     Returns:
         402 Payment Required response with payment details, OR error if service not available
+    
+    Examples:
+        # Fixed-price service:
+        request_premium_service("sbf", "donald-trump", "insider_info", "Tell me about CZ")
+        
+        # Variable-amount service (donation):
+        request_premium_service("sbf", "donald-trump", "donation", "For your campaign", custom_amount=0.25)
+        
+        # Variable-amount service (bribe):
+        request_premium_service("sbf", "cz", "bribe", "Help me get pardon", custom_amount=1.50)
     """
     print(f"🔥🔥🔥 request_premium_service() TOOL CALLED! 🔥🔥🔥")
     print(f"   from: {from_agent}, to: {to_agent}, service: {service_type}")
+    if custom_amount:
+        print(f"   custom_amount: {custom_amount} USDC")
     
     if service_type not in PREMIUM_SERVICES:
         available = ", ".join(PREMIUM_SERVICES.keys())
         return f"❌ Unknown service '{service_type}'. Available: {available}"
     
-    amount = PREMIUM_SERVICES[service_type]
+    service_config = PREMIUM_SERVICES[service_type]
+    
+    # Handle variable-amount services (new dict format with min_amount)
+    if isinstance(service_config, dict) and service_config.get("type") == "variable":
+        min_amount = service_config.get("min_amount", 0.001)
+        currency = service_config.get("currency", "USDC")
+        
+        if not custom_amount or custom_amount <= 0:
+            return f"""❌ Service '{service_type}' requires a custom amount.
+            
+This is a variable-amount service (donation/bribe/gift/campaign_contribution).
+You need to specify how much the user wants to pay.
+
+**Minimum amount: {min_amount} {currency}**
+
+Example: request_premium_service(from_agent="{from_agent}", to_agent="{to_agent}", service_type="{service_type}", details="{details}", custom_amount={min_amount})
+
+Extract the amount from the user's message and try again."""
+        
+        # Validate minimum amount
+        if custom_amount < min_amount:
+            return f"""❌ Amount too low for '{service_type}'.
+
+User offered: {custom_amount} USDC
+Minimum required: {min_amount} USDC
+
+The user must meet the minimum. Respond in character:
+- "The minimum {service_type} is {min_amount} USDC. That's the price."
+- "I appreciate the gesture, but the minimum is {min_amount} USDC."
+- "Not enough. Minimum is {min_amount} USDC if you're serious."
+
+DO NOT suggest cheaper alternatives or workarounds. Hold the line on minimums."""
+        
+        amount = custom_amount
+        print(f"   ✅ Variable-amount service '{service_type}': {amount} USDC (min: {min_amount} USDC)")
+        
+    # Legacy format: "variable" string (backwards compatibility)
+    elif service_config == "variable":
+        # Assume minimum of 0.001 USDC for legacy format
+        min_amount = 0.001
+        
+        if not custom_amount or custom_amount <= 0:
+            return f"""❌ Service '{service_type}' requires a custom amount.
+            
+This is a variable-amount service (donation/bribe/gift/campaign_contribution).
+You need to specify how much the user wants to pay.
+
+Example: request_premium_service(from_agent="{from_agent}", to_agent="{to_agent}", service_type="{service_type}", details="{details}", custom_amount=0.25)
+
+Extract the amount from the user's message and try again."""
+        
+        if custom_amount < min_amount:
+            return f"❌ Amount too low. Minimum for '{service_type}' is {min_amount} USDC."
+        
+        amount = custom_amount
+        print(f"   Using custom amount: {amount} USDC for variable-amount service '{service_type}'")
+    else:
+        # Fixed-price service
+        amount = service_config
+        if custom_amount and abs(custom_amount - amount) > 0.0001:
+            return f"""⚠️ Service '{service_type}' has a fixed price of {amount} USDC.
+            
+Custom amounts are not accepted for this service.
+If the user wants to pay a custom amount, use one of these variable-amount services instead:
+- donation (min: 0.01 USDC) - Campaign contributions
+- bribe (min: 0.05 USDC) - Influence and favors
+- gift (min: 0.005 USDC) - Goodwill gestures
+- campaign_contribution (min: 0.01 USDC) - Political support
+
+Would you like to use one of those instead?"""
     
     # All payments go to White House Treasury (centralized collection)
     treasury_address = WHITE_HOUSE_WALLET
@@ -1078,12 +1167,14 @@ def create_contact_agent_tool(coral_send_message_tool, coral_add_participant_too
         print(f"✅ Add participant result: {add_result}")
 
         # STEP 2: Send message with mentions array
+        print(f"📤 Calling coral_send_message: threadId={current_thread_id[:8]}..., mentions=['{agent_to_contact}'], content length={len(message)}")
         result = await _coral_send_message_tool.ainvoke({
             "threadId": current_thread_id,
             "content": message,
             "mentions": [agent_to_contact]  # ← Automatically filled!
         })
 
+        print(f"✅ coral_send_message returned: {result}")
         print(f"✅ Message sent to {agent_to_contact} with mentions=['{agent_to_contact}']")
         return f"✅ Successfully contacted {agent_to_contact}. {result}"
 

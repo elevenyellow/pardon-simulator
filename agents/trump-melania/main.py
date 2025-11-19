@@ -422,6 +422,7 @@ async def main():
                         continue
                     
                     sender_id = mentions_data["messages"][0]["senderId"]
+                    message_content = mentions_data["messages"][0]["content"]
                     print(f"[OK] Extracted sender: {sender_id[:8] if len(sender_id) > 8 else sender_id}...{sender_id[-8:] if len(sender_id) > 8 else ''}")
                     
                     # Check if sender is the user (sbf) or another agent
@@ -430,8 +431,25 @@ async def main():
                     # Load dynamic content
                     dynamic_content = load_dynamic_content()
                     
-                    # For user messages, replace senderId with actual wallet for scoring
+                    # For user messages, extract wallet for scoring
                     if is_user_message:
+                        # Extract user's ACTUAL wallet address from message
+                        # Format: [USER_WALLET:6pF45ayWyPSFKV3WQLpNNhhkA8GMeeE6eE14NKgw4zug] @agent message
+                        import re
+                        wallet_match = re.search(r'\[USER_WALLET:([1-9A-HJ-NP-Za-km-z]{32,44})\]', message_content)
+                        user_wallet = wallet_match.group(1) if wallet_match else "UNKNOWN_WALLET"
+                        
+                        if user_wallet == "UNKNOWN_WALLET":
+                            print(f"WARNING: Could not extract wallet from message: {message_content[:100]}")
+                        else:
+                            print(f"[OK] Extracted user wallet: {user_wallet[:8]}...{user_wallet[-8:]}")
+                        
+                        # Strip wallet prefix from message content for LLM processing
+                        clean_content = re.sub(r'\[USER_WALLET:[1-9A-HJ-NP-Za-km-z]{32,44}]\s*', '', message_content)
+                        mentions_data["messages"][0]["content"] = clean_content
+                        
+                        # KEEP senderId as "sbf" for proper routing
+                        # Pass the wallet address separately in the prompt for scoring
                         mentions_result_clean = json.dumps(mentions_data)
                         
                         # Build scoring mandate from loaded config
@@ -455,7 +473,11 @@ async def main():
                             agent_id="melania-trump"
                         )
                         
-                        full_input = f"{scoring_mandate}Process these mentions and respond appropriately: {mentions_result_clean}"
+                        # CRITICAL: Include the user's wallet address in the prompt for scoring
+                        # The LLM needs to use this wallet address in award_points(), NOT the senderId
+                        user_wallet_instruction = f"\n\n🎯 CRITICAL SCORING INSTRUCTION:\nThe user's ACTUAL wallet address is: {user_wallet}\nYou MUST use '{user_wallet}' as the user_wallet parameter in award_points().\nFor coral_send_message, use mentions=['sbf'] to reply to the user (NOT the wallet address).\n\n"
+                        
+                        full_input = f"{scoring_mandate}{user_wallet_instruction}Process these mentions and respond appropriately: {mentions_result_clean}"
                     else:
                         # Agent-to-agent communication - no scoring needed
                         mentions_result_clean = json.dumps(mentions_data)

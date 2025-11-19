@@ -49,36 +49,48 @@ export class ScoringRepository {
     
     // Move everything inside transaction to prevent race conditions
     const result = await prisma.$transaction(async (tx) => {
-      // Parallel fetch: session data and speed multiplier calculation
-      const [session, speedMultiplier] = await Promise.all([
+      // Parallel fetch: session data and multipliers calculation
+      const [session, speedMultiplier, multiAgentMod] = await Promise.all([
         tx.session.findUnique({
           where: { id: sessionId },
           select: { currentScore: true, startTime: true },
         }),
-        delta >= 0 ? this.calculateSpeedMultiplier(sessionId, userId, tx) : Promise.resolve(1.0)
+        delta >= 0 ? this.calculateSpeedMultiplier(sessionId, userId, tx) : Promise.resolve(1.0),
+        delta >= 0 ? this.calculateMultiAgentModifier(sessionId, agentId, 0, tx) : Promise.resolve({ modifier: 1.0, canProgress: true })
       ]);
       
       if (!session) {
         throw new Error('Session not found');
       }
       
-      // Calculate final delta with new system: (evaluation ± random) × speed + premium
+      // Recalculate multiAgentMod with actual current score for gate check
+      const multiAgentModWithScore = delta >= 0 
+        ? await this.calculateMultiAgentModifier(sessionId, agentId, session.currentScore, tx)
+        : { modifier: 1.0, canProgress: true };
+      
+      // Calculate final delta with new system: (evaluation ± random) × speed × multiAgent + premium
       let finalDelta: number;
+      let finalReason = reason;
       
       if (delta < 0) {
         // Penalties: apply random variance but no speed multiplier
         const randomVariance = this.getRandomVariance();
         finalDelta = Math.round((delta + randomVariance) * 10) / 10;
       } else {
-        // Positive scores: agent's evaluation (1.0-3.0) with random variance
-        const clampedEvaluation = Math.max(1.0, Math.min(3.0, evaluationScore));
+        // Positive scores: agent's evaluation (1.0-2.0) with random variance
+        const clampedEvaluation = Math.max(1.0, Math.min(2.0, evaluationScore));
         const randomVariance = this.getRandomVariance();
         
         // Calculate premium service bonus
         const premiumBonus = this.calculatePremiumBonus(premiumServicePayment);
         
-        // Final calculation: (evaluation ± 0.1 random) × speed + premium bonus
-        finalDelta = Math.round(((clampedEvaluation + randomVariance) * speedMultiplier + premiumBonus) * 10) / 10;
+        // Final calculation: (evaluation ± 0.1 random) × speed × multiAgent + premium bonus
+        finalDelta = Math.round(((clampedEvaluation + randomVariance) * speedMultiplier * multiAgentModWithScore.modifier + premiumBonus) * 10) / 10;
+        
+        // Add warning message if hitting gate
+        if (!multiAgentModWithScore.canProgress && session.currentScore >= 70) {
+          finalReason += " [WARNING: Need 3+ agents to progress past 70 points]";
+        }
       }
       
       // Calculate new score (capped at 0-100, prize eligibility at 90+)
@@ -93,7 +105,7 @@ export class ScoringRepository {
             threadId,
             delta: finalDelta,
             currentScore: newScore,
-            reason,
+            reason: finalReason,
             category,
             subcategory: subcategory || null,
             agentId: agentId || null,
@@ -155,22 +167,18 @@ export class ScoringRepository {
       : 0;
     
     // Individual message speed (faster = higher multiplier)
-    // < 30 sec = 1.3x, 30-60 sec = 1.2x, 1-2 min = 1.1x, > 2 min = 1.0x
+    // < 30 sec = 1.1x, > 30 sec = 1.0x (reduced from 1.3x for game balance)
     let messageSpeedMult = 1.0;
     if (messageGap > 0) {
-      if (messageGap < 30000) messageSpeedMult = 1.3;
-      else if (messageGap < 60000) messageSpeedMult = 1.2;
-      else if (messageGap < 120000) messageSpeedMult = 1.1;
+      if (messageGap < 30000) messageSpeedMult = 1.1;
     }
     
     // Overall session speed (faster completion = higher multiplier)
-    // < 10 min = 1.3x, 10-20 min = 1.2x, 20-30 min = 1.1x, > 30 min = 1.0x
+    // < 10 min = 1.1x, > 10 min = 1.0x (reduced from 1.3x for game balance)
     let sessionSpeedMult = 1.0;
-    if (sessionAge < 600000) sessionSpeedMult = 1.3;
-    else if (sessionAge < 1200000) sessionSpeedMult = 1.2;
-    else if (sessionAge < 1800000) sessionSpeedMult = 1.1;
+    if (sessionAge < 600000) sessionSpeedMult = 1.1;
     
-    // Combine both (multiplicative) - Max 1.69x, Min 1.0x
+    // Combine both (multiplicative) - Max 1.21x (~1.2x), Min 1.0x (reduced from 1.69x)
     return messageSpeedMult * sessionSpeedMult;
   }
   
@@ -185,20 +193,64 @@ export class ScoringRepository {
   
   /**
    * Calculate premium service bonus points based on payment amount
-   * Linear interpolation from 2 points (min) to 10 points (max)
+   * Linear interpolation from 1 point (min) to 5 points (max)
+   * Reduced from 2-10 for better game balance
    */
   private calculatePremiumBonus(paymentUsdc: number): number {
     // Map from premium_services.json prices
-    const MIN_PAYMENT = 0.0005;  // insider_info = 2 pts
-    const MAX_PAYMENT = 0.01;     // pardon_recommendation = 10 pts
+    const MIN_PAYMENT = 0.0005;  // insider_info = 1 pt (was 2)
+    const MAX_PAYMENT = 0.01;     // pardon_recommendation = 5 pts (was 10)
     
     if (paymentUsdc <= 0) return 0;
-    if (paymentUsdc <= MIN_PAYMENT) return 2;
-    if (paymentUsdc >= MAX_PAYMENT) return 10;
+    if (paymentUsdc <= MIN_PAYMENT) return 1;  // was 2
+    if (paymentUsdc >= MAX_PAYMENT) return 5;  // was 10
     
-    // Linear interpolation between 2 and 10 points
+    // Linear interpolation between 1 and 5 points (was 2-10)
     const ratio = (paymentUsdc - MIN_PAYMENT) / (MAX_PAYMENT - MIN_PAYMENT);
-    return Math.round(2 + (ratio * 8)); // 2-10 point range
+    return Math.round(1 + (ratio * 4)); // 1-5 point range (was 2-10)
+  }
+  
+  /**
+   * Calculate multi-agent interaction bonus/penalty
+   * Encourages players to interact with multiple agents
+   * Hard gate: Can't reach 70+ with fewer than 3 agents
+   */
+  private async calculateMultiAgentModifier(
+    sessionId: string, 
+    agentId: string | undefined,
+    currentScore: number,
+    tx: any
+  ): Promise<{ modifier: number; canProgress: boolean }> {
+    if (!agentId) return { modifier: 1.0, canProgress: true };
+    
+    // Get unique agents interacted with in this session
+    const uniqueAgents = await tx.score.groupBy({
+      by: ['agentId'],
+      where: { sessionId, agentId: { not: null } },
+      _count: { agentId: true }
+    });
+    
+    const agentCount = uniqueAgents.length;
+    const currentAgentData = uniqueAgents.find(a => a.agentId === agentId);
+    const currentAgentMessages = currentAgentData?._count.agentId || 0;
+    
+    // Hard gate: Can't reach 70+ with fewer than 3 agents
+    if (currentScore >= 70 && agentCount < 3) {
+      return { modifier: 0.5, canProgress: false }; // 50% penalty
+    }
+    
+    // Diminishing returns after 5 messages to same agent
+    if (currentAgentMessages >= 5) {
+      const penalty = Math.min(0.5, (currentAgentMessages - 4) * 0.1);
+      return { modifier: 1.0 - penalty, canProgress: true }; // Up to 50% reduction
+    }
+    
+    // Bonus for agent diversity (3+ agents)
+    if (agentCount >= 3) {
+      return { modifier: 1.15, canProgress: true }; // 15% bonus
+    }
+    
+    return { modifier: 1.0, canProgress: true };
   }
   
   /**

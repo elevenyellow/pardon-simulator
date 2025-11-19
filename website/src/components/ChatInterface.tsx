@@ -11,6 +11,8 @@ import {
   loadCachedConversation, 
   clearWalletCache 
 } from'@/lib/conversationCache';
+import ReactMarkdown from'react-markdown';
+import remarkGfm from'remark-gfm';
 
 interface Message {
   id: string;
@@ -67,8 +69,26 @@ const MessageItem = memo(({
               💬 {formatAgentName(message.senderId)} → {mentionedAgent ? formatAgentName(mentionedAgent) :'Agent'}
             </span>
           </div>
-          <div className="text-gray-300 font-pixel text-[15px] pl-2 whitespace-pre-wrap break-words leading-relaxed">
-            {stripDebugMarkers(message.content)}
+          <div className="text-gray-300 font-pixel text-[15px] pl-2 break-words leading-relaxed markdown-content">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                strong: ({children}) => <span className="font-bold text-yellow-300">{children}</span>,
+                em: ({children}) => <span className="italic opacity-90">{children}</span>,
+                h1: ({children}) => <h1 className="text-[17px] font-bold my-2 text-yellow-300">{children}</h1>,
+                h2: ({children}) => <h2 className="text-[16px] font-bold my-1 text-yellow-300">{children}</h2>,
+                h3: ({children}) => <h3 className="text-[15px] font-bold my-1">{children}</h3>,
+                ol: ({children}) => <ol className="list-decimal ml-5 my-2 space-y-1">{children}</ol>,
+                ul: ({children}) => <ul className="list-disc ml-5 my-2 space-y-1">{children}</ul>,
+                li: ({children}) => <li className="ml-1">{children}</li>,
+                p: ({children}) => <p className="my-1">{children}</p>,
+                a: ({children, href}) => <a href={href} className="text-[#66b680] underline hover:text-[#7ac694]" target="_blank" rel="noopener noreferrer">{children}</a>,
+                code: ({children}) => <code className="bg-black/40 px-1 py-0.5 rounded text-[#7ac694]">{children}</code>,
+                pre: ({children}) => <pre className="bg-black/40 p-2 rounded my-2 overflow-x-auto">{children}</pre>,
+              }}
+            >
+              {stripDebugMarkers(message.content)}
+            </ReactMarkdown>
           </div>
           <div className="font-pixel text-[12px] text-gray-500 mt-1 pl-2 opacity-50">
             {message.timestamp.toLocaleTimeString()}
@@ -91,8 +111,26 @@ const MessageItem = memo(({
             ?'bg-gray-800/80 text-white border-white/20'            :'bg-[#66b680]/80 text-white border-[#66b680]'        }`}
       >
         <div className="font-pixel text-[12px] sm:text-[14px] mb-1 opacity-70">{message.sender}</div>
-        <div className="font-pixel text-[13px] sm:text-[15px] whitespace-pre-wrap break-words leading-relaxed">
-          {cleanContent}
+        <div className="font-pixel text-[13px] sm:text-[15px] break-words leading-relaxed markdown-content">
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              strong: ({children}) => <span className="font-bold text-yellow-300">{children}</span>,
+              em: ({children}) => <span className="italic opacity-90">{children}</span>,
+              h1: ({children}) => <h1 className="text-[17px] font-bold my-2 text-yellow-300">{children}</h1>,
+              h2: ({children}) => <h2 className="text-[16px] font-bold my-1 text-yellow-300">{children}</h2>,
+              h3: ({children}) => <h3 className="text-[15px] font-bold my-1">{children}</h3>,
+              ol: ({children}) => <ol className="list-decimal ml-5 my-2 space-y-1">{children}</ol>,
+              ul: ({children}) => <ul className="list-disc ml-5 my-2 space-y-1">{children}</ul>,
+              li: ({children}) => <li className="ml-1">{children}</li>,
+              p: ({children}) => <p className="my-1">{children}</p>,
+              a: ({children, href}) => <a href={href} className="text-[#66b680] underline hover:text-[#7ac694]" target="_blank" rel="noopener noreferrer">{children}</a>,
+              code: ({children}) => <code className="bg-black/40 px-1 py-0.5 rounded text-[#7ac694]">{children}</code>,
+              pre: ({children}) => <pre className="bg-black/40 p-2 rounded my-2 overflow-x-auto">{children}</pre>,
+            }}
+          >
+            {cleanContent}
+          </ReactMarkdown>
         </div>
         <div className="font-pixel text-[10px] sm:text-[12px] opacity-50 mt-1">
           {message.timestamp.toLocaleTimeString()}
@@ -403,6 +441,7 @@ export default function ChatInterface({
       eventSource.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          console.log('[SSE Client] Received event:', data.type, data.messages?.length || 0, 'messages');
           
           if (data.type === 'messages' && data.messages) {
             // Track pending payment requests from agent messages

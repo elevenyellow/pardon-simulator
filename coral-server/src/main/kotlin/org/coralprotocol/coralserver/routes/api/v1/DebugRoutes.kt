@@ -145,6 +145,8 @@ fun Routing.debugApiRoutes(localSessionManager: LocalSessionManager) {
 
         try {
             val request = call.receive<SendMessageInput>()
+            logger.info { "[Debug SendMessage] Received message: threadId=${request.threadId.take(8)}..., senderId=${debugRequest.debugAgentId}, content=${request.content.take(50)}..., mentions=${request.mentions}" }
+            
             val message = session.sendMessage(
                 threadId = request.threadId,
                 senderId = debugRequest.debugAgentId,
@@ -152,6 +154,7 @@ fun Routing.debugApiRoutes(localSessionManager: LocalSessionManager) {
                 mentions = request.mentions
             )
 
+            logger.info { "[Debug SendMessage] Message added to thread ${request.threadId.take(8)}..., messageId=${message.id}" }
             call.respond(message.resolve())
         } catch (e: Exception) {
             logger.error(e) { "Error while sending message" }

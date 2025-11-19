@@ -64,7 +64,7 @@ export async function getThreadFromDB(coralThreadId: string): Promise<ThreadData
 async function checkCoralSessionExists(coralSessionId: string): Promise<boolean> {
   try {
     const response = await fetch(
-      `${CORAL_SERVER_URL}/api/v1/debug/thread/app/debug/${coralSessionId}/sbf`,
+      `${CORAL_SERVER_URL}/api/v1/debug/thread/app/priv/${coralSessionId}/sbf`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -136,7 +136,7 @@ async function restoreThreadInternal(
     
     // Create thread via Coral Server debug API
     const response = await fetch(
-      `${CORAL_SERVER_URL}/api/v1/debug/thread/app/debug/${coralSessionId}/sbf`,
+      `${CORAL_SERVER_URL}/api/v1/debug/thread/app/priv/${coralSessionId}/sbf`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

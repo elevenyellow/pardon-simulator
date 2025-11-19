@@ -485,12 +485,11 @@ async def main():
                         clean_content = re.sub(r'\[USER_WALLET:[1-9A-HJ-NP-Za-km-z]{32,44}]\s*', '', message_content)
                         mentions_data["messages"][0]["content"] = clean_content
                         
-                        # [OK] REPLACE senderId with actual wallet so LLM uses it for scoring
-                        # The LLM will see the wallet in senderId and naturally use it for award_points()
-                        # This doesn't affect Coral routing - we still use mentions=["sbf"] in responses
-                        mentions_data["messages"][0]["senderId"] = user_wallet
+                        # KEEP senderId as "sbf" for proper routing
+                        # Pass the wallet address separately in the prompt for scoring
+                        # This ensures coral_send_message uses mentions=["sbf"] correctly
                         
-                        # Update mentions_result with cleaned content and real wallet
+                        # Update mentions_result with cleaned content
                         mentions_result_clean = json.dumps(mentions_data)
                         
                         # Build scoring mandate from loaded config
@@ -515,7 +514,11 @@ async def main():
                             agent_id="donald-trump"
                         )
                         
-                        full_input = f"{scoring_mandate}Process these mentions and respond appropriately: {mentions_result_clean}"
+                        # CRITICAL: Include the user's wallet address in the prompt for scoring
+                        # The LLM needs to use this wallet address in award_points(), NOT the senderId
+                        user_wallet_instruction = f"\n\n🎯 CRITICAL SCORING INSTRUCTION:\nThe user's ACTUAL wallet address is: {user_wallet}\nYou MUST use '{user_wallet}' as the user_wallet parameter in award_points().\nFor coral_send_message, use mentions=['sbf'] to reply to the user (NOT the wallet address).\n\n"
+                        
+                        full_input = f"{scoring_mandate}{user_wallet_instruction}Process these mentions and respond appropriately: {mentions_result_clean}"
                     else:
                         # Agent-to-agent communication - no scoring needed
                         print(f"[OK] Extracted sender (agent): {sender_id}")
@@ -535,6 +538,14 @@ async def main():
                         timeout=120.0  # 120 second timeout (increased from 45s for payment verification)
                     )
                     print(f"[OK] Response sent: {response}")
+                    print(f"[DEBUG] Response output: {response.get('output', 'NO OUTPUT')}")
+                    print(f"[DEBUG] Response intermediate_steps count: {len(response.get('intermediate_steps', []))}")
+                    
+                    # Log what tools were actually called
+                    intermediate_steps = response.get('intermediate_steps', [])
+                    for idx, (action, result) in enumerate(intermediate_steps):
+                        tool_name = action.tool if hasattr(action, 'tool') else 'unknown'
+                        print(f"[DEBUG]   Step {idx+1}: Called tool '{tool_name}', result preview: {str(result)[:100]}")
                     
                 except asyncio.TimeoutError:
                     print("[ERROR] Agent execution timed out after 120 seconds!")

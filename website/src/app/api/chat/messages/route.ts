@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
 
     // Get messages from Coral Server
     let response = await fetch(
-`${CORAL_SERVER_URL}/api/v1/debug/thread/app/debug/${sessionId}/${threadId}/messages`    );
+`${CORAL_SERVER_URL}/api/v1/debug/thread/app/priv/${sessionId}/${threadId}/messages`    );
 
     if (!response.ok) {
       if (response.status === 404) {
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
             
             // Retry the request after restoration
             response = await fetch(
-`${CORAL_SERVER_URL}/api/v1/debug/thread/app/debug/${sessionId}/${threadId}/messages`            );
+`${CORAL_SERVER_URL}/api/v1/debug/thread/app/priv/${sessionId}/${threadId}/messages`            );
             
             if (!response.ok) {
               console.log('[Messages API] Retry failed, returning empty messages');

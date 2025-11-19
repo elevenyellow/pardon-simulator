@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
 
     // Create thread via Coral Server debug API
     const response = await fetch(
-`${CORAL_SERVER_URL}/api/v1/debug/thread/app/debug/${sessionId}/sbf`,
+`${CORAL_SERVER_URL}/api/v1/debug/thread/app/priv/${sessionId}/sbf`,
       {
         method:'POST',
         headers: {'Content-Type':'application/json'},

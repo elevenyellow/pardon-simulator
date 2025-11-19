@@ -23,7 +23,7 @@ echo "📥 Fetching configs from S3 (${BUCKET_NAME})..."
 FILES=("operational-private.txt" "personality-public.txt" "scoring-config.txt" "tool-descriptions.txt")
 
 for file in "${FILES[@]}"; do
-  s3_path="s3://${BUCKET_NAME}/agents/${AGENT_NAME}/${file}"
+  s3_path="s3://${BUCKET_NAME}/current/agents/${AGENT_NAME}/${file}"
   
   echo -n "  Fetching ${file}... "
   
@@ -36,7 +36,7 @@ done
 
 # Fetch shared premium services config
 echo -n "  Fetching premium_services.json... "
-if aws s3 cp "s3://${BUCKET_NAME}/premium_services.json" "./premium_services.json" --region ${REGION} --quiet 2>/dev/null; then
+if aws s3 cp "s3://${BUCKET_NAME}/current/premium_services.json" "./premium_services.json" --region ${REGION} --quiet 2>/dev/null; then
   echo "✓"
 else
   echo "⚠ not found, skipping"
@@ -48,7 +48,7 @@ mkdir -p /app/shared
 SHARED_FILES=("operational-template.txt" "personality-template.txt" "scoring-mandate.txt" "agent-comms-note.txt")
 
 for file in "${SHARED_FILES[@]}"; do
-  s3_path="s3://${BUCKET_NAME}/shared/${file}"
+  s3_path="s3://${BUCKET_NAME}/current/shared/${file}"
   
   echo -n "  Fetching ${file}... "
   
