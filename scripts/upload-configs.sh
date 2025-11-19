@@ -105,7 +105,7 @@ echo ""
 
 # Update changelog file for git-based deployment triggering
 echo "📝 Updating agents changelog..."
-CHANGELOG_FILE="${PROJECT_ROOT}/AGENTS_CHANGELOG.md"
+CHANGELOG_FILE="${PROJECT_ROOT}/agents/CHANGELOG.md"
 if [ -f "$CHANGELOG_FILE" ]; then
   # Append timestamp entry to changelog
   echo "" >> "$CHANGELOG_FILE"
@@ -220,10 +220,10 @@ echo "  • Timestamp: ${TIMESTAMP}"
 echo "  • Local backup: ${BACKUP_DIR}"
 echo "  • S3 current: s3://${BUCKET_NAME}/current/"
 echo "  • S3 snapshot: s3://${BUCKET_NAME}/versions/${TIMESTAMP}/"
-echo "  • Changelog: AGENTS_CHANGELOG.md updated"
+echo "  • Changelog: agents/CHANGELOG.md updated"
 echo ""
 echo "Next steps:"
-echo "  1. Commit changelog: git add AGENTS_CHANGELOG.md && git commit -m 'Update agent configs ${TIMESTAMP}'"
+echo "  1. Commit changelog: git add agents/CHANGELOG.md && git commit -m 'Update agent configs ${TIMESTAMP}'"
 echo "  2. Deploy to ECS: git push origin main (triggers GitHub Actions)"
 echo "  3. Or test locally: docker-compose restart"
 echo ""
