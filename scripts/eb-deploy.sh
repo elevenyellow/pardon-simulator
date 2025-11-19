@@ -42,3 +42,4 @@ echo "  eb logs            - View application logs"
 echo "  eb ssh             - SSH into an instance"
 echo "  eb open            - Open in browser"
 
+

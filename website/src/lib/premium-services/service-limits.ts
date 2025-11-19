@@ -5,8 +5,6 @@
  * In production, this is fetched from S3 at runtime.
  */
 
-import serviceLimitsData from './service-limits.json';
-
 export enum ServiceLimitType {
   ONE_TIME = 'one_time',        // Can only be purchased once per week
   COOLDOWN = 'cooldown',         // Can repeat after cooldown period
@@ -23,12 +21,25 @@ export interface ServiceLimit {
 }
 
 /**
+ * Load service limits with fallback
+ * Try to load from service-limits.json, fall back to empty object if not available
+ */
+let serviceLimitsData: Record<string, ServiceLimit> = {};
+
+try {
+  // Dynamic import that won't fail build if file is missing
+  serviceLimitsData = require('./service-limits.json');
+} catch (error) {
+  console.warn('service-limits.json not found, using defaults. All services will be repeatable.');
+}
+
+/**
  * Service Limitation Configuration
  * Loaded from service-limits.json (kept private, uploaded to S3)
  * 
  * Services not listed default to REPEATABLE type.
  */
-export const SERVICE_LIMITS: Record<string, ServiceLimit> = serviceLimitsData as Record<string, ServiceLimit>;
+export const SERVICE_LIMITS: Record<string, ServiceLimit> = serviceLimitsData;
 
 /**
  * Get service limit configuration for a given service type

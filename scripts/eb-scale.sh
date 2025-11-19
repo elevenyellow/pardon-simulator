@@ -40,3 +40,4 @@ echo "  - Max: 3 instances"
 echo "  - Scale up when CPU > 75%"
 echo "  - Scale down when CPU < 25%"
 
+

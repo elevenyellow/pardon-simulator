@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/fetch-configs.js",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -40,6 +41,7 @@
     "x402-next": "latest"
   },
   "devDependencies": {
+    "@aws-sdk/client-s3": "^3.709.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@types/jest": "^29.5.14",
