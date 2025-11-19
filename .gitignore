@@ -200,6 +200,9 @@ scripts/ecs-task-definition.json
 # Premium services pricing configuration
 agents/premium_services.json
 
+# Premium services usage limitations (contain game rules - prevent cheating)
+website/src/lib/premium-services/service-limits.json
+
 # Agent operational and personality files (contain game rules - prevent cheating)
 # Keep the .example versions for templates
 agents/*/operational-private.txt

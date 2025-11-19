@@ -79,7 +79,7 @@ echo ""
 
 # Copy root configuration files
 echo "📦 Backing up root configurations"
-ROOT_FILES=("agents/premium_services.json" "agents-session-configuration.json")
+ROOT_FILES=("agents/premium_services.json" "agents-session-configuration.json" "website/src/lib/premium-services/service-limits.json")
 
 for filepath in "${ROOT_FILES[@]}"; do
   total_files=$((total_files + 1))

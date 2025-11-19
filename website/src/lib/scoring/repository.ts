@@ -1,4 +1,6 @@
 import { prisma } from'@/lib/prisma';
+import { serviceUsageRepository } from'@/lib/premium-services/usage-repository';
+import { getServiceLimit, ServiceLimitType } from'@/lib/premium-services/service-limits';
 
 export type ScoreCategory ='payment'|'negotiation'|'milestone'|'penalty';
 
@@ -20,6 +22,7 @@ export interface AddScoreParams {
   messageId?: string;
   evaluationScore?: number;
   premiumServicePayment?: number;
+  premiumServiceType?: string;  // NEW: Track which service was purchased
 }
 
 export interface ScoreResult {
@@ -44,7 +47,8 @@ export class ScoringRepository {
   async addScore(params: AddScoreParams): Promise<ScoreResult> {
     const { 
       userId, sessionId, threadId, delta, reason, category, subcategory, 
-      agentId, messageId, evaluationScore = 2.0, premiumServicePayment = 0 
+      agentId, messageId, evaluationScore = 2.0, premiumServicePayment = 0,
+      premiumServiceType
     } = params;
     
     // Move everything inside transaction to prevent race conditions
@@ -53,7 +57,7 @@ export class ScoringRepository {
       const [session, speedMultiplier, multiAgentMod] = await Promise.all([
         tx.session.findUnique({
           where: { id: sessionId },
-          select: { currentScore: true, startTime: true },
+          select: { currentScore: true, startTime: true, weekId: true },
         }),
         delta >= 0 ? this.calculateSpeedMultiplier(sessionId, userId, tx) : Promise.resolve(1.0),
         delta >= 0 ? this.calculateMultiAgentModifier(sessionId, agentId, 0, tx) : Promise.resolve({ modifier: 1.0, canProgress: true })
@@ -71,6 +75,7 @@ export class ScoringRepository {
       // Calculate final delta with new system: (evaluation ± random) × speed × multiAgent + premium
       let finalDelta: number;
       let finalReason = reason;
+      let premiumBonusApplied = 0;
       
       if (delta < 0) {
         // Penalties: apply random variance but no speed multiplier
@@ -81,8 +86,18 @@ export class ScoringRepository {
         const clampedEvaluation = Math.max(1.0, Math.min(2.0, evaluationScore));
         const randomVariance = this.getRandomVariance();
         
-        // Calculate premium service bonus
-        const premiumBonus = this.calculatePremiumBonus(premiumServicePayment);
+        // Calculate premium service bonus with diminishing returns
+        let premiumBonus = 0;
+        if (premiumServicePayment > 0 && premiumServiceType && agentId) {
+          premiumBonus = await this.calculatePremiumBonusWithDiminishing(
+            premiumServicePayment,
+            premiumServiceType,
+            userId,
+            session.weekId,
+            agentId
+          );
+          premiumBonusApplied = premiumBonus;
+        }
         
         // Final calculation: (evaluation ± 0.1 random) × speed × multiAgent + premium bonus
         finalDelta = Math.round(((clampedEvaluation + randomVariance) * speedMultiplier * multiAgentModWithScore.modifier + premiumBonus) * 10) / 10;
@@ -118,8 +133,26 @@ export class ScoringRepository {
         })
       ]);
       
-      return { scoreRecord, newScore };
+      return { scoreRecord, newScore, premiumBonusApplied, weekId: session.weekId };
     });
+    
+    // Record service usage AFTER transaction (outside to avoid deadlocks)
+    if (premiumServicePayment > 0 && premiumServiceType && agentId && result.premiumBonusApplied > 0) {
+      try {
+        await serviceUsageRepository.recordServiceUsage(
+          userId,
+          sessionId,
+          result.weekId,
+          premiumServiceType,
+          agentId,
+          result.premiumBonusApplied
+        );
+        console.log(`[Service Usage] Recorded ${premiumServiceType} usage for user ${userId}`);
+      } catch (error) {
+        console.error('[Service Usage] Failed to record usage:', error);
+        // Don't fail the entire scoring operation if usage recording fails
+      }
+    }
     
     return {
       newScore: result.newScore,
@@ -208,6 +241,45 @@ export class ScoringRepository {
     // Linear interpolation between 1 and 5 points (was 2-10)
     const ratio = (paymentUsdc - MIN_PAYMENT) / (MAX_PAYMENT - MIN_PAYMENT);
     return Math.round(1 + (ratio * 4)); // 1-5 point range (was 2-10)
+  }
+  
+  /**
+   * Calculate premium bonus with diminishing returns for applicable services
+   * Checks service usage and applies multiplier if necessary
+   */
+  private async calculatePremiumBonusWithDiminishing(
+    paymentUsdc: number,
+    serviceType: string,
+    userId: string,
+    weekId: string,
+    agentId: string
+  ): Promise<number> {
+    // Calculate base bonus
+    const baseBonus = this.calculatePremiumBonus(paymentUsdc);
+    
+    // Check if this service has diminishing returns
+    const limit = getServiceLimit(serviceType);
+    if (limit.type !== ServiceLimitType.DIMINISHING) {
+      return baseBonus; // No diminishing returns for this service
+    }
+    
+    // Get current usage count
+    const usageCount = await serviceUsageRepository.getUsageCount(
+      userId,
+      weekId,
+      serviceType,
+      agentId
+    );
+    
+    // Apply diminishing returns multiplier
+    const adjustedBonus = serviceUsageRepository.calculateDiminishingBonus(
+      baseBonus,
+      usageCount + 1  // +1 because this is the next use
+    );
+    
+    console.log(`[Diminishing Returns] ${serviceType}: base=${baseBonus}, adjusted=${adjustedBonus} (usage=${usageCount})`);
+    
+    return adjustedBonus;
   }
   
   /**

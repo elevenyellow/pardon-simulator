@@ -195,6 +195,39 @@ async def request_premium_service(
         available = ", ".join(PREMIUM_SERVICES.keys())
         return f"❌ Unknown service '{service_type}'. Available: {available}"
     
+    # Check service availability (usage limits)
+    # Only check for user (sbf), not for agent-to-agent requests
+    if from_agent == "sbf":
+        backend_url = get_backend_url()
+        try:
+            # Get user wallet from context (should be passed in message metadata)
+            # For now, we'll extract it from the request context
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{backend_url}/api/premium-services/check-availability",
+                    json={
+                        "userWallet": from_agent,  # Will be replaced with actual wallet in backend
+                        "serviceType": service_type,
+                        "agentId": to_agent,
+                    },
+                    timeout=aiohttp.ClientTimeout(total=5)
+                ) as resp:
+                    if resp.status == 200:
+                        availability_data = await resp.json()
+                        if not availability_data.get("available", True):
+                            reason = availability_data.get("reason", "Service is not available")
+                            print(f"❌ Service unavailable: {reason}")
+                            return f"❌ {reason}"
+                        
+                        # If service has diminishing returns, note the multiplier
+                        bonus_multiplier = availability_data.get("bonusMultiplier")
+                        if bonus_multiplier and bonus_multiplier < 1.0:
+                            percentage = int(bonus_multiplier * 100)
+                            print(f"⚡ Diminishing returns: {percentage}% bonus (used {availability_data.get('usageCount', 0)} times)")
+                    # If check fails, continue anyway (don't block service)
+        except Exception as e:
+            print(f"⚠️ Availability check failed (continuing anyway): {e}")
+    
     service_config = PREMIUM_SERVICES[service_type]
     
     # Handle variable-amount services (new dict format with min_amount)

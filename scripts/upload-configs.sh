@@ -177,6 +177,29 @@ if [ -f "agents/premium_services.json" ]; then
 else
   echo "  ⚠ agents/premium_services.json not found, skipping"
 fi
+
+if [ -f "website/src/lib/premium-services/service-limits.json" ]; then
+  echo -n "  Uploading service-limits.json... "
+  if output=$(aws s3 cp "website/src/lib/premium-services/service-limits.json" \
+    "s3://${BUCKET_NAME}/current/service-limits.json" \
+    --region "${REGION}" \
+    --sse AES256 2>&1); then
+    
+    # Also upload to versions/TIMESTAMP/
+    aws s3 cp "website/src/lib/premium-services/service-limits.json" \
+      "s3://${BUCKET_NAME}/versions/${TIMESTAMP}/service-limits.json" \
+      --region "${REGION}" \
+      --sse AES256 &>/dev/null
+    
+    echo "✓"
+  else
+    echo "❌"
+    echo "  Error: ${output}"
+    exit 1
+  fi
+else
+  echo "  ⚠ website/src/lib/premium-services/service-limits.json not found, skipping"
+fi
 echo ""
 
 # Upload shared templates (required by all agents at startup)

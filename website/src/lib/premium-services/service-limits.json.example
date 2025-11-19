@@ -1,0 +1,28 @@
+{
+  "service_name_1": {
+    "type": "one_time",
+    "description": "Description of this one-time service"
+  },
+  "service_name_2": {
+    "type": "cooldown",
+    "cooldownMessages": 5,
+    "cooldownPoints": 10,
+    "description": "Description of this cooldown service"
+  },
+  "service_name_3": {
+    "type": "cooldown",
+    "cooldownMessages": 10,
+    "cooldownPoints": 20,
+    "maxUses": 3,
+    "description": "Description with max uses per week"
+  },
+  "service_name_4": {
+    "type": "diminishing",
+    "description": "Description of this diminishing returns service"
+  },
+  "service_name_5": {
+    "type": "repeatable",
+    "description": "Description of this fully repeatable service"
+  }
+}
+

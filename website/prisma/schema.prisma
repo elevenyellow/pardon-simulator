@@ -139,3 +139,27 @@ model Payment {
   @@index([x402Registered])
 }
 
+model ServiceUsage {
+  id              String    @id @default(cuid())
+  userId          String
+  sessionId       String
+  weekId          String    // "2024-W45" format - for weekly resets
+  serviceType     String    // e.g., "pardon_recommendation", "golf_game_invite"
+  agentId         String    // Which agent provided the service
+  usageCount      Int       @default(1)
+  lastUsedAt      DateTime  @default(now())
+  firstUsedAt     DateTime  @default(now())
+  
+  // Track score impact for diminishing returns calculation
+  lastScoreBonus  Float?
+  
+  // Cooldown tracking
+  messagesSinceUse Int      @default(0)
+  pointsSinceUse   Float    @default(0)
+  
+  @@unique([userId, weekId, serviceType, agentId])
+  @@index([userId, sessionId])
+  @@index([weekId, serviceType])
+  @@index([userId, weekId])
+}
+
