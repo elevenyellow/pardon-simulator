@@ -410,16 +410,28 @@ Every time you upload configs to S3, a **complete snapshot** is automatically cr
 When you run `./scripts/upload-configs.sh`, the system automatically:
 
 1. **Creates local backup** in `/backups/YYYY-MM-DD_HH-MM-SS/`
-2. **Uploads to S3 current/** (active configs used by agents)
-3. **Uploads to S3 versions/YYYY-MM-DD_HH-MM-SS/** (snapshot archive)
+2. **Updates changelog** in `AGENTS_CHANGELOG.md` (for git-based deployment)
+3. **Uploads to S3 current/** (active configs used by agents)
+4. **Uploads to S3 versions/YYYY-MM-DD_HH-MM-SS/** (snapshot archive)
 
 **Example:**
 ```bash
 ./scripts/upload-configs.sh
 # Creates:
 # - backups/2024-11-19_14-30-00/  (local)
+# - Updates AGENTS_CHANGELOG.md    (git-tracked)
 # - s3://bucket/current/           (active)
 # - s3://bucket/versions/2024-11-19_14-30-00/  (snapshot)
+```
+
+**Deployment Integration:**
+The `AGENTS_CHANGELOG.md` file is tracked in git and automatically updated on each upload. This allows CI/CD to detect config changes and trigger production deployments:
+
+```bash
+# After upload-configs.sh completes:
+git add AGENTS_CHANGELOG.md
+git commit -m "Update agent configs 2024-11-19_14-30-00"
+git push origin main  # Triggers GitHub Actions deployment
 ```
 
 ### Backup Structure
