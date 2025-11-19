@@ -16,10 +16,15 @@ model User {
   username        String    // Auto-generated from wallet
   totalScore      Float     @default(0)
   createdAt       DateTime  @default(now())
+  lastActiveAt    DateTime? // Track last activity for admin panel
   
   sessions        Session[]
   scores          Score[]
   leaderboardEntries LeaderboardEntry[]
+  
+  @@index([walletAddress])
+  @@index([createdAt])
+  @@index([lastActiveAt])
 }
 
 model Session {
@@ -30,6 +35,8 @@ model Session {
   startTime       DateTime  @default(now())
   endTime         DateTime?
   weekId          String    // Format: "2024-W45"
+  messageCount    Int       @default(0)
+  lastActivityAt  DateTime  @default(now())
   
   user            User      @relation(fields: [userId], references: [id])
   threads         Thread[]
@@ -37,6 +44,8 @@ model Session {
   
   @@unique([userId, weekId])  // ✅ Prevent duplicate sessions for same user+week
   @@index([coralSessionId])
+  @@index([startTime])
+  @@index([lastActivityAt])
 }
 
 model Thread {
@@ -161,5 +170,54 @@ model ServiceUsage {
   @@index([userId, sessionId])
   @@index([weekId, serviceType])
   @@index([userId, weekId])
+}
+
+// Admin Panel Models
+
+model AdminUser {
+  id              String    @id @default(cuid())
+  username        String    @unique
+  passwordHash    String?   // null on first login - user sets password
+  setupToken      String?   // one-time token for initial password setup
+  createdAt       DateTime  @default(now())
+  lastLoginAt     DateTime?
+  isActive        Boolean   @default(true)
+  
+  // Account lockout fields
+  failedLoginAttempts Int      @default(0)
+  lockedUntil         DateTime?
+  
+  sessions        AdminSession[]
+  auditLogs       AdminAuditLog[]
+}
+
+model AdminSession {
+  id              String    @id @default(cuid())
+  adminUserId     String
+  token           String    @unique
+  expiresAt       DateTime
+  createdAt       DateTime  @default(now())
+  ipAddress       String?
+  userAgent       String?
+  
+  admin           AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  
+  @@index([token])
+  @@index([adminUserId])
+}
+
+model AdminAuditLog {
+  id              String    @id @default(cuid())
+  adminUserId     String
+  action          String    // "view_user", "search_messages", "export_data"
+  resource        String?   // userId, walletAddress, etc.
+  details         Json?     // Additional context
+  ipAddress       String?
+  timestamp       DateTime  @default(now())
+  
+  admin           AdminUser @relation(fields: [adminUserId], references: [id])
+  
+  @@index([adminUserId, timestamp])
+  @@index([action, timestamp])
 }
 

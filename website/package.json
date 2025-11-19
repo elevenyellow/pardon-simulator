@@ -14,7 +14,8 @@
     "db:reset": "node reset-database.js --force",
     "db:studio": "prisma studio",
     "db:check-scores": "node check-user-scores.js",
-    "db:merge-sessions": "node merge-duplicate-sessions.js"
+    "db:merge-sessions": "node merge-duplicate-sessions.js",
+    "admin:create": "ts-node --project tsconfig.node.json scripts/create-admin.ts"
   },
   "dependencies": {
     "@coinbase/cdp-sdk": "^1.38.5",
@@ -27,6 +28,8 @@
     "@solana/wallet-adapter-react-ui": "^0.9.35",
     "@solana/wallet-adapter-wallets": "^0.19.32",
     "@solana/web3.js": "^1.95.8",
+    "@types/bcryptjs": "^2.4.6",
+    "bcryptjs": "^3.0.3",
     "lucide-react": "^0.468.0",
     "next": "^15.0.0",
     "react": "^18.3.1",
@@ -52,6 +55,7 @@
     "prisma": "^6.19.0",
     "tailwindcss": "^3.4.1",
     "ts-jest": "^29.2.5",
+    "ts-node": "^10.9.2",
     "typescript": "^5"
   }
 }
