@@ -128,6 +128,7 @@ export default function ChatInterface({
   const previousWalletRef = useRef<string | null>(null); // Track wallet changes for cache clearing
   const previousMessageCountRef = useRef<number>(0); // Track message count to detect new messages
   const loadingMessageIdRef = useRef<string | null>(null); // Track loading message to remove when agent responds
+  const phoneDialRef = useRef<HTMLAudioElement | null>(null); // Phone sound for payment confirmation
   
   // Score tracking state
   const [currentScore, setCurrentScore] = useState(0);
@@ -323,6 +324,22 @@ export default function ChatInterface({
       isFetchingScoreRef.current = false;
     }
   };
+
+  // Initialize phone dial audio
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      phoneDialRef.current = new Audio('/assets/Phone Dial and Ring Sound.mp4');
+      phoneDialRef.current.volume = 0.6;
+    }
+
+    return () => {
+      // Cleanup audio on unmount
+      if (phoneDialRef.current) {
+        phoneDialRef.current.pause();
+        phoneDialRef.current = null;
+      }
+    };
+  }, []);
 
   // Initialize session
   useEffect(() => {
@@ -1128,7 +1145,7 @@ export default function ChatInterface({
         id: loadingMessageId,
         senderId: 'system',
         sender: 'System',
-        content: '⏳ Processing payment and waiting for response...',
+        content: '⏳ Processing payment...',
         timestamp: new Date(userMessageTimestamp.getTime() + 1), // 1ms after user message
         isAgent: true,
         mentions: [],
@@ -1173,6 +1190,21 @@ export default function ChatInterface({
       console.log('[Payment] Message sent to agent, waiting for response...');
 
       showToast('Payment successful!','success');
+
+      // Update loading message to "Waiting for response..." and play phone sound
+      setMessages(prev => prev.map(m => 
+        m.id === loadingMessageId 
+          ? { ...m, content: '⏳ Waiting for response...' }
+          : m
+      ));
+
+      // Play phone dial sound
+      if (phoneDialRef.current) {
+        phoneDialRef.current.currentTime = 0; // Reset to start
+        phoneDialRef.current.play().catch(err => {
+          console.warn('Could not play phone sound:', err);
+        });
+      }
 
       // Update messages with agent response if provided (otherwise SSE will handle it)
       if (retryResult.messages) {
