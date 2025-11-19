@@ -3,6 +3,7 @@ import type { Metadata } from'next';
 import { WalletProvider } from'@/components/WalletProvider';
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'),
   title:'Pardon Simulator',
   description:'You are SBF - Negotiate with the Trump family using crypto to secure your presidential pardon!',
   icons: {

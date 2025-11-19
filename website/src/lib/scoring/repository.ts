@@ -231,7 +231,7 @@ export class ScoringRepository {
     });
     
     const agentCount = uniqueAgents.length;
-    const currentAgentData = uniqueAgents.find(a => a.agentId === agentId);
+    const currentAgentData = uniqueAgents.find((a: { agentId: string | null; _count: { agentId: number } }) => a.agentId === agentId);
     const currentAgentMessages = currentAgentData?._count.agentId || 0;
     
     // Hard gate: Can't reach 70+ with fewer than 3 agents
