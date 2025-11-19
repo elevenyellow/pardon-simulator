@@ -99,7 +99,7 @@ async function verifyPayment(paymentPayload: string, amount: number, recipient: 
     const usdcMint ='EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'; // USDC mainnet
     
     // Call our INTERNAL backend API (which uses Coinbase CDP facilitator)
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ||'http://localhost:3000';
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ||'https://pardonsimulator.com';
     const response = await fetch(`${baseUrl}/api/x402/verify`, {
       method:'POST',
       headers: {

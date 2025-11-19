@@ -165,7 +165,7 @@ async function handlePOST(request: NextRequest) {
           payTo: to,
           maxAmountRequired: amountMicroUsdc, // Use actual amount from payment request
           asset:'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
-          resource:`${process.env.NEXT_PUBLIC_BASE_URL ||'https://pardon-simulator.com'}/api/chat/send`,
+          resource:`${process.env.NEXT_PUBLIC_BASE_URL ||'https://pardonsimulator.com'}/api/chat/send`,
           description:'Pardon Simulator Chat Message',
           mimeType:'application/json',
           outputSchema: {

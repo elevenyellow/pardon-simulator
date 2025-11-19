@@ -1090,8 +1090,10 @@ def create_contact_agent_tool(coral_send_message_tool, coral_add_participant_too
     return contact_agent
 
 
-# Get backend URL from environment
-BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:3000")
+# Backend URL will be read dynamically to ensure ECS environment variables are available
+def get_backend_url() -> str:
+    """Get backend URL from environment, reading it dynamically to ensure ECS env vars are loaded"""
+    return os.getenv("BACKEND_URL", "http://localhost:3000")
 
 
 @tool
@@ -1181,9 +1183,10 @@ async def award_points(
         if premium_service_amount > 0:
             payload["premiumServicePayment"] = premium_service_amount
         
+        backend_url = get_backend_url()  # Read dynamically
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                f"{BACKEND_URL}/api/scoring/update",
+                f"{backend_url}/api/scoring/update",
                 json=payload,
                 timeout=aiohttp.ClientTimeout(total=10)
             ) as resp:
