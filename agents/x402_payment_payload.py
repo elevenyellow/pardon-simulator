@@ -60,7 +60,7 @@ class X402PaymentPayload:
         
         Example:
             payload = X402PaymentPayload.create_payload(
-                payment_id="melania-trump-insider_info-1762850712",
+                payment_id="trump-melania-insider_info-1762850712",
                 from_address="CZ_wallet_address",
                 to_address="melania_wallet_address",
                 amount_sol=0.0005,

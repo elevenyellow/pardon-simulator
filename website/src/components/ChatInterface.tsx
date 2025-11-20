@@ -167,6 +167,7 @@ export default function ChatInterface({
   const previousMessageCountRef = useRef<number>(0); // Track message count to detect new messages
   const loadingMessageIdRef = useRef<string | null>(null); // Track loading message to remove when agent responds
   const phoneDialRef = useRef<HTMLAudioElement | null>(null); // Phone sound for payment confirmation
+  const lastUserMessageRef = useRef<string | null>(null); // Store the last user message for premium service payments
   
   // Score tracking state
   const [currentScore, setCurrentScore] = useState(0);
@@ -553,6 +554,7 @@ export default function ChatInterface({
             });
             
             // Trigger payment flow if we detected a payment request
+            // Now we can use finalMessages directly since it was calculated synchronously
             if (pendingPaymentRequest && publicKey && sessionId && threadId) {
               const { request, messageId }: { request: PaymentRequest; messageId: string } = pendingPaymentRequest;
               
@@ -567,11 +569,16 @@ export default function ChatInterface({
               
               console.log(`[SSE Premium Service] Payment request detected: ${amount} ${currency} for ${service}`);
               
+              // Use the stored user message from the ref
+              const originalMessageContent = lastUserMessageRef.current || `Premium service: ${service}`;
+              
+              console.log('[SSE] Using original message content from ref:', originalMessageContent);
+              
               // Trigger payment flow
               setLoading(true);
               handlePayment(
                 request,
-                `Premium service: ${service}`,
+                originalMessageContent,  // ✅ FIXED - Pass actual user message
                 sessionId,
                 threadId,
                 selectedAgent
@@ -967,12 +974,17 @@ export default function ChatInterface({
         
         console.log(`[Premium Service] Payment request detected: ${amount} ${currency} for ${service}`);
         
+        // Use the stored user message from the ref
+        const originalMessageContent = lastUserMessageRef.current || `Premium service: ${service}`;
+        
+        console.log('[Payment Flow] Using original message content from ref:', originalMessageContent);
+        
         // Trigger payment flow (toast will be shown in handlePayment)
         setLoading(true);
         try {
           await handlePayment(
             request,
-            `Premium service: ${service}`,
+            originalMessageContent,  // ✅ FIXED - Pass actual user message
             sessionId,
             threadId,
             selectedAgent
@@ -1026,6 +1038,9 @@ export default function ChatInterface({
 
     // Capture input value before clearing it
     const messageContent =`@${selectedAgent} ${input}`;
+    
+    // Store the message content for potential premium service payments
+    lastUserMessageRef.current = messageContent;
     
     // Clear input immediately but DON'T show message yet - wait to see if payment is required
     setInput('');
@@ -1229,6 +1244,12 @@ export default function ChatInterface({
       console.log('[Payment] Message sent to agent, waiting for response...');
 
       showToast('Payment successful!','success');
+      
+      // Only clear the stored user message if this was a premium service payment
+      // For regular message fees, keep it so premium service requests can use it
+      if (isPremiumService) {
+        lastUserMessageRef.current = null;
+      }
 
       // Update loading message to "Waiting for response..." and play phone sound
       setMessages(prev => prev.map(m => 
@@ -1287,6 +1308,13 @@ export default function ChatInterface({
 
     } catch (err: any) {
       console.error('Payment error:', err);
+      
+      // Only clear the stored user message on error if this was a premium service
+      // For regular message fees, keep it so retries can use it
+      const isPremiumService = paymentReq.service_type && paymentReq.service_type !== 'message_fee';
+      if (isPremiumService) {
+        lastUserMessageRef.current = null;
+      }
       
       // Remove loading message on error
       if (loadingMessageIdRef.current) {

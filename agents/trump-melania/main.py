@@ -194,7 +194,7 @@ async def lookup_agent_wallet(agent_name: str) -> str:
     Look up another agent's Solana wallet address by their name.
     Use this BEFORE sending crypto or paying for services.
     
-    Available agents: donald-trump, melania-trump, eric-trump, donjr-trump, barron-trump, sbf, cz
+    Available agents: trump-donald, trump-melania, trump-eric, trump-donjr, trump-barron, sbf, cz
     """
     if agent_name in AGENT_WALLETS:
         address = AGENT_WALLETS[agent_name]
@@ -397,7 +397,7 @@ async def main():
     while True:
         try:
             print("\n Waiting for mentions (blocking call)...")
-            mentions_result = await wait_tool.ainvoke({"timeoutMs": 600000})
+            mentions_result = await wait_tool.ainvoke({"timeoutMs": 120000})
             print(f"[MESSAGE] Got mentions: {mentions_result}")
             
             if mentions_result and "No new mentions" not in str(mentions_result):

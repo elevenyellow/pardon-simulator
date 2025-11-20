@@ -209,7 +209,10 @@ private suspend fun handleSseConnection(
     individualServer.connect(transport)
     individualServer.onClose {
         logger.info { "Agent $agentId disconnected via server." }
-        session.disconnectAgent(agentId);
+        session.disconnectAgent(agentId)
+        // Clean up the server instance from the map to prevent memory leaks
+        servers.remove(transportSessionId)
+        logger.info { "Cleaned up server instance for transport $transportSessionId" }
     }
     return true
 }

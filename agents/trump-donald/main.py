@@ -150,7 +150,7 @@ async def lookup_agent_wallet(agent_name: str) -> str:
     Look up another agent's Solana wallet address by their name.
     Use this BEFORE sending crypto to find their wallet address.
     
-    Available agents: donald-trump, melania-trump, eric-trump, donjr-trump, barron-trump, sbf, cz
+    Available agents: trump-donald, trump-melania, trump-eric, trump-donjr, trump-barron, sbf, cz
     """
     if agent_name in AGENT_WALLETS:
         address = AGENT_WALLETS[agent_name]
@@ -413,9 +413,9 @@ async def main():
         try:
             print("\n Waiting for mentions (blocking call)...")
             # Call coral_wait_for_mentions directly to block until we get a mention
-            # Use a very long timeout (10 minutes = 600000ms)
+            # Use a 2 minute timeout (120000ms) to reduce idle wait time
             try:
-                mentions_result = await wait_tool.ainvoke({"timeoutMs": 600000})
+                mentions_result = await wait_tool.ainvoke({"timeoutMs": 120000})
             except Exception as e:
                 # Handle connection errors gracefully (httpx.ReadTimeout, McpError, etc.)
                 error_msg = str(e)

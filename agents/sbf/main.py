@@ -261,7 +261,7 @@ async def lookup_agent_wallet(agent_name: str) -> str:
     Look up another agent's Solana wallet address by their name.
     Use this BEFORE sending crypto or paying for services.
     
-    Available agents: donald-trump, melania-trump, eric-trump, donjr-trump, barron-trump, sbf, cz
+    Available agents: trump-donald, trump-melania, trump-eric, trump-donjr, trump-barron, sbf, cz
     """
     if agent_name in AGENT_WALLETS:
         address = AGENT_WALLETS[agent_name]

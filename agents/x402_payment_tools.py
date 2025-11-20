@@ -28,11 +28,11 @@ from x402_solana_payload import (
 def load_agent_wallets() -> Dict[str, str]:
     """Load agent wallet addresses from environment variables"""
     wallets = {
-        "donald-trump": os.getenv("WALLET_DONALD_TRUMP", ""),
-        "melania-trump": os.getenv("WALLET_MELANIA_TRUMP", ""),
-        "eric-trump": os.getenv("WALLET_ERIC_TRUMP", ""),
-        "donjr-trump": os.getenv("WALLET_DONJR_TRUMP", ""),
-        "barron-trump": os.getenv("WALLET_BARRON_TRUMP", ""),
+        "trump-donald": os.getenv("WALLET_DONALD_TRUMP", ""),
+        "trump-melania": os.getenv("WALLET_MELANIA_TRUMP", ""),
+        "trump-eric": os.getenv("WALLET_ERIC_TRUMP", ""),
+        "trump-donjr": os.getenv("WALLET_DONJR_TRUMP", ""),
+        "trump-barron": os.getenv("WALLET_BARRON_TRUMP", ""),
         "cz": os.getenv("WALLET_CZ", ""),
     }
     
@@ -165,7 +165,7 @@ async def request_premium_service(
     
     Args:
         from_agent: Your agent name (usually "sbf" for user)
-        to_agent: Agent providing the service (e.g., "donald-trump", "cz")
+        to_agent: Agent providing the service (e.g., "trump-donald", "cz")
         service_type: Type of service - Fixed-price: insider_info, strategy_advice, 
                      connection_intro, private_deal, pardon_recommendation
                      Variable-amount: donation, bribe, campaign_contribution, gift
@@ -178,10 +178,10 @@ async def request_premium_service(
     
     Examples:
         # Fixed-price service:
-        request_premium_service("sbf", "donald-trump", "insider_info", "Tell me about CZ")
+        request_premium_service("sbf", "trump-donald", "insider_info", "Tell me about CZ")
         
         # Variable-amount service (donation):
-        request_premium_service("sbf", "donald-trump", "donation", "For your campaign", custom_amount=0.25)
+        request_premium_service("sbf", "trump-donald", "donation", "For your campaign", custom_amount=0.25)
         
         # Variable-amount service (bribe):
         request_premium_service("sbf", "cz", "bribe", "Help me get pardon", custom_amount=1.50)
@@ -1177,15 +1177,15 @@ def create_contact_agent_tool(coral_send_message_tool, coral_add_participant_too
     @tool
     async def contact_agent(agent_to_contact: str, message: str, current_thread_id: str) -> str:
         """
-        🎯 USE THIS TOOL to contact another agent (donald-trump, cz, melania-trump, etc.).
+        🎯 USE THIS TOOL to contact another agent (trump-donald, cz, trump-melania, etc.).
         This tool automatically adds the agent to the thread and handles mentions correctly!
 
         Parameters:
-        - agent_to_contact: Agent's name (e.g., "donald-trump", "cz", "melania-trump")
+        - agent_to_contact: Agent's name (e.g., "trump-donald", "cz", "trump-melania")
         - message: Your message content (include @agent-name in the message!)
         - current_thread_id: The thread ID from the current conversation
 
-        Example: contact_agent("donald-trump", "@donald-trump SBF is asking about pardon", "thread-id-123")
+        Example: contact_agent("trump-donald", "@trump-donald SBF is asking about pardon", "thread-id-123")
 
         DO NOT use coral_send_message directly! Use this tool instead!
         """
@@ -1307,7 +1307,7 @@ async def award_points(
         reason: Brief explanation of your evaluation
         category: "payment", "negotiation", "milestone", or "penalty"
         subcategory: Optional detail (e.g., "insult", "high_quality", "spam", "strategic_thinking")
-        agent_id: Optional agent ID who awarded/deducted points (e.g., "donald-trump")
+        agent_id: Optional agent ID who awarded/deducted points (e.g., "trump-donald")
         message_id: Optional message ID that triggered this score change
         premium_service_amount: USDC amount if user paid for premium service (auto-adds 2-10 bonus points)
     
@@ -1316,16 +1316,16 @@ async def award_points(
     
     Examples:
         # Excellent message:
-        award_points("6pF45ay...", 2.7, "Highly strategic, aligned with goals", "negotiation", "high_quality", "donald-trump")
+        award_points("6pF45ay...", 2.7, "Highly strategic, aligned with goals", "negotiation", "high_quality", "trump-donald")
         
         # Average message:
         award_points("6pF45ay...", 2.0, "Decent approach", "negotiation", "medium_quality", "cz")
         
         # Minimal effort:
-        award_points("6pF45ay...", 0.8, "Vague and unhelpful", "negotiation", "low_quality", "melania-trump")
+        award_points("6pF45ay...", 0.8, "Vague and unhelpful", "negotiation", "low_quality", "trump-melania")
         
         # Penalty for insult:
-        award_points("6pF45ay...", -2.5, "Insulted agent", "penalty", "insult", "donald-trump")
+        award_points("6pF45ay...", -2.5, "Insulted agent", "penalty", "insult", "trump-donald")
         
         # Premium service with payment bonus:
         award_points("6pF45ay...", 2.1, "Good message with premium service", "payment", None, "cz", premium_service_amount=0.005)
@@ -1584,7 +1584,7 @@ async def verify_payment_transaction(
         expected_from: Expected payer's wallet address
         expected_amount_usdc: Expected payment amount in USDC
         service_type: Type of service being paid for
-        to_agent: Agent ID receiving the payment (e.g., 'cz', 'donald-trump'). Pass os.getenv('CORAL_AGENT_ID') to identify yourself.
+        to_agent: Agent ID receiving the payment (e.g., 'cz', 'trump-donald'). Pass os.getenv('CORAL_AGENT_ID') to identify yourself.
         backend_url: Backend URL (defaults to BACKEND_URL env var or localhost:3000)
     
     Returns:

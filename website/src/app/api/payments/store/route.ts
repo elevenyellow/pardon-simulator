@@ -9,8 +9,18 @@ export async function POST(request: NextRequest) {
   try {
     const data = await request.json();
     
-    const payment = await prisma.payment.create({
-      data: {
+    // Use upsert to handle duplicate payment storage gracefully
+    // If payment with this signature already exists, just return it
+    const payment = await prisma.payment.upsert({
+      where: {
+        signature: data.signature
+      },
+      update: {
+        // If it exists, optionally update verification status if new data is more complete
+        verified: data.verified || undefined,
+        verifiedAt: data.verifiedAt ? new Date(data.verifiedAt * 1000) : undefined,
+      },
+      create: {
         fromWallet: data.fromWallet,
         toWallet: data.toWallet,
         toAgent: data.toAgent ||'unknown',

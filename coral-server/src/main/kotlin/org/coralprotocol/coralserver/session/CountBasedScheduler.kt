@@ -9,6 +9,7 @@ import kotlin.concurrent.atomics.incrementAndFetch
 
 class CountBasedScheduler() {
     private val agentCountNotifications = ConcurrentHashMap<Int, MutableList<CompletableDeferred<Boolean>>>()
+    private val markedAgents = ConcurrentHashMap.newKeySet<String>()  // Track which agents have been counted
     @OptIn(ExperimentalAtomicApi::class)
     private var registeredAgentsCount = AtomicInt(0)
 
@@ -18,12 +19,16 @@ class CountBasedScheduler() {
     @OptIn(ExperimentalAtomicApi::class)
     fun clear() {
         agentCountNotifications.clear()
+        markedAgents.clear()
         registeredAgentsCount.store(0)
     }
 
     @OptIn(ExperimentalAtomicApi::class)
     fun markAgentReady(agentId: String) {
-        registeredAgentsCount.incrementAndFetch()
+        // Only increment count if this agent hasn't been marked before
+        if (markedAgents.add(agentId)) {
+            registeredAgentsCount.incrementAndFetch()
+        }
 
         // Create a copy of the keys to avoid ConcurrentModificationException
         val targetCounts = agentCountNotifications.keys.toList()

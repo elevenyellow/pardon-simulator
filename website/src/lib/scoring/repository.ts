@@ -53,19 +53,21 @@ export class ScoringRepository {
     
     // Move everything inside transaction to prevent race conditions
     const result = await prisma.$transaction(async (tx) => {
-      // Parallel fetch: session data and multipliers calculation
-      const [session, speedMultiplier, multiAgentMod] = await Promise.all([
-        tx.session.findUnique({
-          where: { id: sessionId },
-          select: { currentScore: true, startTime: true, weekId: true },
-        }),
-        delta >= 0 ? this.calculateSpeedMultiplier(sessionId, userId, tx) : Promise.resolve(1.0),
-        delta >= 0 ? this.calculateMultiAgentModifier(sessionId, agentId, 0, tx) : Promise.resolve({ modifier: 1.0, canProgress: true })
-      ]);
+      // Fetch session data first (needed by other calculations)
+      const session = await tx.session.findUnique({
+        where: { id: sessionId },
+        select: { currentScore: true, startTime: true, weekId: true },
+      });
       
       if (!session) {
         throw new Error('Session not found');
       }
+      
+      // Parallel calculation of multipliers (now that we have session data)
+      const [speedMultiplier, multiAgentMod] = await Promise.all([
+        delta >= 0 ? this.calculateSpeedMultiplier(session.startTime, sessionId, userId, tx) : Promise.resolve(1.0),
+        delta >= 0 ? this.calculateMultiAgentModifier(sessionId, agentId, 0, tx) : Promise.resolve({ modifier: 1.0, canProgress: true })
+      ]);
       
       // Recalculate multiAgentMod with actual current score for gate check
       const multiAgentModWithScore = delta >= 0 
@@ -183,17 +185,11 @@ export class ScoringRepository {
    * Rewards faster play with higher multipliers
    */
   private async calculateSpeedMultiplier(
+    sessionStartTime: Date,
     sessionId: string,
     userId: string,
     tx: any
   ): Promise<number> {
-    // Get session start time
-    const session = await tx.session.findUnique({
-      where: { id: sessionId },
-      select: { startTime: true }
-    });
-    
-    if (!session) return 1.0;
     
     // Get user's last score timestamp
     const lastUserScore = await tx.score.findFirst({
@@ -202,7 +198,7 @@ export class ScoringRepository {
     });
     
     const now = Date.now();
-    const sessionAge = now - session.startTime.getTime();
+    const sessionAge = now - sessionStartTime.getTime();
     const messageGap = lastUserScore 
       ? now - lastUserScore.timestamp.getTime() 
       : 0;
