@@ -26,9 +26,11 @@ export default function AuditPage() {
   const [actionFilter, setActionFilter] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+  const [stats, setStats] = useState<any>(null);
 
   useEffect(() => {
     fetchLogs();
+    fetchStats();
   }, [page, actionFilter, fromDate, toDate]);
 
   const fetchLogs = async () => {
@@ -51,6 +53,39 @@ export default function AuditPage() {
       console.error('Failed to fetch audit logs:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchStats = async () => {
+    try {
+      const res = await fetch('/api/admin/audit/cleanup');
+      const data = await res.json();
+      setStats(data.stats);
+    } catch (error) {
+      console.error('Failed to fetch audit stats:', error);
+    }
+  };
+
+  const handleCleanup = async () => {
+    if (!confirm('Delete audit logs older than 90 days? This cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/admin/audit/cleanup?retentionDays=90', {
+        method: 'DELETE',
+        headers: { 'X-Admin-Action': 'admin-request' }
+      });
+      const data = await res.json();
+      
+      if (data.success) {
+        alert(`Successfully deleted ${data.deletedCount} old audit log(s)`);
+        fetchLogs();
+        fetchStats();
+      }
+    } catch (error) {
+      console.error('Cleanup failed:', error);
+      alert('Failed to cleanup logs');
     }
   };
 
@@ -90,37 +125,68 @@ export default function AuditPage() {
 
   return (
     <div>
-      <h1 className="text-3xl font-bold text-gray-900 mb-6">Audit Log</h1>
+      <h1 className="text-3xl font-bold text-gray-900 mb-6">Admin Audit Log</h1>
+
+      {/* Info Banner */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+        <div className="flex items-start gap-3">
+          <svg className="w-5 h-5 text-blue-600 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+          </svg>
+          <div>
+            <h3 className="text-sm font-semibold text-blue-900 mb-1">Critical Operations Only</h3>
+            <p className="text-sm text-blue-700">
+              This log tracks <strong>critical admin actions</strong> like data exports and password changes. 
+              Read-only operations (viewing pages, searches) are not logged to keep the database lean.
+            </p>
+          </div>
+        </div>
+      </div>
 
       <div className="bg-white rounded-lg shadow p-6 mb-6 space-y-4">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-gray-700">Action:</label>
-            <select
-              value={actionFilter}
-              onChange={(e) => {
-                setActionFilter(e.target.value);
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-700">Action:</label>
+              <select
+                value={actionFilter}
+                onChange={(e) => {
+                  setActionFilter(e.target.value);
+                  setPage(1);
+                }}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+              >
+                <option value="">All Actions</option>
+                <option value="export_payments">Export Payments</option>
+                <option value="export_users">Export Users</option>
+                <option value="change_password">Change Password</option>
+                <option value="create_admin">Create Admin</option>
+                <option value="delete_admin">Delete Admin</option>
+              </select>
+            </div>
+            <DateRangeFilter
+              label="Log Date"
+              onFilterChange={(from, to) => {
+                setFromDate(from);
+                setToDate(to);
                 setPage(1);
               }}
-              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
-            >
-              <option value="">All Actions</option>
-              <option value="view_user">View User</option>
-              <option value="list_users">List Users</option>
-              <option value="search_messages">Search Messages</option>
-              <option value="list_payments">List Payments</option>
-              <option value="export_data">Export Data</option>
-              <option value="view_audit_log">View Audit Log</option>
-            </select>
+            />
           </div>
-          <DateRangeFilter
-            label="Log Date"
-            onFilterChange={(from, to) => {
-              setFromDate(from);
-              setToDate(to);
-              setPage(1);
-            }}
-          />
+          
+          {stats && (
+            <div className="flex items-center gap-4">
+              <div className="text-sm text-gray-600">
+                <span className="font-medium">{stats.totalLogs}</span> total logs
+              </div>
+              <button
+                onClick={handleCleanup}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+              >
+                Cleanup Old Logs (90+ days)
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

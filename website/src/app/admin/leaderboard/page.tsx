@@ -21,6 +21,7 @@ export default function LeaderboardPage() {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [weekId, setWeekId] = useState(getCurrentWeekId());
+  const [stats, setStats] = useState({ totalPlayers: 0, prizeEligible: 0 });
 
   useEffect(() => {
     fetchLeaderboard();
@@ -29,9 +30,13 @@ export default function LeaderboardPage() {
   const fetchLeaderboard = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/leaderboard/current?weekId=${weekId}`);
+      const res = await fetch(`/api/admin/leaderboard?weekId=${weekId}`);
       const data = await res.json();
       setEntries(data.leaderboard || []);
+      setStats({
+        totalPlayers: data.totalPlayers || 0,
+        prizeEligible: data.prizeEligible || 0
+      });
     } catch (error) {
       console.error('Failed to fetch leaderboard:', error);
     } finally {
@@ -63,7 +68,18 @@ export default function LeaderboardPage() {
       key: 'finalScore',
       label: 'Score',
       render: (entry) => (
-        <div className="text-lg font-bold">{entry.finalScore.toFixed(2)}</div>
+        <div className="flex items-center gap-2">
+          <div className="text-lg font-bold">{entry.finalScore.toFixed(2)}</div>
+          {entry.finalScore >= 90 ? (
+            <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+              Prize Eligible
+            </span>
+          ) : (
+            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+              Below Threshold
+            </span>
+          )}
+        </div>
       )
     },
     {
@@ -87,17 +103,31 @@ export default function LeaderboardPage() {
         <h1 className="text-3xl font-bold text-gray-900">Leaderboard</h1>
       </div>
 
-      <div className="bg-white rounded-lg shadow p-6 mb-6">
-        <label className="block text-sm font-medium text-gray-700 mb-2">Week</label>
-        <input
-          type="text"
-          value={weekId}
-          onChange={(e) => setWeekId(e.target.value)}
-          placeholder="2024-W45"
-          className="px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
-        />
-        <div className="text-sm text-gray-500 mt-1">
-          Current week: {getCurrentWeekId()}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <div className="bg-white rounded-lg shadow p-6">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Week</label>
+          <input
+            type="text"
+            value={weekId}
+            onChange={(e) => setWeekId(e.target.value)}
+            placeholder="2024-W45"
+            className="px-4 py-2 border border-gray-300 rounded-lg text-gray-900 w-full"
+          />
+          <div className="text-sm text-gray-500 mt-1">
+            Current week: {getCurrentWeekId()}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="text-sm font-medium text-gray-700 mb-2">Total Players</div>
+          <div className="text-3xl font-bold text-gray-900">{stats.totalPlayers}</div>
+          <div className="text-sm text-gray-500 mt-1">All participants this week</div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="text-sm font-medium text-gray-700 mb-2">Prize Eligible</div>
+          <div className="text-3xl font-bold text-green-600">{stats.prizeEligible}</div>
+          <div className="text-sm text-gray-500 mt-1">Players with 90+ score</div>
         </div>
       </div>
 

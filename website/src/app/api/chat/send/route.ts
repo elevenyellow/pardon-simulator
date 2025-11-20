@@ -300,19 +300,58 @@ async function handlePOST(request: NextRequest) {
             console.warn(`CDP backend error (${settleResponse.status}) - attempting on-chain verification as fallback`);
             
             try {
-              // Decode the transaction to extract the signature
+              // For partially-signed transactions (CDP co-signing):
+              // - signatures[0] = Fee payer (CDP) - NOT YET SIGNED (placeholder)
+              // - signatures[1] = User's transfer authority - SIGNED BY USER
+              // We need to find the first valid (non-placeholder) signature
+              
               const txBuffer = Buffer.from(transactionBase64, 'base64');
-              let signature: string;
+              let signature: string | null = null;
               
               try {
                 const versionedTx = VersionedTransaction.deserialize(txBuffer);
-                signature = bs58.encode(versionedTx.signatures[0]);
-              } catch (e) {
-                const legacyTx = Transaction.from(txBuffer);
-                signature = bs58.encode(legacyTx.signature!);
+                
+                // Try all signatures until we find a valid one (not placeholder)
+                for (let i = 0; i < versionedTx.signatures.length; i++) {
+                  const sig = versionedTx.signatures[i];
+                  const isPlaceholder = sig.every(byte => byte === 0) || sig.every(byte => byte === 1);
+                  
+                  if (!isPlaceholder) {
+                    signature = bs58.encode(sig);
+                    console.log(`[CDP Fallback] Found valid signature at index ${i}:`, signature);
+                    break;
+                  }
+                }
+              } catch (e: any) {
+                // Try legacy transaction
+                try {
+                  const legacyTx = Transaction.from(txBuffer);
+                  
+                  // For legacy transactions with multiple signatures
+                  if (legacyTx.signatures && legacyTx.signatures.length > 0) {
+                    for (const sigObj of legacyTx.signatures) {
+                      if (sigObj.signature) {
+                        const sigBuffer = Buffer.from(sigObj.signature);
+                        const isPlaceholder = sigBuffer.every(byte => byte === 0) || sigBuffer.every(byte => byte === 1);
+                        
+                        if (!isPlaceholder) {
+                          signature = bs58.encode(sigObj.signature);
+                          console.log('[CDP Fallback] Found valid legacy signature:', signature);
+                          break;
+                        }
+                      }
+                    }
+                  }
+                } catch (legacyError: any) {
+                  throw new Error(`Failed to parse transaction: ${e.message || legacyError.message}`);
+                }
               }
               
-              console.log('[CDP Fallback] Extracted transaction signature:', signature);
+              if (!signature) {
+                throw new Error('No valid signature found in transaction - all signatures are placeholders. Transaction may not be fully signed.');
+              }
+              
+              console.log('[CDP Fallback] Using signature for on-chain verification:', signature);
               console.log('[CDP Fallback] Waiting 3s for transaction to settle on-chain...');
               
               // Wait for transaction to potentially settle
@@ -351,6 +390,32 @@ async function handlePOST(request: NextRequest) {
                 verifiedViaFallback: true
               };
               
+              // Store payment in database (fallback case)
+              try {
+                const paymentAmount = amountUsdc;
+                const serviceType = isPremiumServicePayment ? 'premium_service' : 'message_fee';
+                
+                const payment = await prisma.payment.create({
+                  data: {
+                    fromWallet: frontendPayload.from,
+                    toWallet: to,
+                    toAgent: agentId,
+                    amount: paymentAmount,
+                    currency:'USDC',
+                    signature,
+                    serviceType,
+                    verified: true,
+                    verifiedAt: new Date(),
+                    isAgentToAgent: false,
+                    initiatedBy: userWallet
+                  }
+                });
+                console.log('[CDP Fallback] Payment stored in database:', signature, 'ID:', payment.id);
+              } catch (storeError: any) {
+                console.error('[CDP Fallback] Failed to store payment in database:', storeError.message);
+                // Don't fail the whole request if storage fails
+              }
+              
             } catch (fallbackError: any) {
               console.error('[CDP Fallback] On-chain verification failed:', fallbackError.message);
               throw new Error(`CDP error (${settleResponse.status}) and on-chain verification failed: ${fallbackError.message}`);
@@ -387,6 +452,32 @@ async function handlePOST(request: NextRequest) {
           };
           
           console.log('[CDP] Settlement result:', settlementResult);
+          
+          // Store payment in database
+          try {
+            const paymentAmount = amountUsdc;
+            const serviceType = isPremiumServicePayment ? 'premium_service' : 'message_fee';
+            
+            const payment = await prisma.payment.create({
+              data: {
+                fromWallet: settlementResult.payer,
+                toWallet: to,
+                toAgent: agentId,
+                amount: paymentAmount,
+                currency:'USDC',
+                signature: txSignature,
+                serviceType,
+                verified: true,
+                verifiedAt: new Date(),
+                isAgentToAgent: false,
+                initiatedBy: userWallet
+              }
+            });
+            console.log('[CDP] Payment stored in database:', txSignature, 'ID:', payment.id);
+          } catch (storeError: any) {
+            console.error('[CDP] Failed to store payment in database:', storeError.message);
+            // Don't fail the whole request if storage fails
+          }
         }
       } catch (error: any) {
         console.error('CDP settlement error:', error.message);

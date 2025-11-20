@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { validatePagination, validateDateRange, validateSearchQuery, validateSort } from '@/lib/admin/validation';
 
 export async function GET(request: NextRequest) {
-  const { admin, error } = await requireAdminAuth(request, 'list_users');
+  const { admin, error } = await requireAdminAuth(request);
   if (error) return error;
 
   try {

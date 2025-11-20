@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAdminAuth } from '@/lib/admin/middleware';
+import { requireAdminAuthWithLogging } from '@/lib/admin/middleware';
 import { prisma } from '@/lib/prisma';
 
 export async function GET(request: NextRequest) {
-  const { admin, error } = await requireAdminAuth(request, 'export_payments');
+  // CRITICAL: Export operations are audited
+  const { admin, error } = await requireAdminAuthWithLogging(request, 'export_payments');
   if (error) return error;
 
   try {

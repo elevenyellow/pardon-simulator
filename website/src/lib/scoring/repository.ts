@@ -111,7 +111,7 @@ export class ScoringRepository {
       // Calculate new score (capped at 0-100, prize eligibility at 90+)
       const newScore = Math.max(0, Math.min(100, session.currentScore + finalDelta));
       
-      // Parallel: create score record and update session
+      // Parallel: create score record, update session, and update user totalScore
       const [scoreRecord] = await Promise.all([
         tx.score.create({
           data: {
@@ -130,6 +130,14 @@ export class ScoringRepository {
         tx.session.update({
           where: { id: sessionId },
           data: { currentScore: newScore },
+        }),
+        // Update user's totalScore by incrementing with the delta
+        tx.user.update({
+          where: { id: userId },
+          data: { 
+            totalScore: { increment: finalDelta },
+            lastActiveAt: new Date()
+          },
         })
       ]);
       

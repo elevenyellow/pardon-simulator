@@ -1527,6 +1527,7 @@ async def verify_payment_transaction(
     expected_from: str,
     expected_amount_usdc: float,
     service_type: str,
+    to_agent: Optional[str] = None,
     backend_url: Optional[str] = None
 ) -> str:
     """
@@ -1545,6 +1546,7 @@ async def verify_payment_transaction(
         expected_from: Expected payer's wallet address
         expected_amount_usdc: Expected payment amount in USDC
         service_type: Type of service being paid for
+        to_agent: Agent ID receiving the payment (e.g., 'cz', 'donald-trump'). Pass os.getenv('CORAL_AGENT_ID') to identify yourself.
         backend_url: Backend URL (defaults to BACKEND_URL env var or localhost:3000)
     
     Returns:
@@ -1583,6 +1585,10 @@ async def verify_payment_transaction(
     if backend_url is None:
         backend_url = os.getenv("BACKEND_URL", "http://localhost:3000")
     
+    # Auto-detect agent ID from environment if not provided
+    if to_agent is None:
+        to_agent = os.getenv("CORAL_AGENT_ID", "unknown")
+    
     print(f"\n{'='*80}")
     print(f"🔍 VERIFYING PAYMENT VIA BACKEND")
     print(f"{'='*80}")
@@ -1591,6 +1597,7 @@ async def verify_payment_transaction(
     print(f"Expected To: White House Treasury")
     print(f"Expected Amount: {expected_amount_usdc} USDC")
     print(f"Service: {service_type}")
+    print(f"To Agent: {to_agent}")
     print(f"")
     
     try:
@@ -1674,6 +1681,7 @@ Please ensure you sent the correct payment."""
             to_wallet=details["to"],
             amount=details["amount"],
             service_type=service_type,
+            to_agent=to_agent,
             is_agent_to_agent=False,
             initiated_by=expected_from
         )
@@ -1799,6 +1807,7 @@ async def store_payment_in_database(
     to_wallet: str,
     amount: float,
     service_type: str,
+    to_agent: Optional[str] = None,
     is_agent_to_agent: bool = False,
     initiated_by: Optional[str] = None
 ) -> bool:
@@ -1813,6 +1822,7 @@ async def store_payment_in_database(
                     'signature': signature,
                     'fromWallet': from_wallet,
                     'toWallet': to_wallet,
+                    'toAgent': to_agent or 'unknown',
                     'amount': amount,
                     'currency': 'SOL',
                     'serviceType': service_type,

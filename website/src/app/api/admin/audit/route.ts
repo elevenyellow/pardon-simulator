@@ -3,7 +3,7 @@ import { requireAdminAuth } from '@/lib/admin/middleware';
 import { prisma } from '@/lib/prisma';
 
 export async function GET(request: NextRequest) {
-  const { admin, error } = await requireAdminAuth(request, 'view_audit_log');
+  const { admin, error } = await requireAdminAuth(request);
   if (error) return error;
 
   try {
