@@ -1220,6 +1220,55 @@ def get_backend_url() -> str:
     return os.getenv("BACKEND_URL", "http://localhost:3000")
 
 
+async def _submit_score_async(
+    user_wallet: str,
+    evaluation_score: float,
+    reason: str,
+    category: str,
+    subcategory: Optional[str],
+    agent_id: Optional[str],
+    message_id: Optional[str],
+    premium_service_amount: float
+):
+    """
+    Submit score update asynchronously (background task).
+    This allows the agent to respond immediately without waiting for scoring.
+    """
+    try:
+        payload = {
+            "userWallet": user_wallet,
+            "delta": evaluation_score,
+            "reason": reason,
+            "category": category,
+            "evaluationScore": evaluation_score,
+        }
+        
+        if subcategory:
+            payload["subcategory"] = subcategory
+        if agent_id:
+            payload["agentId"] = agent_id
+        if message_id:
+            payload["messageId"] = message_id
+        if premium_service_amount > 0:
+            payload["premiumServicePayment"] = premium_service_amount
+        
+        backend_url = get_backend_url()
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{backend_url}/api/scoring/update",
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=10)
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    print(f"✅ Score updated (async): {data['newScore']} (delta: {data.get('delta', evaluation_score)})")
+                else:
+                    error_text = await resp.text()
+                    print(f"❌ Scoring API error {resp.status}: {error_text}")
+    except Exception as e:
+        print(f"❌ Exception in async scoring: {str(e)}")
+
+
 @tool
 async def award_points(
     user_wallet: str,
@@ -1288,53 +1337,42 @@ async def award_points(
     
     print(f"🎯 award_points() called: {evaluation_score} evaluation score to {user_wallet[:8]}... ({reason})")
     
-    try:
-        payload = {
-            "userWallet": user_wallet,
-            "delta": evaluation_score,  # Use evaluation_score as delta (it IS the points)
-            "reason": reason,
-            "category": category,
-            "evaluationScore": evaluation_score,
-        }
-        
-        # Add optional fields if provided
-        if subcategory:
-            payload["subcategory"] = subcategory
-        if agent_id:
-            payload["agentId"] = agent_id
-        if message_id:
-            payload["messageId"] = message_id
-        if premium_service_amount > 0:
-            payload["premiumServicePayment"] = premium_service_amount
-        
-        backend_url = get_backend_url()  # Read dynamically
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{backend_url}/api/scoring/update",
-                json=payload,
-                timeout=aiohttp.ClientTimeout(total=10)
-            ) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    result = {
-                        "type": "score_update",
-                        "current_score": data["newScore"],
-                        "delta": data.get("delta", evaluation_score),  # Use backend-calculated delta with variance & speed
-                        "reason": reason,
-                        "category": category,
-                        "subcategory": subcategory,
-                        "agent_id": agent_id,
-                        "feedback": data.get("feedback", _generate_feedback(data["newScore"], data.get("delta", evaluation_score)))
-                    }
-                    print(f"✅ Score updated: {data['newScore']} (delta: {data.get('delta', evaluation_score)})")
-                    return json.dumps(result)
-                else:
-                    error_text = await resp.text()
-                    print(f"❌ Scoring API error {resp.status}: {error_text}")
-                    return json.dumps({"error": f"Failed to update score: {error_text}"})
-    except Exception as e:
-        print(f"❌ Exception in award_points: {str(e)}")
-        return json.dumps({"error": f"Failed to update score: {str(e)}"})
+    # Fire off async scoring (non-blocking)
+    asyncio.create_task(_submit_score_async(
+        user_wallet=user_wallet,
+        evaluation_score=evaluation_score,
+        reason=reason,
+        category=category,
+        subcategory=subcategory,
+        agent_id=agent_id,
+        message_id=message_id,
+        premium_service_amount=premium_service_amount
+    ))
+    
+    # Return immediate estimated result
+    # Estimate: evaluation_score with typical 1.1x speed multiplier
+    estimated_delta = round(evaluation_score * 1.1, 1)
+    
+    # Generate estimated feedback
+    estimated_feedback = "Score updating..."
+    if evaluation_score > 0:
+        estimated_feedback = f"Processing +{estimated_delta:.1f} points..."
+    elif evaluation_score < 0:
+        estimated_feedback = f"Processing {estimated_delta:.1f} points penalty..."
+    
+    result = {
+        "type": "score_update",
+        "current_score": 0,  # Will be updated async, frontend can poll or ignore
+        "delta": estimated_delta,
+        "reason": reason,
+        "category": category,
+        "subcategory": subcategory,
+        "agent_id": agent_id,
+        "feedback": estimated_feedback
+    }
+    
+    print(f"✅ Score update queued (async): {evaluation_score} points, estimated delta: {estimated_delta}")
+    return json.dumps(result)
 
 
 def _generate_feedback(score: int, delta: int) -> str:

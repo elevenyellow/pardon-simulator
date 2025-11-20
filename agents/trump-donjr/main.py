@@ -224,7 +224,7 @@ async def create_agent(coral_tools, solana_tools):
         "model_provider": os.getenv("MODEL_PROVIDER", "openai"),
         "api_key": os.getenv("MODEL_API_KEY"),
         "temperature": float(os.getenv("MODEL_TEMPERATURE", "0.8")),
-        "max_tokens": int(os.getenv("MODEL_MAX_TOKENS", "8000"))
+        "max_tokens": int(os.getenv("MODEL_MAX_TOKENS", "2000"))  # Reduced for faster responses while maintaining quality
     }
     
     # Add reasoning_effort for GPT-5.1+ models (optional, only if explicitly set)

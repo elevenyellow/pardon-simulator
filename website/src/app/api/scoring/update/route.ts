@@ -92,19 +92,9 @@ async function handlePOST(request: NextRequest) {
       { maxRetries: 2, initialDelay: 200 }
     );
     
-    // Get user rank (with retry logic and 1s timeout to avoid blocking)
+    // Rank calculation disabled for performance (not shown in score toast)
+    // Move to separate /api/leaderboard endpoint if needed
     let rank = null;
-    try {
-      rank = await Promise.race([
-        withRetry(
-      () => scoringRepository.getUserRank(userId, weekId),
-      { maxRetries: 1, initialDelay: 100 }
-        ),
-        new Promise<null>(resolve => setTimeout(() => resolve(null), 1000)) // 1s timeout
-      ]);
-    } catch {
-      rank = null; // Don't fail if rank calculation fails
-    }
     
     // Generate contextual feedback
     const feedback = generateFeedback(result.newScore, delta);

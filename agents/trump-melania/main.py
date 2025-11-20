@@ -243,7 +243,7 @@ async def create_agent(coral_tools, solana_tools):
         "model_provider": os.getenv("MODEL_PROVIDER", "openai"),
         "api_key": api_key_to_use,
         "temperature": float(os.getenv("MODEL_TEMPERATURE", "0.5")),
-        "max_tokens": int(os.getenv("MODEL_MAX_TOKENS", "2000"))  # Reduced for faster responses
+        "max_tokens": int(os.getenv("MODEL_MAX_TOKENS", "2000"))  # Reduced for faster responses while maintaining quality
     }
     
     # IMPORTANT: LangChain's OpenAI client may use OPENAI_API_KEY env var directly
