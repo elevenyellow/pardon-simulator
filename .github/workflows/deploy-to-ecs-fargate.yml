@@ -109,6 +109,7 @@ jobs:
           SOLANA_PUBLIC_ADDRESS_TRUMP_DONJR: ${{ secrets.SOLANA_PUBLIC_ADDRESS_TRUMP_DONJR }}
           SOLANA_PRIVATE_KEY_TRUMP_BARRON: ${{ secrets.SOLANA_PRIVATE_KEY_TRUMP_BARRON }}
           SOLANA_PUBLIC_ADDRESS_TRUMP_BARRON: ${{ secrets.SOLANA_PUBLIC_ADDRESS_TRUMP_BARRON }}
+          WALLET_WHITE_HOUSE: ${{ secrets.WALLET_WHITE_HOUSE }}
         run: |
           echo "📋 Fetching current task definition..."
           
@@ -153,6 +154,7 @@ jobs:
             --arg DONJR_PUB "$ADDR_DONJR" \
             --arg BARRON_PRIV "$SOLANA_PRIVATE_KEY_TRUMP_BARRON" \
             --arg BARRON_PUB "$ADDR_BARRON" \
+            --arg WHITE_HOUSE "$WALLET_WHITE_HOUSE" \
             '
             .containerDefinitions |= map(
               # Update coral-server image
@@ -166,6 +168,14 @@ jobs:
                   elif .name == "SOLANA_RPC_URL" then .value = $RPC_URL
                   elif .name == "SOLANA_PRIVATE_KEY" then .value = $CZ_PRIV
                   elif .name == "SOLANA_PUBLIC_ADDRESS" then .value = $CZ_PUB
+                  elif .name == "WALLET_WHITE_HOUSE" then .value = $WHITE_HOUSE
+                  elif .name == "WALLET_CZ" then .value = $CZ_PUB
+                  elif .name == "WALLET_SBF" then .value = $SBF_PUB
+                  elif .name == "WALLET_DONALD_TRUMP" then .value = $DONALD_PUB
+                  elif .name == "WALLET_MELANIA_TRUMP" then .value = $MELANIA_PUB
+                  elif .name == "WALLET_ERIC_TRUMP" then .value = $ERIC_PUB
+                  elif .name == "WALLET_DONJR_TRUMP" then .value = $DONJR_PUB
+                  elif .name == "WALLET_BARRON_TRUMP" then .value = $BARRON_PUB
                   else . end
                 )
               elif .name == "agent-sbf" then
@@ -175,6 +185,14 @@ jobs:
                   elif .name == "SOLANA_RPC_URL" then .value = $RPC_URL
                   elif .name == "SOLANA_PRIVATE_KEY" then .value = $SBF_PRIV
                   elif .name == "SOLANA_PUBLIC_ADDRESS" then .value = $SBF_PUB
+                  elif .name == "WALLET_WHITE_HOUSE" then .value = $WHITE_HOUSE
+                  elif .name == "WALLET_CZ" then .value = $CZ_PUB
+                  elif .name == "WALLET_SBF" then .value = $SBF_PUB
+                  elif .name == "WALLET_DONALD_TRUMP" then .value = $DONALD_PUB
+                  elif .name == "WALLET_MELANIA_TRUMP" then .value = $MELANIA_PUB
+                  elif .name == "WALLET_ERIC_TRUMP" then .value = $ERIC_PUB
+                  elif .name == "WALLET_DONJR_TRUMP" then .value = $DONJR_PUB
+                  elif .name == "WALLET_BARRON_TRUMP" then .value = $BARRON_PUB
                   else . end
                 )
               elif .name == "agent-trump-donald" then
@@ -184,6 +202,14 @@ jobs:
                   elif .name == "SOLANA_RPC_URL" then .value = $RPC_URL
                   elif .name == "SOLANA_PRIVATE_KEY" then .value = $DONALD_PRIV
                   elif .name == "SOLANA_PUBLIC_ADDRESS" then .value = $DONALD_PUB
+                  elif .name == "WALLET_WHITE_HOUSE" then .value = $WHITE_HOUSE
+                  elif .name == "WALLET_CZ" then .value = $CZ_PUB
+                  elif .name == "WALLET_SBF" then .value = $SBF_PUB
+                  elif .name == "WALLET_DONALD_TRUMP" then .value = $DONALD_PUB
+                  elif .name == "WALLET_MELANIA_TRUMP" then .value = $MELANIA_PUB
+                  elif .name == "WALLET_ERIC_TRUMP" then .value = $ERIC_PUB
+                  elif .name == "WALLET_DONJR_TRUMP" then .value = $DONJR_PUB
+                  elif .name == "WALLET_BARRON_TRUMP" then .value = $BARRON_PUB
                   else . end
                 )
               elif .name == "agent-trump-melania" then
@@ -193,6 +219,14 @@ jobs:
                   elif .name == "SOLANA_RPC_URL" then .value = $RPC_URL
                   elif .name == "SOLANA_PRIVATE_KEY" then .value = $MELANIA_PRIV
                   elif .name == "SOLANA_PUBLIC_ADDRESS" then .value = $MELANIA_PUB
+                  elif .name == "WALLET_WHITE_HOUSE" then .value = $WHITE_HOUSE
+                  elif .name == "WALLET_CZ" then .value = $CZ_PUB
+                  elif .name == "WALLET_SBF" then .value = $SBF_PUB
+                  elif .name == "WALLET_DONALD_TRUMP" then .value = $DONALD_PUB
+                  elif .name == "WALLET_MELANIA_TRUMP" then .value = $MELANIA_PUB
+                  elif .name == "WALLET_ERIC_TRUMP" then .value = $ERIC_PUB
+                  elif .name == "WALLET_DONJR_TRUMP" then .value = $DONJR_PUB
+                  elif .name == "WALLET_BARRON_TRUMP" then .value = $BARRON_PUB
                   else . end
                 )
               elif .name == "agent-trump-eric" then
@@ -202,6 +236,14 @@ jobs:
                   elif .name == "SOLANA_RPC_URL" then .value = $RPC_URL
                   elif .name == "SOLANA_PRIVATE_KEY" then .value = $ERIC_PRIV
                   elif .name == "SOLANA_PUBLIC_ADDRESS" then .value = $ERIC_PUB
+                  elif .name == "WALLET_WHITE_HOUSE" then .value = $WHITE_HOUSE
+                  elif .name == "WALLET_CZ" then .value = $CZ_PUB
+                  elif .name == "WALLET_SBF" then .value = $SBF_PUB
+                  elif .name == "WALLET_DONALD_TRUMP" then .value = $DONALD_PUB
+                  elif .name == "WALLET_MELANIA_TRUMP" then .value = $MELANIA_PUB
+                  elif .name == "WALLET_ERIC_TRUMP" then .value = $ERIC_PUB
+                  elif .name == "WALLET_DONJR_TRUMP" then .value = $DONJR_PUB
+                  elif .name == "WALLET_BARRON_TRUMP" then .value = $BARRON_PUB
                   else . end
                 )
               elif .name == "agent-trump-donjr" then
@@ -211,6 +253,14 @@ jobs:
                   elif .name == "SOLANA_RPC_URL" then .value = $RPC_URL
                   elif .name == "SOLANA_PRIVATE_KEY" then .value = $DONJR_PRIV
                   elif .name == "SOLANA_PUBLIC_ADDRESS" then .value = $DONJR_PUB
+                  elif .name == "WALLET_WHITE_HOUSE" then .value = $WHITE_HOUSE
+                  elif .name == "WALLET_CZ" then .value = $CZ_PUB
+                  elif .name == "WALLET_SBF" then .value = $SBF_PUB
+                  elif .name == "WALLET_DONALD_TRUMP" then .value = $DONALD_PUB
+                  elif .name == "WALLET_MELANIA_TRUMP" then .value = $MELANIA_PUB
+                  elif .name == "WALLET_ERIC_TRUMP" then .value = $ERIC_PUB
+                  elif .name == "WALLET_DONJR_TRUMP" then .value = $DONJR_PUB
+                  elif .name == "WALLET_BARRON_TRUMP" then .value = $BARRON_PUB
                   else . end
                 )
               elif .name == "agent-trump-barron" then
@@ -220,6 +270,14 @@ jobs:
                   elif .name == "SOLANA_RPC_URL" then .value = $RPC_URL
                   elif .name == "SOLANA_PRIVATE_KEY" then .value = $BARRON_PRIV
                   elif .name == "SOLANA_PUBLIC_ADDRESS" then .value = $BARRON_PUB
+                  elif .name == "WALLET_WHITE_HOUSE" then .value = $WHITE_HOUSE
+                  elif .name == "WALLET_CZ" then .value = $CZ_PUB
+                  elif .name == "WALLET_SBF" then .value = $SBF_PUB
+                  elif .name == "WALLET_DONALD_TRUMP" then .value = $DONALD_PUB
+                  elif .name == "WALLET_MELANIA_TRUMP" then .value = $MELANIA_PUB
+                  elif .name == "WALLET_ERIC_TRUMP" then .value = $ERIC_PUB
+                  elif .name == "WALLET_DONJR_TRUMP" then .value = $DONJR_PUB
+                  elif .name == "WALLET_BARRON_TRUMP" then .value = $BARRON_PUB
                   else . end
                 )
               else . end

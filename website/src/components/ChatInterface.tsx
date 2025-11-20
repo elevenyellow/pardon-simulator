@@ -1181,11 +1181,18 @@ export default function ChatInterface({
 
       // Show user's message and loading indicator together to avoid timing/ordering issues
       const userMessageTimestamp = new Date();
+      
+      // For premium services, show a payment confirmation message to user
+      // But the full message is still sent to agent in the database (line 1217)
+      const displayContent = isPremiumService
+        ? `Payment for premium service: ${paymentReq.service_type?.replace(/_/g, ' ')}`
+        : originalMessageContent;
+      
       const userMessage: Message = {
         id: `optimistic-${Date.now()}`,
         senderId: 'sbf',
         sender: 'You (SBF)',
-        content: originalMessageContent,
+        content: displayContent,
         timestamp: userMessageTimestamp,
         isAgent: false,
         mentions: [originalAgentId],

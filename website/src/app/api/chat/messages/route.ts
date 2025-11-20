@@ -77,9 +77,25 @@ export async function GET(request: NextRequest) {
     }
 
     const data = await response.json();
+    const allMessages = data.messages || [];
+    
+    // Filter out premium service payment confirmation echoes from user
+    // These are needed in the DB for agent-to-agent forwarding, but shouldn't show to user
+    const filteredMessages = allMessages.filter((msg: any) => {
+      const isUserMessage = msg.senderId === 'sbf';
+      const hasPaymentMarker = msg.content?.includes('[PREMIUM_SERVICE_PAYMENT_COMPLETED]');
+      
+      // Keep agent messages, keep user messages without the marker
+      // Filter out user messages with the marker (they're already shown optimistically)
+      if (isUserMessage && hasPaymentMarker) {
+        console.log(`[Messages API] Filtering premium service payment echo: ${msg.id}`);
+        return false;
+      }
+      return true;
+    });
     
     return NextResponse.json({
-      messages: data.messages || [],
+      messages: filteredMessages,
     });
 
   } catch (error: any) {

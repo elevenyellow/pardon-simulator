@@ -41,22 +41,45 @@ export async function GET(request: NextRequest) {
             if (messages.length > lastMessageCount) {
               const newMessages = messages.slice(lastMessageCount);
               console.log(`[SSE Poll] Detected ${newMessages.length} NEW messages, sending to client`);
-              newMessages.forEach((msg: any, idx: number) => {
-                console.log(`[SSE Poll]   New message ${idx + 1}: from=${msg.senderId}, id=${msg.id}, content=${msg.content.substring(0, 50)}...`);
+              
+              // Filter out premium service payment confirmation echoes from user
+              // These are needed in the DB for agent-to-agent forwarding, but shouldn't show to user
+              const filteredMessages = newMessages.filter((msg: any) => {
+                const isUserMessage = msg.senderId === 'sbf';
+                const hasPaymentMarker = msg.content?.includes('[PREMIUM_SERVICE_PAYMENT_COMPLETED]');
+                
+                // Keep agent messages, keep user messages without the marker
+                // Filter out user messages with the marker (they're already shown optimistically)
+                if (isUserMessage && hasPaymentMarker) {
+                  console.log(`[SSE Poll] Filtering premium service payment echo: ${msg.id}`);
+                  return false;
+                }
+                return true;
               });
-              lastMessageCount = messages.length;
               
-              controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({ 
-                  type: 'messages', 
-                  messages: newMessages 
-                })}\n\n`)
-              );
-              console.log(`[SSE Poll] Sent ${newMessages.length} messages to client via SSE`);
-              
-              // Reset to fast polling when new messages arrive
-              pollInterval = 300;
-              consecutiveEmptyPolls = 0;
+              if (filteredMessages.length > 0) {
+                filteredMessages.forEach((msg: any, idx: number) => {
+                  console.log(`[SSE Poll]   New message ${idx + 1}: from=${msg.senderId}, id=${msg.id}, content=${msg.content.substring(0, 50)}...`);
+                });
+                
+                lastMessageCount = messages.length; // Update count with ALL messages (not just filtered)
+                
+                controller.enqueue(
+                  encoder.encode(`data: ${JSON.stringify({ 
+                    type: 'messages', 
+                    messages: filteredMessages 
+                  })}\n\n`)
+                );
+                console.log(`[SSE Poll] Sent ${filteredMessages.length} messages to client via SSE (filtered ${newMessages.length - filteredMessages.length})`);
+                
+                // Reset to fast polling when new messages arrive
+                pollInterval = 300;
+                consecutiveEmptyPolls = 0;
+              } else {
+                // All messages were filtered out, but update count to avoid re-processing
+                lastMessageCount = messages.length;
+                console.log(`[SSE Poll] All ${newMessages.length} new messages were filtered out`);
+              }
             } else {
               // No new messages - adjust polling interval based on idle time
               consecutiveEmptyPolls++;
