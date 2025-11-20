@@ -1,6 +1,6 @@
 import urllib.parse
 from dotenv import load_dotenv
-import os, json, asyncio, traceback, sys, time
+import os, json, asyncio, traceback, sys, time, re
 from langchain.chat_models import init_chat_model
 from langchain.prompts import ChatPromptTemplate
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -15,7 +15,7 @@ import base58
 
 # Import x402 payment protocol tools
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from x402_payment_tools import X402_TOOLS, create_contact_agent_tool, reload_agent_wallets
+from x402_payment_tools import X402_TOOLS, create_contact_agent_tool, reload_agent_wallets, AGENT_WALLETS
 from x402_payment_payload import X402PaymentPayload
 
 
@@ -24,8 +24,6 @@ class TrumpWallet:
         self.keypair = Keypair.from_base58_string(private_key_b58) if private_key_b58 else Keypair()
         self.client = AsyncClient(rpc_url)
         self.owner_name = owner_name
-        import sys, os
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
         from x402_cdp_client import get_cdp_client
         self.cdp_client = get_cdp_client()
         
@@ -46,7 +44,6 @@ class TrumpWallet:
         """
         try:
             # Import x402 facilitator submission function
-            sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
             from x402_payment_tools import submit_payment_via_x402_facilitator
             
             # x402 facilitator submission is ENABLED by default for maximum compliance
@@ -432,7 +429,6 @@ async def main():
                     if is_user_message:
                         # Extract user's ACTUAL wallet address from message
                         # Format: [USER_WALLET:6pF45ayWyPSFKV3WQLpNNhhkA8GMeeE6eE14NKgw4zug] @agent message
-                        import re
                         wallet_match = re.search(r'\[USER_WALLET:([1-9A-HJ-NP-Za-km-z]{32,44})\]', message_content)
                         user_wallet = wallet_match.group(1) if wallet_match else "UNKNOWN_WALLET"
                         
@@ -503,7 +499,6 @@ DO NOT just acknowledge payment - DELIVER THE SERVICE NOW!
                         scoring_config_content = dynamic_content['scoring_config']
                         
                         # Extract sections from scoring config
-                        import re
                         eval_criteria_match = re.search(r'## Evaluation Criteria\n(.+?)(?=\n## )', scoring_config_content, re.DOTALL)
                         score_guide_match = re.search(r'## Evaluation Score Guide[^\n]*\n(.+?)(?=\n## |\nNote:)', scoring_config_content, re.DOTALL)
                         routing_match = re.search(r'## Routing Instructions\n(.+?)$', scoring_config_content, re.DOTALL)

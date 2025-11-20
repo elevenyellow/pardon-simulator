@@ -14,7 +14,7 @@ from solders.system_program import TransferParams, transfer
 
 # Import x402 payment protocol tools
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from x402_payment_tools import X402_TOOLS, create_contact_agent_tool, reload_agent_wallets
+from x402_payment_tools import X402_TOOLS, create_contact_agent_tool, reload_agent_wallets, AGENT_WALLETS
 from x402_payment_payload import X402PaymentPayload
 
 class CryptoWallet:
@@ -22,8 +22,6 @@ class CryptoWallet:
         self.keypair = Keypair.from_base58_string(pk) if pk else Keypair()
         self.client = AsyncClient(rpc)
         self.owner_name = name
-        import sys, os
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
         from x402_cdp_client import get_cdp_client
         self.cdp_client = get_cdp_client()
     async def get_balance(self) -> float:
@@ -37,7 +35,6 @@ class CryptoWallet:
         """
         try:
             # Import x402 facilitator submission function
-            sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
             from x402_payment_tools import submit_payment_via_x402_facilitator
             
             # x402 facilitator submission is ENABLED by default for maximum compliance
