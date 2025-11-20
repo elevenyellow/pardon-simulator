@@ -1164,6 +1164,17 @@ export default function ChatInterface({
         );
 
         console.log('[Payment] Transaction signed by user');
+        
+        // Enhanced logging for payment flow debugging
+        console.log('[Payment Flow] Payment submitted successfully');
+        console.log('[Payment Flow] Transaction:', signedTx.payment_id);
+        console.log('[Payment Flow] Amount:', amount, 'USDC');
+        console.log('[Payment Flow] Service:', paymentReq.service_type);
+        console.log('[Payment Flow] Agent:', originalAgentId);
+        
+        // Add timestamp for debugging
+        const paymentTimestamp = new Date().toISOString();
+        console.log('[Payment Flow] Completion timestamp:', paymentTimestamp);
 
         // Build x402 payload to send to /api/chat/send
         const x402Payload = {
@@ -1224,6 +1235,9 @@ export default function ChatInterface({
       const messageContent = isPremiumService
         ? `[PREMIUM_SERVICE_PAYMENT_COMPLETED] ${originalMessageContent}`.trim()
         : originalMessageContent;
+      
+      // Log message being sent to agent for debugging
+      console.log('[Payment Flow] Message to agent:', messageContent.substring(0, 200));
 
       const retryResponse = await fetch('/api/chat/send', {
         method:'POST',
@@ -1314,7 +1328,33 @@ export default function ChatInterface({
       }
 
     } catch (err: any) {
-      console.error('Payment error:', err);
+      // Enhanced error logging for payment flow
+      console.error('[Payment Flow] Error:', err);
+      console.error('[Payment Flow] Stack:', err.stack);
+      console.error('[Payment Flow] Error details:', {
+        message: err.message,
+        name: err.name,
+        cause: err.cause
+      });
+      
+      // Log to backend for monitoring
+      fetch('/api/log-error', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          error: 'payment_processing_error',
+          message: err.message,
+          stack: err.stack,
+          context: {
+            agent: originalAgentId,
+            threadId: originalThreadId,
+            serviceType: paymentReq.service_type,
+            timestamp: new Date().toISOString(),
+            amount: paymentReq.amount_usdc || paymentReq.amount_sol,
+            currency: paymentReq.amount_usdc ? 'USDC' : 'SOL'
+          }
+        })
+      }).catch(console.error);
       
       // Only clear the stored user message on error if this was a premium service
       // For regular message fees, keep it so retries can use it

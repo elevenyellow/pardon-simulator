@@ -448,6 +448,54 @@ async def main():
                         clean_content = re.sub(r'\[USER_WALLET:[1-9A-HJ-NP-Za-km-z]{32,44}]\s*', '', message_content)
                         mentions_data["messages"][0]["content"] = clean_content
                         
+                        # PAYMENT DETECTION: Check for payment completion marker
+                        payment_match = re.search(
+                            r'\[PREMIUM_SERVICE_PAYMENT_COMPLETED:\s*([A-Za-z0-9]{87,88})\]',
+                            message_content
+                        )
+                        
+                        payment_instruction = ""
+                        if payment_match:
+                            transaction_signature = payment_match.group(1)
+                            service_type = "insider_info"  
+                            amount_usdc = 0.0005
+                            
+                            print("="*80)
+                            print(f"[PAYMENT FLOW START] Timestamp: {time.time()}")
+                            print(f"[PAYMENT FLOW] Thread: {mentions_data['messages'][0].get('threadId', 'unknown')}")
+                            print(f"[PAYMENT FLOW] User: {user_wallet}")
+                            print(f"[PAYMENT FLOW] Message ID: {mentions_data['messages'][0].get('id', 'unknown')}")
+                            print(f"[PAYMENT DETECTED] Signature: {transaction_signature[:16]}...{transaction_signature[-16:]}")
+                            print(f"[PAYMENT DETECTED] Service Type: {service_type}")
+                            print(f"[PAYMENT DETECTED] User Wallet: {user_wallet}")
+                            print("="*80)
+                            
+                            payment_instruction = f"""
+🚨 PAYMENT COMPLETION DETECTED 🚨
+
+Transaction Signature: {transaction_signature}
+User Wallet: {user_wallet}
+Service Type: {service_type}
+Amount: {amount_usdc} USDC
+
+MANDATORY ACTIONS (Execute in THIS turn):
+
+1. Call verify_payment_transaction() immediately:
+   verify_payment_transaction(
+       transaction_hash="{transaction_signature}",
+       expected_from="{user_wallet}",
+       expected_amount_usdc={amount_usdc},
+       service_type="{service_type}"
+   )
+
+2. After verification succeeds, deliver the {service_type} service immediately
+
+3. Respond to user with the delivered service content
+
+DO NOT just acknowledge payment - DELIVER THE SERVICE NOW!
+
+"""
+                        
                         # KEEP senderId as "sbf" for proper routing
                         # Pass the wallet address separately in the prompt for scoring
                         mentions_result_clean = json.dumps(mentions_data)
@@ -477,7 +525,8 @@ async def main():
                         # The LLM needs to use this wallet address in award_points(), NOT the senderId
                         user_wallet_instruction = f"\n\n🎯 CRITICAL SCORING INSTRUCTION:\nThe user's ACTUAL wallet address is: {user_wallet}\nYou MUST use '{user_wallet}' as the user_wallet parameter in award_points().\nFor coral_send_message, use mentions=['sbf'] to reply to the user (NOT the wallet address).\n\n"
                         
-                        full_input = f"{scoring_mandate}{user_wallet_instruction}Process these mentions and respond appropriately: {mentions_result_clean}"
+                        # Prepend payment instruction if payment was detected
+                        full_input = f"{payment_instruction}{scoring_mandate}{user_wallet_instruction}Process these mentions and respond appropriately: {mentions_result_clean}"
                     else:
                         # Agent-to-agent communication - no scoring needed
                         mentions_result_clean = json.dumps(mentions_data)
@@ -486,36 +535,67 @@ async def main():
                         agent_comms_note = dynamic_content['agent_comms_note']
                         full_input = f"{agent_comms_note}Process this agent message and respond appropriately: {mentions_result_clean}"
                     
-                    response = await asyncio.wait_for(
-                        agent_executor.ainvoke({
-                            "input": full_input,
-                            "my_wallet_address": my_wallet_address,  # Pass wallet address to prompt template
-                            "agent_scratchpad": []
-                        }),
-                        timeout=120.0  # 120 second timeout for payment verification
-                    )
-                    print(f"[OK] Response sent: {response}")
+                    # Execute with retry logic and exponential backoff
+                    max_retries = 3
+                    retry_delay = 2  # seconds
+                    response = None
                     
-                except asyncio.TimeoutError:
-                    print("[ERROR] Agent execution timed out after 120 seconds!")
-                    print("WARNING:  This usually means payment verification delays or LLM API issues")
-                    continue
+                    for attempt in range(max_retries):
+                        try:
+                            print(f"[AGENT INVOKE] Attempt {attempt + 1}/{max_retries}")
+                            
+                            response = await asyncio.wait_for(
+                                agent_executor.ainvoke({
+                                    "input": full_input,
+                                    "my_wallet_address": my_wallet_address,
+                                    "agent_scratchpad": []
+                                }),
+                                timeout=120.0
+                            )
+                            
+                            print(f"[OK] Response sent successfully on attempt {attempt + 1}")
+                            print(f"[RESPONSE PREVIEW] {str(response)[:200]}...")
+                            
+                            # Log payment flow completion if this was a payment
+                            if payment_match:
+                                print("="*80)
+                                print(f"[PAYMENT FLOW END] Service delivered successfully")
+                                print(f"[PAYMENT FLOW] Response length: {len(str(response))}")
+                                print("="*80)
+                            
+                            break
+                            
+                        except asyncio.TimeoutError:
+                            print(f"[ERROR] Agent execution timed out on attempt {attempt + 1}/{max_retries}")
+                            if attempt < max_retries - 1:
+                                print(f"[RETRY] Waiting {retry_delay}s before retry...")
+                                await asyncio.sleep(retry_delay)
+                                retry_delay *= 2  # Exponential backoff
+                            else:
+                                print(f"[FATAL] All {max_retries} attempts failed due to timeout")
+                                print(f"[FATAL] Message content: {message_content[:500]}")
+                                print(f"[FATAL] User wallet: {user_wallet}")
+                                if payment_match:
+                                    print(f"[FATAL] Payment signature: {transaction_signature}")
+                                
+                        except Exception as e:
+                            print(f"[ERROR] Agent execution error on attempt {attempt + 1}/{max_retries}: {e}")
+                            traceback.print_exc()
+                            if attempt < max_retries - 1:
+                                print(f"[RETRY] Waiting {retry_delay}s before retry...")
+                                await asyncio.sleep(retry_delay)
+                                retry_delay *= 2
+                            else:
+                                print(f"[FATAL] All {max_retries} attempts failed")
+                                print(f"[FATAL] Error type: {type(e).__name__}")
+                                print(f"[FATAL] Error message: {str(e)}")
+                    
+                    if response is None:
+                        print("[FATAL] No response after all retry attempts, continuing to next message")
+                        continue
+                        
                 except Exception as e:
-                    print(f"[ERROR] Error during agent execution: {e}")
-                    print(f"[DEBUG] Exception type: {type(e).__name__}")
-                    
-                    # Enhanced debugging for API errors
-                    if hasattr(e, 'response'):
-                        print(f"[DEBUG] Response status: {e.response.status_code if hasattr(e.response, 'status_code') else 'N/A'}")
-                        print(f"[DEBUG] Response headers: {dict(e.response.headers) if hasattr(e.response, 'headers') else 'N/A'}")
-                    
-                    # Print current environment variables related to OpenAI
-                    print(f"[DEBUG] Current MODEL_API_KEY: {os.getenv('MODEL_API_KEY', 'NOT_SET')[:8]}...{os.getenv('MODEL_API_KEY', '')[-4:] if os.getenv('MODEL_API_KEY') else ''}")
-                    print(f"[DEBUG] Current MODEL_PROVIDER: {os.getenv('MODEL_PROVIDER', 'NOT_SET')}")
-                    print(f"[DEBUG] Current MODEL_NAME: {os.getenv('MODEL_NAME', 'NOT_SET')}")
-                    print(f"[DEBUG] Current MODEL_BASE_URL: {os.getenv('MODEL_BASE_URL', 'NOT_SET')}")
-                    print(f"[DEBUG] Current OPENAI_API_KEY env: {os.getenv('OPENAI_API_KEY', 'NOT_SET')[:8]}...{os.getenv('OPENAI_API_KEY', '')[-4:] if os.getenv('OPENAI_API_KEY') else ''}")
-                    
+                    print(f"[ERROR] Error during message processing: {e}")
                     traceback.print_exc()
                     continue
         except KeyboardInterrupt: break
