@@ -180,6 +180,30 @@ export async function verifyAdminToken(token: string) {
 }
 
 /**
+ * Verify admin authentication from NextRequest
+ * Extracts token from Authorization header and validates it
+ */
+export async function verifyAdminAuth(request: Request): Promise<{
+  authenticated: boolean;
+  admin?: any;
+}> {
+  const authHeader = request.headers.get('authorization');
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return { authenticated: false };
+  }
+
+  const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+  const admin = await verifyAdminToken(token);
+
+  if (!admin) {
+    return { authenticated: false };
+  }
+
+  return { authenticated: true, admin };
+}
+
+/**
  * Invalidate admin session (logout)
  */
 export async function invalidateAdminSession(token: string): Promise<boolean> {

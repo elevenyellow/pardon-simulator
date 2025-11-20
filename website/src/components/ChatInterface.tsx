@@ -1251,10 +1251,10 @@ export default function ChatInterface({
         lastUserMessageRef.current = null;
       }
 
-      // Update loading message to "Waiting for response..." and play phone sound
+      // Update loading message to "The prison phone is transmitting the message..." and play phone sound
       setMessages(prev => prev.map(m => 
         m.id === loadingMessageId 
-          ? { ...m, content: '⏳ Waiting for response...' }
+          ? { ...m, content: '⏳ The prison phone is transmitting the message...' }
           : m
       ));
 
