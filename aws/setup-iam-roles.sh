@@ -154,3 +154,4 @@ echo "  3. Initialize Elastic Beanstalk: ./scripts/eb-init.sh"
 rm -f /tmp/ec2-trust-policy.json /tmp/eb-service-trust-policy.json
 
 
+

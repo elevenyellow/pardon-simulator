@@ -40,3 +40,4 @@ echo "View logs:"
 echo "  eb logs --stream --log-group /aws/elasticbeanstalk/agent-${AGENT}"
 
 
+

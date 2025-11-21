@@ -108,3 +108,4 @@ This is normal for local development. The build will use fallback configurations
 - The file is encrypted at rest in S3 (AES256)
 - Vercel build environment has read-only access to S3 configs
 
+

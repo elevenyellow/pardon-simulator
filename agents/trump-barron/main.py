@@ -388,9 +388,13 @@ async def main():
         return
     
     # Run agent loop
+    # Track wait_for_mentions call timing to detect broken connections
+    wait_start_time = None
+    
     while True:
         try:
             print("\n Waiting for mentions (blocking call)...")
+            wait_start_time = time.time()  # Track when we start waiting
             mentions_result = await wait_tool.ainvoke({"timeoutMs": 120000})
             print(f"[MESSAGE] Got mentions: {mentions_result}")
             
@@ -403,16 +407,39 @@ async def main():
                     
                     # Check for timeout or error responses
                     if mentions_data.get("result") == "error_timeout":
-                        print("[TIMEOUT] Timeout waiting for mentions, retrying...")
-                        continue
+                        # Calculate how long we actually waited
+                        if wait_start_time is not None:
+                            elapsed = time.time() - wait_start_time
+                            
+                            if elapsed < 5.0:
+                                # INSTANT timeout = broken SSE connection to Coral
+                                print("=" * 80)
+                                print(f"[FATAL] SSE CONNECTION BROKEN")
+                                print(f"[FATAL] wait_for_mentions returned error_timeout in {elapsed:.2f}s (expected 120s)")
+                                print(f"[FATAL] This indicates the SSE connection to Coral Server is dead")
+                                print(f"[FATAL] Exiting cleanly - ECS will restart this container with fresh connection")
+                                print(f"[FATAL] Agent: {os.getenv('CORAL_AGENT_ID', 'unknown')}")
+                                print(f"[FATAL] Timestamp: {time.time()}")
+                                print("=" * 80)
+                                sys.exit(1)  # Clean exit - ECS restarts the container
+                            else:
+                                # Genuine timeout after waiting ~2 minutes - normal operation
+                                print(f"[TIMEOUT] Genuine timeout after {elapsed:.1f}s - no mentions received")
+                                continue
+                        else:
+                            # First iteration, just continue
+                            print("[TIMEOUT] Timeout waiting for mentions, retrying...")
+                            continue
                     
                     if mentions_data.get("result") != "wait_for_mentions_success":
                         print(f"WARNING:  Unexpected result: {mentions_data.get('result')}, retrying...")
+                        await asyncio.sleep(2)  # Small delay before retry
                         continue
                     
                     # Check if messages exist
                     if "messages" not in mentions_data or not mentions_data["messages"]:
-                        print(" No messages in response, retrying...")
+                        print("No messages in response, retrying...")
+                        await asyncio.sleep(2)
                         continue
                     
                     sender_id = mentions_data["messages"][0]["senderId"]
