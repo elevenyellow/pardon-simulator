@@ -735,7 +735,8 @@ export default function ChatInterface({
     
     try {
       setLoading(true);
-      const thread = await apiClient.createThread(sessionId, selectedAgent);
+      const userWallet = publicKey?.toBase58();
+      const thread = await apiClient.createThread(sessionId, selectedAgent, userWallet);
       onThreadCreated(thread.threadId);
       
       // Only add welcome message if there are no existing messages (e.g., from cache)

@@ -111,12 +111,12 @@ class APIClient {
    * Create a new thread
    * Retries if agent is not ready (503)
    */
-  async createThread(sessionId: string, agentId: string, retries: number = 5, delayMs: number = 2000): Promise<CreateThreadResponse> {
+  async createThread(sessionId: string, agentId: string, userWallet?: string, retries: number = 5, delayMs: number = 2000): Promise<CreateThreadResponse> {
     for (let attempt = 1; attempt <= retries; attempt++) {
       const response = await fetch(`${this.baseUrl}/chat/thread`, {
         method:'POST',
         headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ sessionId, agentId }),
+        body: JSON.stringify({ sessionId, agentId, userWallet }),
       });
 
       if (response.ok) {

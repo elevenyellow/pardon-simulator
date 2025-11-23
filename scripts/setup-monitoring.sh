@@ -76,3 +76,4 @@ echo "These will appear in CloudWatch under the 'PardonSimulator' namespace"
 echo -e "\n${GREEN}Monitoring setup complete!${NC}"
 
 
+
