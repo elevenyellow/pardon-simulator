@@ -17,24 +17,29 @@ RUN apt-get update && \
 # Install Python AWS SDK
 RUN pip install --no-cache-dir boto3
 
-# Copy all agent directories and shared files
+# Copy shared base files (required for all agents)
+COPY base_agent.py /app/
+COPY executor_config.py /app/
+COPY worker_pool.py /app/
+COPY prompt_cache.py /app/
+COPY payment/ /app/payment/
+COPY utils/ /app/utils/
+
+# Copy shared x402 payment tools
+COPY x402_*.py /app/
+
+# Copy all agent directories
 COPY cz/ /app/cz/
+COPY sbf/ /app/sbf/
 COPY trump-donald/ /app/trump-donald/
 COPY trump-melania/ /app/trump-melania/
 COPY trump-eric/ /app/trump-eric/
 COPY trump-donjr/ /app/trump-donjr/
 COPY trump-barron/ /app/trump-barron/
 
-# Copy shared x402 payment tools
-COPY x402_*.py /app/cz/
-COPY x402_*.py /app/trump-donald/
-COPY x402_*.py /app/trump-melania/
-COPY x402_*.py /app/trump-eric/
-COPY x402_*.py /app/trump-donjr/
-COPY x402_*.py /app/trump-barron/
-
 # Install dependencies for each agent
 RUN cd /app/cz && pip install --no-cache-dir poetry && poetry config virtualenvs.create false && poetry install --only main --no-root && \
+    cd /app/sbf && pip install --no-cache-dir poetry && poetry config virtualenvs.create false && poetry install --only main --no-root && \
     cd /app/trump-donald && pip install --no-cache-dir poetry && poetry config virtualenvs.create false && poetry install --only main --no-root && \
     cd /app/trump-melania && pip install --no-cache-dir poetry && poetry config virtualenvs.create false && poetry install --only main --no-root && \
     cd /app/trump-eric && pip install --no-cache-dir poetry && poetry config virtualenvs.create false && poetry install --only main --no-root && \
