@@ -160,154 +160,203 @@ jobs:
               # Update coral-server image
               if .name == "coral-server" then
                 .image = $REGISTRY + "/coral-server:" + $TAG
-              # Update agent images and inject secrets
+              # Update agent images and SET ALL environment variables from scratch
               elif .name == "agent-cz" then
                 .image = $REGISTRY + "/pardon-agent:" + $TAG |
-                .environment |= (
-                  map(select(.name != "CORAL_SESSIONS")) |
-                  map(
-                    if .name == "MODEL_API_KEY" then .value = $MODEL_KEY
-                    elif .name == "SOLANA_RPC_URL" then .value = $RPC_URL
-                    elif .name == "CORAL_SSE_URL" then .value = "http://localhost:5555/sse/v1/devmode/app/priv"
-                    elif .name == "SOLANA_PRIVATE_KEY" then .value = $CZ_PRIV
-                    elif .name == "SOLANA_PUBLIC_ADDRESS" then .value = $CZ_PUB
-                    elif .name == "WALLET_WHITE_HOUSE" then .value = $WHITE_HOUSE
-                    elif .name == "WALLET_CZ" then .value = $CZ_PUB
-                    elif .name == "WALLET_SBF" then .value = $SBF_PUB
-                    elif .name == "WALLET_DONALD_TRUMP" then .value = $DONALD_PUB
-                    elif .name == "WALLET_MELANIA_TRUMP" then .value = $MELANIA_PUB
-                    elif .name == "WALLET_ERIC_TRUMP" then .value = $ERIC_PUB
-                    elif .name == "WALLET_DONJR_TRUMP" then .value = $DONJR_PUB
-                    elif .name == "WALLET_BARRON_TRUMP" then .value = $BARRON_PUB
-                    else . end
-                  ) + [{name: "CORAL_SESSIONS", value: "pool-0,pool-1,pool-2,pool-3,pool-4"}]
-                )
+                .environment = [
+                  {name: "AGENT_NAME", value: "cz"},
+                  {name: "CORAL_AGENT_ID", value: "cz"},
+                  {name: "MODEL_API_KEY", value: $MODEL_KEY},
+                  {name: "MODEL_NAME", value: "gpt-4o"},
+                  {name: "MODEL_PROVIDER", value: "openai"},
+                  {name: "MODEL_TEMPERATURE", value: "0.7"},
+                  {name: "MODEL_MAX_TOKENS", value: "8000"},
+                  {name: "SOLANA_RPC_URL", value: $RPC_URL},
+                  {name: "SOLANA_PRIVATE_KEY", value: $CZ_PRIV},
+                  {name: "SOLANA_PUBLIC_ADDRESS", value: $CZ_PUB},
+                  {name: "CORAL_SSE_URL", value: "http://localhost:5555/sse/v1/devmode/app/priv"},
+                  {name: "CORAL_SESSIONS", value: "pool-0,pool-1,pool-2,pool-3,pool-4"},
+                  {name: "WALLET_WHITE_HOUSE", value: $WHITE_HOUSE},
+                  {name: "WALLET_CZ", value: $CZ_PUB},
+                  {name: "WALLET_SBF", value: $SBF_PUB},
+                  {name: "WALLET_DONALD_TRUMP", value: $DONALD_PUB},
+                  {name: "WALLET_MELANIA_TRUMP", value: $MELANIA_PUB},
+                  {name: "WALLET_ERIC_TRUMP", value: $ERIC_PUB},
+                  {name: "WALLET_DONJR_TRUMP", value: $DONJR_PUB},
+                  {name: "WALLET_BARRON_TRUMP", value: $BARRON_PUB},
+                  {name: "BACKEND_URL", value: "https://pardonsimulator.com"},
+                  {name: "AWS_REGION", value: "us-east-1"},
+                  {name: "S3_BUCKET_NAME", value: "pardon-simulator-configs"},
+                  {name: "TIMEOUT_MS", value: "300"}
+                ]
               elif .name == "agent-sbf" then
                 .image = $REGISTRY + "/pardon-agent:" + $TAG |
-                .environment |= (
-                  map(select(.name != "CORAL_SESSIONS")) |
-                  map(
-                    if .name == "MODEL_API_KEY" then .value = $MODEL_KEY
-                    elif .name == "SOLANA_RPC_URL" then .value = $RPC_URL
-                    elif .name == "CORAL_SSE_URL" then .value = "http://localhost:5555/sse/v1/devmode/app/priv"
-                    elif .name == "SOLANA_PRIVATE_KEY" then .value = $SBF_PRIV
-                    elif .name == "SOLANA_PUBLIC_ADDRESS" then .value = $SBF_PUB
-                    elif .name == "WALLET_WHITE_HOUSE" then .value = $WHITE_HOUSE
-                    elif .name == "WALLET_CZ" then .value = $CZ_PUB
-                    elif .name == "WALLET_SBF" then .value = $SBF_PUB
-                    elif .name == "WALLET_DONALD_TRUMP" then .value = $DONALD_PUB
-                    elif .name == "WALLET_MELANIA_TRUMP" then .value = $MELANIA_PUB
-                    elif .name == "WALLET_ERIC_TRUMP" then .value = $ERIC_PUB
-                    elif .name == "WALLET_DONJR_TRUMP" then .value = $DONJR_PUB
-                    elif .name == "WALLET_BARRON_TRUMP" then .value = $BARRON_PUB
-                    else . end
-                  ) + [{name: "CORAL_SESSIONS", value: "pool-0,pool-1,pool-2,pool-3,pool-4"}]
-                )
+                .environment = [
+                  {name: "AGENT_NAME", value: "sbf"},
+                  {name: "CORAL_AGENT_ID", value: "sbf"},
+                  {name: "MODEL_API_KEY", value: $MODEL_KEY},
+                  {name: "MODEL_NAME", value: "gpt-4o"},
+                  {name: "MODEL_PROVIDER", value: "openai"},
+                  {name: "MODEL_TEMPERATURE", value: "0.7"},
+                  {name: "MODEL_MAX_TOKENS", value: "8000"},
+                  {name: "SOLANA_RPC_URL", value: $RPC_URL},
+                  {name: "SOLANA_PRIVATE_KEY", value: $SBF_PRIV},
+                  {name: "SOLANA_PUBLIC_ADDRESS", value: $SBF_PUB},
+                  {name: "CORAL_SSE_URL", value: "http://localhost:5555/sse/v1/devmode/app/priv"},
+                  {name: "CORAL_SESSIONS", value: "pool-0,pool-1,pool-2,pool-3,pool-4"},
+                  {name: "WALLET_WHITE_HOUSE", value: $WHITE_HOUSE},
+                  {name: "WALLET_CZ", value: $CZ_PUB},
+                  {name: "WALLET_SBF", value: $SBF_PUB},
+                  {name: "WALLET_DONALD_TRUMP", value: $DONALD_PUB},
+                  {name: "WALLET_MELANIA_TRUMP", value: $MELANIA_PUB},
+                  {name: "WALLET_ERIC_TRUMP", value: $ERIC_PUB},
+                  {name: "WALLET_DONJR_TRUMP", value: $DONJR_PUB},
+                  {name: "WALLET_BARRON_TRUMP", value: $BARRON_PUB},
+                  {name: "BACKEND_URL", value: "https://pardonsimulator.com"},
+                  {name: "AWS_REGION", value: "us-east-1"},
+                  {name: "S3_BUCKET_NAME", value: "pardon-simulator-configs"},
+                  {name: "TIMEOUT_MS", value: "300"}
+                ]
               elif .name == "agent-trump-donald" then
                 .image = $REGISTRY + "/pardon-agent:" + $TAG |
-                .environment |= (
-                  map(select(.name != "CORAL_SESSIONS")) |
-                  map(
-                    if .name == "MODEL_API_KEY" then .value = $MODEL_KEY
-                    elif .name == "SOLANA_RPC_URL" then .value = $RPC_URL
-                    elif .name == "CORAL_SSE_URL" then .value = "http://localhost:5555/sse/v1/devmode/app/priv"
-                    elif .name == "SOLANA_PRIVATE_KEY" then .value = $DONALD_PRIV
-                    elif .name == "SOLANA_PUBLIC_ADDRESS" then .value = $DONALD_PUB
-                    elif .name == "WALLET_WHITE_HOUSE" then .value = $WHITE_HOUSE
-                    elif .name == "WALLET_CZ" then .value = $CZ_PUB
-                    elif .name == "WALLET_SBF" then .value = $SBF_PUB
-                    elif .name == "WALLET_DONALD_TRUMP" then .value = $DONALD_PUB
-                    elif .name == "WALLET_MELANIA_TRUMP" then .value = $MELANIA_PUB
-                    elif .name == "WALLET_ERIC_TRUMP" then .value = $ERIC_PUB
-                    elif .name == "WALLET_DONJR_TRUMP" then .value = $DONJR_PUB
-                    elif .name == "WALLET_BARRON_TRUMP" then .value = $BARRON_PUB
-                    else . end
-                  ) + [{name: "CORAL_SESSIONS", value: "pool-0,pool-1,pool-2,pool-3,pool-4"}]
-                )
+                .environment = [
+                  {name: "AGENT_NAME", value: "trump-donald"},
+                  {name: "CORAL_AGENT_ID", value: "trump-donald"},
+                  {name: "MODEL_API_KEY", value: $MODEL_KEY},
+                  {name: "MODEL_NAME", value: "gpt-4o"},
+                  {name: "MODEL_PROVIDER", value: "openai"},
+                  {name: "MODEL_TEMPERATURE", value: "0.7"},
+                  {name: "MODEL_MAX_TOKENS", value: "8000"},
+                  {name: "SOLANA_RPC_URL", value: $RPC_URL},
+                  {name: "SOLANA_PRIVATE_KEY", value: $DONALD_PRIV},
+                  {name: "SOLANA_PUBLIC_ADDRESS", value: $DONALD_PUB},
+                  {name: "CORAL_SSE_URL", value: "http://localhost:5555/sse/v1/devmode/app/priv"},
+                  {name: "CORAL_SESSIONS", value: "pool-0,pool-1,pool-2,pool-3,pool-4"},
+                  {name: "WALLET_WHITE_HOUSE", value: $WHITE_HOUSE},
+                  {name: "WALLET_CZ", value: $CZ_PUB},
+                  {name: "WALLET_SBF", value: $SBF_PUB},
+                  {name: "WALLET_DONALD_TRUMP", value: $DONALD_PUB},
+                  {name: "WALLET_MELANIA_TRUMP", value: $MELANIA_PUB},
+                  {name: "WALLET_ERIC_TRUMP", value: $ERIC_PUB},
+                  {name: "WALLET_DONJR_TRUMP", value: $DONJR_PUB},
+                  {name: "WALLET_BARRON_TRUMP", value: $BARRON_PUB},
+                  {name: "BACKEND_URL", value: "https://pardonsimulator.com"},
+                  {name: "AWS_REGION", value: "us-east-1"},
+                  {name: "S3_BUCKET_NAME", value: "pardon-simulator-configs"},
+                  {name: "TIMEOUT_MS", value: "300"}
+                ]
               elif .name == "agent-trump-melania" then
                 .image = $REGISTRY + "/pardon-agent:" + $TAG |
-                .environment |= (
-                  map(select(.name != "CORAL_SESSIONS")) |
-                  map(
-                    if .name == "MODEL_API_KEY" then .value = $MODEL_KEY
-                    elif .name == "SOLANA_RPC_URL" then .value = $RPC_URL
-                    elif .name == "CORAL_SSE_URL" then .value = "http://localhost:5555/sse/v1/devmode/app/priv"
-                    elif .name == "SOLANA_PRIVATE_KEY" then .value = $MELANIA_PRIV
-                    elif .name == "SOLANA_PUBLIC_ADDRESS" then .value = $MELANIA_PUB
-                    elif .name == "WALLET_WHITE_HOUSE" then .value = $WHITE_HOUSE
-                    elif .name == "WALLET_CZ" then .value = $CZ_PUB
-                    elif .name == "WALLET_SBF" then .value = $SBF_PUB
-                    elif .name == "WALLET_DONALD_TRUMP" then .value = $DONALD_PUB
-                    elif .name == "WALLET_MELANIA_TRUMP" then .value = $MELANIA_PUB
-                    elif .name == "WALLET_ERIC_TRUMP" then .value = $ERIC_PUB
-                    elif .name == "WALLET_DONJR_TRUMP" then .value = $DONJR_PUB
-                    elif .name == "WALLET_BARRON_TRUMP" then .value = $BARRON_PUB
-                    else . end
-                  ) + [{name: "CORAL_SESSIONS", value: "pool-0,pool-1,pool-2,pool-3,pool-4"}]
-                )
+                .environment = [
+                  {name: "AGENT_NAME", value: "trump-melania"},
+                  {name: "CORAL_AGENT_ID", value: "trump-melania"},
+                  {name: "MODEL_API_KEY", value: $MODEL_KEY},
+                  {name: "MODEL_NAME", value: "gpt-4o"},
+                  {name: "MODEL_PROVIDER", value: "openai"},
+                  {name: "MODEL_TEMPERATURE", value: "0.7"},
+                  {name: "MODEL_MAX_TOKENS", value: "8000"},
+                  {name: "SOLANA_RPC_URL", value: $RPC_URL},
+                  {name: "SOLANA_PRIVATE_KEY", value: $MELANIA_PRIV},
+                  {name: "SOLANA_PUBLIC_ADDRESS", value: $MELANIA_PUB},
+                  {name: "CORAL_SSE_URL", value: "http://localhost:5555/sse/v1/devmode/app/priv"},
+                  {name: "CORAL_SESSIONS", value: "pool-0,pool-1,pool-2,pool-3,pool-4"},
+                  {name: "WALLET_WHITE_HOUSE", value: $WHITE_HOUSE},
+                  {name: "WALLET_CZ", value: $CZ_PUB},
+                  {name: "WALLET_SBF", value: $SBF_PUB},
+                  {name: "WALLET_DONALD_TRUMP", value: $DONALD_PUB},
+                  {name: "WALLET_MELANIA_TRUMP", value: $MELANIA_PUB},
+                  {name: "WALLET_ERIC_TRUMP", value: $ERIC_PUB},
+                  {name: "WALLET_DONJR_TRUMP", value: $DONJR_PUB},
+                  {name: "WALLET_BARRON_TRUMP", value: $BARRON_PUB},
+                  {name: "BACKEND_URL", value: "https://pardonsimulator.com"},
+                  {name: "AWS_REGION", value: "us-east-1"},
+                  {name: "S3_BUCKET_NAME", value: "pardon-simulator-configs"},
+                  {name: "TIMEOUT_MS", value: "300"}
+                ]
               elif .name == "agent-trump-eric" then
                 .image = $REGISTRY + "/pardon-agent:" + $TAG |
-                .environment |= (
-                  map(select(.name != "CORAL_SESSIONS")) |
-                  map(
-                    if .name == "MODEL_API_KEY" then .value = $MODEL_KEY
-                    elif .name == "SOLANA_RPC_URL" then .value = $RPC_URL
-                    elif .name == "CORAL_SSE_URL" then .value = "http://localhost:5555/sse/v1/devmode/app/priv"
-                    elif .name == "SOLANA_PRIVATE_KEY" then .value = $ERIC_PRIV
-                    elif .name == "SOLANA_PUBLIC_ADDRESS" then .value = $ERIC_PUB
-                    elif .name == "WALLET_WHITE_HOUSE" then .value = $WHITE_HOUSE
-                    elif .name == "WALLET_CZ" then .value = $CZ_PUB
-                    elif .name == "WALLET_SBF" then .value = $SBF_PUB
-                    elif .name == "WALLET_DONALD_TRUMP" then .value = $DONALD_PUB
-                    elif .name == "WALLET_MELANIA_TRUMP" then .value = $MELANIA_PUB
-                    elif .name == "WALLET_ERIC_TRUMP" then .value = $ERIC_PUB
-                    elif .name == "WALLET_DONJR_TRUMP" then .value = $DONJR_PUB
-                    elif .name == "WALLET_BARRON_TRUMP" then .value = $BARRON_PUB
-                    else . end
-                  ) + [{name: "CORAL_SESSIONS", value: "pool-0,pool-1,pool-2,pool-3,pool-4"}]
-                )
+                .environment = [
+                  {name: "AGENT_NAME", value: "trump-eric"},
+                  {name: "CORAL_AGENT_ID", value: "trump-eric"},
+                  {name: "MODEL_API_KEY", value: $MODEL_KEY},
+                  {name: "MODEL_NAME", value: "gpt-4o"},
+                  {name: "MODEL_PROVIDER", value: "openai"},
+                  {name: "MODEL_TEMPERATURE", value: "0.7"},
+                  {name: "MODEL_MAX_TOKENS", value: "8000"},
+                  {name: "SOLANA_RPC_URL", value: $RPC_URL},
+                  {name: "SOLANA_PRIVATE_KEY", value: $ERIC_PRIV},
+                  {name: "SOLANA_PUBLIC_ADDRESS", value: $ERIC_PUB},
+                  {name: "CORAL_SSE_URL", value: "http://localhost:5555/sse/v1/devmode/app/priv"},
+                  {name: "CORAL_SESSIONS", value: "pool-0,pool-1,pool-2,pool-3,pool-4"},
+                  {name: "WALLET_WHITE_HOUSE", value: $WHITE_HOUSE},
+                  {name: "WALLET_CZ", value: $CZ_PUB},
+                  {name: "WALLET_SBF", value: $SBF_PUB},
+                  {name: "WALLET_DONALD_TRUMP", value: $DONALD_PUB},
+                  {name: "WALLET_MELANIA_TRUMP", value: $MELANIA_PUB},
+                  {name: "WALLET_ERIC_TRUMP", value: $ERIC_PUB},
+                  {name: "WALLET_DONJR_TRUMP", value: $DONJR_PUB},
+                  {name: "WALLET_BARRON_TRUMP", value: $BARRON_PUB},
+                  {name: "BACKEND_URL", value: "https://pardonsimulator.com"},
+                  {name: "AWS_REGION", value: "us-east-1"},
+                  {name: "S3_BUCKET_NAME", value: "pardon-simulator-configs"},
+                  {name: "TIMEOUT_MS", value: "300"}
+                ]
               elif .name == "agent-trump-donjr" then
                 .image = $REGISTRY + "/pardon-agent:" + $TAG |
-                .environment |= (
-                  map(select(.name != "CORAL_SESSIONS")) |
-                  map(
-                    if .name == "MODEL_API_KEY" then .value = $MODEL_KEY
-                    elif .name == "SOLANA_RPC_URL" then .value = $RPC_URL
-                    elif .name == "CORAL_SSE_URL" then .value = "http://localhost:5555/sse/v1/devmode/app/priv"
-                    elif .name == "SOLANA_PRIVATE_KEY" then .value = $DONJR_PRIV
-                    elif .name == "SOLANA_PUBLIC_ADDRESS" then .value = $DONJR_PUB
-                    elif .name == "WALLET_WHITE_HOUSE" then .value = $WHITE_HOUSE
-                    elif .name == "WALLET_CZ" then .value = $CZ_PUB
-                    elif .name == "WALLET_SBF" then .value = $SBF_PUB
-                    elif .name == "WALLET_DONALD_TRUMP" then .value = $DONALD_PUB
-                    elif .name == "WALLET_MELANIA_TRUMP" then .value = $MELANIA_PUB
-                    elif .name == "WALLET_ERIC_TRUMP" then .value = $ERIC_PUB
-                    elif .name == "WALLET_DONJR_TRUMP" then .value = $DONJR_PUB
-                    elif .name == "WALLET_BARRON_TRUMP" then .value = $BARRON_PUB
-                    else . end
-                  ) + [{name: "CORAL_SESSIONS", value: "pool-0,pool-1,pool-2,pool-3,pool-4"}]
-                )
+                .environment = [
+                  {name: "AGENT_NAME", value: "trump-donjr"},
+                  {name: "CORAL_AGENT_ID", value: "trump-donjr"},
+                  {name: "MODEL_API_KEY", value: $MODEL_KEY},
+                  {name: "MODEL_NAME", value: "gpt-4o"},
+                  {name: "MODEL_PROVIDER", value: "openai"},
+                  {name: "MODEL_TEMPERATURE", value: "0.7"},
+                  {name: "MODEL_MAX_TOKENS", value: "8000"},
+                  {name: "SOLANA_RPC_URL", value: $RPC_URL},
+                  {name: "SOLANA_PRIVATE_KEY", value: $DONJR_PRIV},
+                  {name: "SOLANA_PUBLIC_ADDRESS", value: $DONJR_PUB},
+                  {name: "CORAL_SSE_URL", value: "http://localhost:5555/sse/v1/devmode/app/priv"},
+                  {name: "CORAL_SESSIONS", value: "pool-0,pool-1,pool-2,pool-3,pool-4"},
+                  {name: "WALLET_WHITE_HOUSE", value: $WHITE_HOUSE},
+                  {name: "WALLET_CZ", value: $CZ_PUB},
+                  {name: "WALLET_SBF", value: $SBF_PUB},
+                  {name: "WALLET_DONALD_TRUMP", value: $DONALD_PUB},
+                  {name: "WALLET_MELANIA_TRUMP", value: $MELANIA_PUB},
+                  {name: "WALLET_ERIC_TRUMP", value: $ERIC_PUB},
+                  {name: "WALLET_DONJR_TRUMP", value: $DONJR_PUB},
+                  {name: "WALLET_BARRON_TRUMP", value: $BARRON_PUB},
+                  {name: "BACKEND_URL", value: "https://pardonsimulator.com"},
+                  {name: "AWS_REGION", value: "us-east-1"},
+                  {name: "S3_BUCKET_NAME", value: "pardon-simulator-configs"},
+                  {name: "TIMEOUT_MS", value: "300"}
+                ]
               elif .name == "agent-trump-barron" then
                 .image = $REGISTRY + "/pardon-agent:" + $TAG |
-                .environment |= (
-                  map(select(.name != "CORAL_SESSIONS")) |
-                  map(
-                    if .name == "MODEL_API_KEY" then .value = $MODEL_KEY
-                    elif .name == "SOLANA_RPC_URL" then .value = $RPC_URL
-                    elif .name == "CORAL_SSE_URL" then .value = "http://localhost:5555/sse/v1/devmode/app/priv"
-                    elif .name == "SOLANA_PRIVATE_KEY" then .value = $BARRON_PRIV
-                    elif .name == "SOLANA_PUBLIC_ADDRESS" then .value = $BARRON_PUB
-                    elif .name == "WALLET_WHITE_HOUSE" then .value = $WHITE_HOUSE
-                    elif .name == "WALLET_CZ" then .value = $CZ_PUB
-                    elif .name == "WALLET_SBF" then .value = $SBF_PUB
-                    elif .name == "WALLET_DONALD_TRUMP" then .value = $DONALD_PUB
-                    elif .name == "WALLET_MELANIA_TRUMP" then .value = $MELANIA_PUB
-                    elif .name == "WALLET_ERIC_TRUMP" then .value = $ERIC_PUB
-                    elif .name == "WALLET_DONJR_TRUMP" then .value = $DONJR_PUB
-                    elif .name == "WALLET_BARRON_TRUMP" then .value = $BARRON_PUB
-                    else . end
-                  ) + [{name: "CORAL_SESSIONS", value: "pool-0,pool-1,pool-2,pool-3,pool-4"}]
-                )
+                .environment = [
+                  {name: "AGENT_NAME", value: "trump-barron"},
+                  {name: "CORAL_AGENT_ID", value: "trump-barron"},
+                  {name: "MODEL_API_KEY", value: $MODEL_KEY},
+                  {name: "MODEL_NAME", value: "gpt-4o"},
+                  {name: "MODEL_PROVIDER", value: "openai"},
+                  {name: "MODEL_TEMPERATURE", value: "0.7"},
+                  {name: "MODEL_MAX_TOKENS", value: "8000"},
+                  {name: "SOLANA_RPC_URL", value: $RPC_URL},
+                  {name: "SOLANA_PRIVATE_KEY", value: $BARRON_PRIV},
+                  {name: "SOLANA_PUBLIC_ADDRESS", value: $BARRON_PUB},
+                  {name: "CORAL_SSE_URL", value: "http://localhost:5555/sse/v1/devmode/app/priv"},
+                  {name: "CORAL_SESSIONS", value: "pool-0,pool-1,pool-2,pool-3,pool-4"},
+                  {name: "WALLET_WHITE_HOUSE", value: $WHITE_HOUSE},
+                  {name: "WALLET_CZ", value: $CZ_PUB},
+                  {name: "WALLET_SBF", value: $SBF_PUB},
+                  {name: "WALLET_DONALD_TRUMP", value: $DONALD_PUB},
+                  {name: "WALLET_MELANIA_TRUMP", value: $MELANIA_PUB},
+                  {name: "WALLET_ERIC_TRUMP", value: $ERIC_PUB},
+                  {name: "WALLET_DONJR_TRUMP", value: $DONJR_PUB},
+                  {name: "WALLET_BARRON_TRUMP", value: $BARRON_PUB},
+                  {name: "BACKEND_URL", value: "https://pardonsimulator.com"},
+                  {name: "AWS_REGION", value: "us-east-1"},
+                  {name: "S3_BUCKET_NAME", value: "pardon-simulator-configs"},
+                  {name: "TIMEOUT_MS", value: "300"}
+                ]
               else . end
             ) |
             # Remove fields that cannot be included in registration
