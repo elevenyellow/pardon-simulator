@@ -1,0 +1,26 @@
+{
+  "tools": [
+    {
+      "name": "example_tool_name",
+      "description": "Description of what this tool does",
+      "parameters": {},
+      "response": "Static response for tools with no parameters"
+    },
+    {
+      "name": "example_templated_tool",
+      "description": "Description of tool with parameters",
+      "parameters": {
+        "param1": {
+          "type": "string",
+          "description": "Description of parameter"
+        },
+        "param2": {
+          "type": "string",
+          "description": "Description of another parameter"
+        }
+      },
+      "response_template": "Response with {param1} and {param2} inserted"
+    }
+  ]
+}
+

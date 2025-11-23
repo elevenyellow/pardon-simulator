@@ -25,7 +25,7 @@ from x402_solana_payload import (
 )
 
 # Load agent wallet addresses from environment variables
-def load_agent_wallets() -> Dict[str, str]:
+def load_agent_wallets(suppress_warning: bool = False) -> Dict[str, str]:
     """Load agent wallet addresses from environment variables"""
     wallets = {
         "trump-donald": os.getenv("WALLET_DONALD_TRUMP", ""),
@@ -36,18 +36,18 @@ def load_agent_wallets() -> Dict[str, str]:
         "cz": os.getenv("WALLET_CZ", ""),
     }
     
-    # Filter out empty values and warn about missing wallets
+    # Filter out empty values and warn about missing wallets (when allowed)
     missing = [agent for agent, addr in wallets.items() if not addr]
-    if missing:
+    if missing and not suppress_warning:
         print(f"⚠️  Warning: Missing wallet addresses for: {', '.join(missing)}")
-        print(f"   Please set WALLET_[AGENT] environment variables in .env")
+        print("   Please set WALLET_[AGENT] environment variables in .env")
     
     # Return only configured wallets
     return {agent: addr for agent, addr in wallets.items() if addr}
 
 # Agent wallet directory (for cross-agent transactions and payment requests)
 # NOTE: "sbf" is NOT included - SBF is user-controlled via browser wallet
-AGENT_WALLETS = load_agent_wallets()
+AGENT_WALLETS = load_agent_wallets(suppress_warning=True)
 
 def reload_agent_wallets():
     """Reload agent wallet addresses after .env file is loaded"""
@@ -61,10 +61,6 @@ def reload_agent_wallets():
 
 # White House Treasury - Central revenue collection (CRITICAL SECURITY)
 WHITE_HOUSE_WALLET = os.getenv("WALLET_WHITE_HOUSE", "")
-if not WHITE_HOUSE_WALLET:
-    print("⚠️  WARNING: WALLET_WHITE_HOUSE not configured!")
-    print("   All user payments should be forwarded to the White House treasury")
-    print("   Set WALLET_WHITE_HOUSE in your .env file")
 
 # Payment ledger - tracks pending and completed payments
 payment_ledger = {
@@ -186,6 +182,12 @@ async def request_premium_service(
         # Variable-amount service (bribe):
         request_premium_service("sbf", "cz", "bribe", "Help me get pardon", custom_amount=1.50)
     """
+    print("="*80)
+    print(f"[TEST_DEBUG] PREMIUM SERVICE REQUEST")
+    print(f"[TEST_DEBUG] Timestamp: {time.time()}")
+    print(f"[TEST_DEBUG] From: {from_agent}, To: {to_agent}")
+    print(f"[TEST_DEBUG] Service: {service_type}, Amount: {custom_amount}")
+    print("="*80)
     print(f"🔥🔥🔥 request_premium_service() TOOL CALLED! 🔥🔥🔥")
     print(f"   from: {from_agent}, to: {to_agent}, service: {service_type}")
     if custom_amount:
@@ -1571,6 +1573,8 @@ async def verify_payment_transaction(
     """
     Verify payment transaction through backend (x402 facilitator).
     
+    [TEST_DEBUG marker for automated testing]
+    
     This is the NEW proper x402 flow for agents to verify payments:
     1. User submits payment via /api/x402/user-submit (frontend → backend → facilitator)
     2. User receives transaction hash
@@ -1628,6 +1632,13 @@ async def verify_payment_transaction(
         to_agent = os.getenv("CORAL_AGENT_ID", "unknown")
     
     print(f"\n{'='*80}")
+    print(f"[TEST_DEBUG] VERIFY PAYMENT TRANSACTION CALLED")
+    print(f"[TEST_DEBUG] Timestamp: {time.time()}")
+    print(f"[TEST_DEBUG] Tx: {transaction_hash[:16]}...{transaction_hash[-16:]}")
+    print(f"[TEST_DEBUG] From: {expected_from[:8]}...{expected_from[-8:]}")
+    print(f"[TEST_DEBUG] Amount: {expected_amount_usdc} USDC")
+    print(f"[TEST_DEBUG] Service: {service_type}")
+    print(f"{'='*80}")
     print(f"🔍 VERIFYING PAYMENT VIA BACKEND")
     print(f"{'='*80}")
     print(f"Transaction: {transaction_hash[:16]}...{transaction_hash[-16:]}")
@@ -1700,6 +1711,9 @@ Please ensure you sent the correct payment."""
         # Payment verified successfully!
         details = result["details"]
         
+        print(f"{'='*80}")
+        print(f"[TEST_DEBUG] PAYMENT VERIFIED SUCCESSFULLY via backend")
+        print(f"[TEST_DEBUG] Timestamp: {time.time()}")
         print(f"{'='*80}")
         print(f"✅ PAYMENT VERIFIED SUCCESSFULLY!")
         print(f"{'='*80}")

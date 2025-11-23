@@ -9,6 +9,7 @@ import { getClientIP, logInjectionAttempt } from'@/lib/security/monitoring';
 import { createFacilitatorConfig } from'@coinbase/x402';
 import type { PaymentPayload, PaymentRequirements } from'x402/types';
 import { restoreCoralSession } from'@/lib/sessionRestoration';
+import { USER_SENDER_ID } from'@/lib/constants';
 
 const CORAL_SERVER_URL = process.env.CORAL_SERVER_URL ||'http://localhost:5555';
 const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL;
@@ -34,36 +35,50 @@ interface PaymentRequest {
  * Send message to agent with x402 payment protocol support
  */
 function validatePromptStrict(content: string, isPaymentConfirmation: boolean = false): { valid: boolean; error?: string } {
+  // Length check: 200 characters for regular messages
   if (!isPaymentConfirmation) {
-    if (content.length > 100) {
+    if (content.length > 200) {
       return {
         valid: false,
-        error:'Message exceeds 100 characters'      };
+        error:'Message exceeds 200 characters'      };
     }
   }
   
   const hasSignature = /Transaction signature:\s*[1-9A-HJ-NP-Za-km-z]{87,88}/.test(content);
   if (!hasSignature) {
-    const englishRegex = /^[a-zA-Z0-9\s\.,!?;:'"()\-@#$%&*+=\[\]{}\/\\]+$/;
-    if (!englishRegex.test(content)) {
+    // More flexible character validation:
+    // - Standard English alphanumeric
+    // - Common punctuation: . , ! ? ; : ' " ( ) - @ # $ % & * + = [ ] { } / \
+    // - Spanish punctuation: ¿ ¡
+    // - Curly quotes: " " ' ' (Unicode)
+    // - Currency symbols: $
+    // - Underscore: _ (for identifiers, service names, usernames)
+    // Still prevents: < > | ` ~ ^ (which could be used in injections)
+    const allowedCharsRegex = /^[a-zA-Z0-9_\s\.,!?¿¡;:'""\u2018\u2019\u201C\u201D()\-@#$%&*+=\[\]{}\/\\]+$/;
+    
+    if (!allowedCharsRegex.test(content)) {
       return {
         valid: false,
-        error:'Please use only English characters in your message. Special characters are not allowed except in payment confirmations.'      };
+        error:'Please use standard characters. Avoid special symbols like <, >, |, `, ~, ^'      };
     }
   }
   
+  // Security: Block prompt injection and score manipulation attempts
   if (!isPaymentConfirmation) {
     const injectionPatterns = [
       { pattern: /award.*\d+.*points/i, name:'score_manipulation'},
-      { pattern: /give.*me.*\d+/i, name:'score_request'},
+      { pattern: /give.*me.*\d+.*points/i, name:'score_request'},
       { pattern: /set.*score.*\d+/i, name:'score_setting'},
       { pattern: /system\s*prompt/i, name:'prompt_injection'},
       { pattern: /ignore\s*previous/i, name:'instruction_override'},
+      { pattern: /ignore\s*instructions/i, name:'instruction_override'},
+      { pattern: /<script|<iframe|javascript:/i, name:'xss_attempt'},
+      { pattern: /union.*select|drop.*table|insert.*into/i, name:'sql_injection'},
     ];
     
     for (const { pattern, name } of injectionPatterns) {
       if (pattern.test(content)) {
-        console.warn('[security] Injection attempt detected');
+        console.warn('[security] Injection attempt detected:', name);
         return {
           valid: false,
           error:'Invalid message content'
@@ -97,6 +112,49 @@ async function handlePOST(request: NextRequest) {
       return NextResponse.json(
         { error:'Invalid or missing wallet address'},
         { status: 400 }
+      );
+    }
+    
+    // SECURITY: Users can only send messages as 'sbf'
+    // This prevents impersonation attacks via direct API calls
+    const requestedSenderId = rawBody.senderId;
+    if (requestedSenderId && requestedSenderId !== USER_SENDER_ID) {
+      console.warn(`[SECURITY] User attempted to send as '${requestedSenderId}' from wallet ${userWallet}`);
+      logInjectionAttempt(
+        getClientIP(request.headers),
+        '/api/chat/send',
+        `senderId: ${requestedSenderId}`,
+        'sender_impersonation'
+      );
+      return NextResponse.json(
+        { error: 'Unauthorized: Users can only send messages as SBF' },
+        { status: 403 }
+      );
+    }
+    
+    // SECURITY: Verify wallet matches session owner
+    // This prevents session hijacking attacks
+    const session = await prisma.session.findFirst({
+      where: { 
+        OR: [
+          { coralSessionId: sessionId },
+          { id: sessionId }
+        ]
+      },
+      include: { user: true }
+    });
+
+    if (session && session.user.walletAddress !== userWallet) {
+      console.warn(`[SECURITY] Wallet mismatch for session ${sessionId}: expected ${session.user.walletAddress}, got ${userWallet}`);
+      logInjectionAttempt(
+        getClientIP(request.headers),
+        '/api/chat/send',
+        `wallet_mismatch: session=${sessionId}, wallet=${userWallet}`,
+        'session_hijacking'
+      );
+      return NextResponse.json(
+        { error: 'Wallet mismatch: This session belongs to a different wallet' },
+        { status: 403 }
       );
     }
     
@@ -268,6 +326,8 @@ async function handlePOST(request: NextRequest) {
         
         const settleUrl =`${facilitator.url}/settle`;
         
+        console.log('[CDP] Sending settle request to:', settleUrl);
+        
         const settleResponse = await fetch(settleUrl, {
           method:'POST',
           headers: {
@@ -277,27 +337,36 @@ async function handlePOST(request: NextRequest) {
           body: JSON.stringify(settleRequestBody),
         });
         
+        console.log('[CDP] Settle response status:', settleResponse.status, settleResponse.statusText);
+        
         if (!settleResponse.ok) {
           const errorText = await settleResponse.text();
           let errorData;
           let isHtmlError = false;
           
+          console.error('[CDP] Settlement failed with status:', settleResponse.status);
+          console.error('[CDP] Response headers:', Object.fromEntries(settleResponse.headers.entries()));
+          
           try {
             errorData = JSON.parse(errorText);
+            console.error('[CDP] Error response (JSON):', errorData);
           } catch {
             // Check if error is HTML (CDP returns HTML error pages)
             if (errorText.trim().startsWith('<!DOCTYPE') || errorText.trim().startsWith('<html')) {
               isHtmlError = true;
               errorData = { errorMessage: `CDP returned HTML error page (${settleResponse.status} error)` };
-              console.error(`CDP settlement failed: ${settleResponse.status} - HTML error page received (not logging full HTML)`);
+              console.error(`[CDP] HTML error page received (not logging full HTML)`);
             } else {
               errorData = { errorMessage: errorText };
-              console.error('CDP settlement failed:', settleResponse.status, errorText.substring(0, 500)); // Limit log output
+              console.error('[CDP] Error response (text):', errorText.substring(0, 500)); // Limit log output
             }
           }
           
-          if (settleResponse.status >= 500 || isHtmlError) {
-            console.warn(`CDP backend error (${settleResponse.status}) - attempting on-chain verification as fallback`);
+          // ALWAYS attempt on-chain verification as fallback for ANY CDP error
+          // The transaction might have succeeded on-chain even if CDP API returns an error
+          if (true) {
+            console.warn(`CDP API error (${settleResponse.status}) - attempting on-chain verification as fallback`);
+            console.log(`CDP error details:`, errorData);
             
             try {
               // For partially-signed transactions (CDP co-signing):
@@ -418,14 +487,12 @@ async function handlePOST(request: NextRequest) {
               
             } catch (fallbackError: any) {
               console.error('[CDP Fallback] On-chain verification failed:', fallbackError.message);
-              throw new Error(`CDP error (${settleResponse.status}) and on-chain verification failed: ${fallbackError.message}`);
+              // Include both CDP error and fallback error for debugging
+              const errorMessage = isHtmlError 
+                ? `CDP returned HTML error (${settleResponse.status}), transaction not found on-chain: ${fallbackError.message}` 
+                : `CDP API error (${settleResponse.status}): ${errorText.substring(0, 200)}. On-chain verification failed: ${fallbackError.message}`;
+              throw new Error(errorMessage);
             }
-          } else {
-            // Don't include full HTML in error message
-            const errorMessage = isHtmlError 
-              ? `CDP facilitator settle failed: ${settleResponse.status} (HTML error page)` 
-              : `CDP facilitator settle failed: ${settleResponse.status} ${errorText.substring(0, 200)}`;
-            throw new Error(errorMessage);
           }
         } else {
           const settleResult = await settleResponse.json();
@@ -581,10 +648,10 @@ async function handlePOST(request: NextRequest) {
       throw new Error(`Failed to send message: ${sendResponse.statusText}`);
     }
 
-    await saveMessageToDatabase({
+    const savedMessage = await saveMessageToDatabase({
       threadId,
       sessionId,
-      senderId:'sbf',
+      senderId: USER_SENDER_ID,  // Always enforce, never trust client
       content,
       mentions: [agentId],
       isIntermediary: false,
@@ -614,8 +681,14 @@ async function handlePOST(request: NextRequest) {
 
   } catch (error: any) {
     console.error('Send message error:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Error details:', {
+      message: error.message,
+      name: error.name,
+      cause: error.cause
+    });
     return NextResponse.json(
-      { error:'internal_error', message:'An error occurred while sending your message. Please try again.'},
+      { error:'internal_error', message:'An error occurred while sending your message. Please try again.', details: error.message},
       { status: 500 }
     );
   }
@@ -754,9 +827,9 @@ async function saveMessageToDatabase(params: {
   mentions: string[];
   isIntermediary: boolean;
   userWallet?: string;
-}) {
+}): Promise<any> {
   try {
-    await withRetry(async () => {
+    return await withRetry(async () => {
       let thread = await prisma.thread.findFirst({
         where: { coralThreadId: params.threadId }
       });
@@ -815,7 +888,7 @@ async function saveMessageToDatabase(params: {
         });
       }
 
-      await prisma.message.create({
+      const message = await prisma.message.create({
         data: {
           threadId: thread.id,
           senderId: params.senderId,
@@ -824,10 +897,13 @@ async function saveMessageToDatabase(params: {
           isIntermediary: params.isIntermediary
         }
       });
+      
+      return message;
     }, { maxRetries: 3, initialDelay: 500 });
     
   } catch (error: any) {
     console.error('Error saving message to database:', error);
+    throw error;  // Re-throw so caller can handle
   }
 }
 

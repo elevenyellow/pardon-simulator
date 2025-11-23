@@ -23,6 +23,9 @@ fun <K, V> Map<K, V?>.filterNotNullValues(): Map<K, V> =
 @Resource("/api/v1/sessions")
 class Sessions
 
+@Resource("/api/v1/sessions/{sessionId}/agents")
+class SessionAgents(val sessionId: String)
+
 /**
  * Configures session-related routes.
  */
@@ -104,5 +107,46 @@ fun Routing.sessionApiRoutes(
     }) {
         val sessions = localSessionManager.getAllSessions()
         call.respond(HttpStatusCode.OK, sessions.map { it.id })
+    }
+    
+    get<SessionAgents>({
+        summary = "Get session agents"
+        description = "Fetches all agents connected to a session"
+        operationId = "getSessionAgents"
+        request {
+            pathParameter<String>("sessionId") {
+                description = "The session ID"
+            }
+        }
+        response {
+            HttpStatusCode.OK to {
+                description = "Success"
+            }
+            HttpStatusCode.NotFound to {
+                description = "Session not found"
+                body<RouteException> {
+                    description = "Error details"
+                }
+            }
+        }
+    }) { request ->
+        val session = localSessionManager.getSession(request.sessionId)
+        if (session == null) {
+            throw RouteException(HttpStatusCode.NotFound, "Session not found: ${request.sessionId}")
+        }
+        
+        val agentsList = session.agents.values.map { agent ->
+            mapOf(
+                "id" to agent.id,
+                "state" to agent.state.toString(),
+                "description" to agent.description
+            )
+        }
+        
+        call.respond(HttpStatusCode.OK, mapOf(
+            "sessionId" to session.id,
+            "agentCount" to session.agents.size,
+            "agents" to agentsList
+        ))
     }
 }

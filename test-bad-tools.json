@@ -1,0 +1,29 @@
+{
+  "tools": [
+    {
+      "name": "good_tool",
+      "description": "This tool is fine",
+      "parameters": {},
+      "response": "All good!"
+    },
+    {
+      "name": "missing_description_tool",
+      "parameters": {},
+      "response": "Missing description"
+    },
+    {
+      "name": "wrong_template_tool",
+      "description": "Has wrong placeholders",
+      "parameters": {
+        "user_name": {"type": "string", "description": "The user's name"}
+      },
+      "response_template": "Hello {wrong_param}!"
+    },
+    "not_a_dictionary",
+    {
+      "name": "no_response_tool",
+      "description": "Missing both response and response_template"
+    }
+  ]
+}
+

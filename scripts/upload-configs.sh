@@ -6,6 +6,17 @@ echo "🔐 Uploading Agent Configs to AWS S3"
 echo "=========================================="
 echo ""
 
+# Check for --skip-validation flag
+SKIP_VALIDATION=false
+for arg in "$@"; do
+  if [ "$arg" == "--skip-validation" ]; then
+    SKIP_VALIDATION=true
+    echo "⚠️  WARNING: Validation skipped (--skip-validation flag)"
+    echo ""
+    break
+  fi
+done
+
 # Check if AWS CLI is configured
 if ! aws sts get-caller-identity &>/dev/null; then
   echo "❌ AWS CLI not configured. Please run 'aws configure' first."
@@ -19,7 +30,7 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 cd "$PROJECT_ROOT"
 
 AGENTS=("cz" "sbf" "trump-donald" "trump-melania" "trump-eric" "trump-donjr" "trump-barron")
-FILES=("operational-private.txt" "personality-public.txt" "scoring-config.txt" "tool-descriptions.txt")
+FILES=("operational-private.txt" "personality-public.txt" "scoring-config.txt" "tool-descriptions.txt" "tool-definitions.json")
 REGION=${AWS_REGION:-us-east-1}
 BUCKET_NAME=${S3_BUCKET_NAME:-pardon-simulator-configs}
 
@@ -30,6 +41,28 @@ echo "📍 Region: ${REGION}"
 echo "🪣 S3 Bucket: ${BUCKET_NAME}"
 echo "📅 Version: ${TIMESTAMP}"
 echo ""
+
+# Validate tool definitions before uploading
+if [ "$SKIP_VALIDATION" = false ]; then
+  echo "🔍 Validating tool definitions..."
+  if command -v python3 &> /dev/null; then
+    if python3 "${SCRIPT_DIR}/validate-tool-definitions.py" "${AGENTS[@]}"; then
+      echo "  ✅ Validation passed"
+    else
+      echo ""
+      echo "❌ Tool definitions validation FAILED!"
+      echo "   Fix errors before uploading to S3."
+      echo "   Run: python3 scripts/validate-tool-definitions.py"
+      echo ""
+      echo "To skip validation (not recommended):"
+      echo "   ./scripts/upload-configs.sh --skip-validation"
+      exit 1
+    fi
+  else
+    echo "  ⚠️  Python3 not found - skipping validation (not recommended)"
+  fi
+  echo ""
+fi
 
 # Create S3 bucket if it doesn't exist
 echo "🪣 Checking/creating S3 bucket..."

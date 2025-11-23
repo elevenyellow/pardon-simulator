@@ -1,0 +1,11 @@
+[
+  {
+    "ParameterKey": "EnvironmentName",
+    "ParameterValue": "pardon-production"
+  },
+  {
+    "ParameterKey": "CertificateArn",
+    "ParameterValue": ""
+  }
+]
+

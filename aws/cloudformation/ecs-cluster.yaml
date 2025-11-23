@@ -1,0 +1,492 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Pardon Simulator - ECS Cluster with Auto-Scaling'
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: pardon-production
+    Description: Environment name prefix
+
+  CoralServerImage:
+    Type: String
+    Description: ECR image URI for Coral Server
+    Default: 640080112933.dkr.ecr.us-east-1.amazonaws.com/coral-server:latest
+
+  PardonAgentImage:
+    Type: String
+    Description: ECR image URI for Pardon Agent
+    Default: 640080112933.dkr.ecr.us-east-1.amazonaws.com/pardon-agent:latest
+
+  DesiredCount:
+    Type: Number
+    Default: 3
+    Description: Desired number of ECS tasks
+
+  MinCapacity:
+    Type: Number
+    Default: 3
+    Description: Minimum number of ECS tasks
+
+  MaxCapacity:
+    Type: Number
+    Default: 10
+    Description: Maximum number of ECS tasks
+
+  S3BucketName:
+    Type: String
+    Description: S3 bucket for agent configurations
+    Default: pardon-simulator-configs
+
+Resources:
+  # ECS Cluster
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub ${EnvironmentName}-cluster
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: FARGATE
+          Weight: 1
+          Base: 1
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-cluster
+
+  # ECS Task Execution Role (for pulling images, accessing secrets)
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${EnvironmentName}-task-execution-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: SecretsManagerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !ImportValue pardon-production-OpenAIAPIKeySecretArn
+                  - !ImportValue pardon-production-HeliusAPIKeySecretArn
+                  - !ImportValue pardon-production-SolanaPrivateKeyCZArn
+                  - !ImportValue pardon-production-SolanaPrivateKeySBFArn
+                  - !ImportValue pardon-production-SolanaPrivateKeyDonaldArn
+                  - !ImportValue pardon-production-SolanaPrivateKeyMelaniaArn
+                  - !ImportValue pardon-production-SolanaPrivateKeyEricArn
+                  - !ImportValue pardon-production-SolanaPrivateKeyDonjrArn
+                  - !ImportValue pardon-production-SolanaPrivateKeyBarronArn
+                  - !ImportValue pardon-production-DatabaseURLSecretArn
+        - PolicyName: S3ConfigAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub arn:aws:s3:::${S3BucketName}/*
+                  - !Sub arn:aws:s3:::${S3BucketName}
+
+  # ECS Task Role (for CloudWatch metrics, RDS access)
+  ECSTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${EnvironmentName}-task-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchMetrics
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource: '*'
+        - PolicyName: S3ConfigAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub arn:aws:s3:::${S3BucketName}/*
+
+  # CloudWatch Log Group
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /ecs/${EnvironmentName}
+      RetentionInDays: 7
+
+  # ECS Task Definition
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${EnvironmentName}-task
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: '2048'
+      Memory: '8192'
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
+      ContainerDefinitions:
+        # Coral Server
+        - Name: coral-server
+          Image: !Ref CoralServerImage
+          Essential: true
+          PortMappings:
+            - ContainerPort: 5555
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: coral-server
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - curl -f http://localhost:5555/health || exit 1
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 60
+        # Agent: CZ
+        - Name: agent-cz
+          Image: !Ref PardonAgentImage
+          Essential: false
+          Command:
+            - /app/fetch-and-start.sh
+            - cz
+          WorkingDirectory: /app/cz
+          Environment:
+            - Name: CORAL_SESSIONS
+              Value: pool-0,pool-1,pool-2,pool-3,pool-4
+            - Name: CORAL_SSE_URL
+              Value: http://localhost:5555/sse/v1/devmode/app/priv
+            - Name: S3_BUCKET_NAME
+              Value: !Ref S3BucketName
+            - Name: AGENT_NAME
+              Value: cz
+          Secrets:
+            - Name: MODEL_API_KEY
+              ValueFrom: !ImportValue pardon-production-OpenAIAPIKeySecretArn
+            - Name: HELIUS_API_KEY
+              ValueFrom: !ImportValue pardon-production-HeliusAPIKeySecretArn
+            - Name: SOLANA_PRIVATE_KEY
+              ValueFrom: !ImportValue pardon-production-SolanaPrivateKeyCZArn
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: agent-cz
+          DependsOn:
+            - ContainerName: coral-server
+              Condition: START
+        # Agent: SBF
+        - Name: agent-sbf
+          Image: !Ref PardonAgentImage
+          Essential: false
+          Command:
+            - /app/fetch-and-start.sh
+            - sbf
+          WorkingDirectory: /app/sbf
+          Environment:
+            - Name: CORAL_SESSIONS
+              Value: pool-0,pool-1,pool-2,pool-3,pool-4
+            - Name: CORAL_SSE_URL
+              Value: http://localhost:5555/sse/v1/devmode/app/priv
+            - Name: S3_BUCKET_NAME
+              Value: !Ref S3BucketName
+            - Name: AGENT_NAME
+              Value: sbf
+          Secrets:
+            - Name: MODEL_API_KEY
+              ValueFrom: !ImportValue pardon-production-OpenAIAPIKeySecretArn
+            - Name: HELIUS_API_KEY
+              ValueFrom: !ImportValue pardon-production-HeliusAPIKeySecretArn
+            - Name: SOLANA_PRIVATE_KEY
+              ValueFrom: !ImportValue pardon-production-SolanaPrivateKeySBFArn
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: agent-sbf
+          DependsOn:
+            - ContainerName: coral-server
+              Condition: START
+        # Agent: Donald
+        - Name: agent-donald
+          Image: !Ref PardonAgentImage
+          Essential: false
+          Command:
+            - /app/fetch-and-start.sh
+            - donald
+          WorkingDirectory: /app/donald
+          Environment:
+            - Name: CORAL_SESSIONS
+              Value: pool-0,pool-1,pool-2,pool-3,pool-4
+            - Name: CORAL_SSE_URL
+              Value: http://localhost:5555/sse/v1/devmode/app/priv
+            - Name: S3_BUCKET_NAME
+              Value: !Ref S3BucketName
+            - Name: AGENT_NAME
+              Value: donald
+          Secrets:
+            - Name: MODEL_API_KEY
+              ValueFrom: !ImportValue pardon-production-OpenAIAPIKeySecretArn
+            - Name: HELIUS_API_KEY
+              ValueFrom: !ImportValue pardon-production-HeliusAPIKeySecretArn
+            - Name: SOLANA_PRIVATE_KEY
+              ValueFrom: !ImportValue pardon-production-SolanaPrivateKeyDonaldArn
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: agent-donald
+          DependsOn:
+            - ContainerName: coral-server
+              Condition: START
+        # Agent: Melania
+        - Name: agent-melania
+          Image: !Ref PardonAgentImage
+          Essential: false
+          Command:
+            - /app/fetch-and-start.sh
+            - melania
+          WorkingDirectory: /app/melania
+          Environment:
+            - Name: CORAL_SESSIONS
+              Value: pool-0,pool-1,pool-2,pool-3,pool-4
+            - Name: CORAL_SSE_URL
+              Value: http://localhost:5555/sse/v1/devmode/app/priv
+            - Name: S3_BUCKET_NAME
+              Value: !Ref S3BucketName
+            - Name: AGENT_NAME
+              Value: melania
+          Secrets:
+            - Name: MODEL_API_KEY
+              ValueFrom: !ImportValue pardon-production-OpenAIAPIKeySecretArn
+            - Name: HELIUS_API_KEY
+              ValueFrom: !ImportValue pardon-production-HeliusAPIKeySecretArn
+            - Name: SOLANA_PRIVATE_KEY
+              ValueFrom: !ImportValue pardon-production-SolanaPrivateKeyMelaniaArn
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: agent-melania
+          DependsOn:
+            - ContainerName: coral-server
+              Condition: START
+        # Agent: Eric
+        - Name: agent-eric
+          Image: !Ref PardonAgentImage
+          Essential: false
+          Command:
+            - /app/fetch-and-start.sh
+            - eric
+          WorkingDirectory: /app/eric
+          Environment:
+            - Name: CORAL_SESSIONS
+              Value: pool-0,pool-1,pool-2,pool-3,pool-4
+            - Name: CORAL_SSE_URL
+              Value: http://localhost:5555/sse/v1/devmode/app/priv
+            - Name: S3_BUCKET_NAME
+              Value: !Ref S3BucketName
+            - Name: AGENT_NAME
+              Value: eric
+          Secrets:
+            - Name: MODEL_API_KEY
+              ValueFrom: !ImportValue pardon-production-OpenAIAPIKeySecretArn
+            - Name: HELIUS_API_KEY
+              ValueFrom: !ImportValue pardon-production-HeliusAPIKeySecretArn
+            - Name: SOLANA_PRIVATE_KEY
+              ValueFrom: !ImportValue pardon-production-SolanaPrivateKeyEricArn
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: agent-eric
+          DependsOn:
+            - ContainerName: coral-server
+              Condition: START
+        # Agent: DonJr
+        - Name: agent-donjr
+          Image: !Ref PardonAgentImage
+          Essential: false
+          Command:
+            - /app/fetch-and-start.sh
+            - donjr
+          WorkingDirectory: /app/donjr
+          Environment:
+            - Name: CORAL_SESSIONS
+              Value: pool-0,pool-1,pool-2,pool-3,pool-4
+            - Name: CORAL_SSE_URL
+              Value: http://localhost:5555/sse/v1/devmode/app/priv
+            - Name: S3_BUCKET_NAME
+              Value: !Ref S3BucketName
+            - Name: AGENT_NAME
+              Value: donjr
+          Secrets:
+            - Name: MODEL_API_KEY
+              ValueFrom: !ImportValue pardon-production-OpenAIAPIKeySecretArn
+            - Name: HELIUS_API_KEY
+              ValueFrom: !ImportValue pardon-production-HeliusAPIKeySecretArn
+            - Name: SOLANA_PRIVATE_KEY
+              ValueFrom: !ImportValue pardon-production-SolanaPrivateKeyDonjrArn
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: agent-donjr
+          DependsOn:
+            - ContainerName: coral-server
+              Condition: START
+        # Agent: Barron
+        - Name: agent-barron
+          Image: !Ref PardonAgentImage
+          Essential: false
+          Command:
+            - /app/fetch-and-start.sh
+            - barron
+          WorkingDirectory: /app/barron
+          Environment:
+            - Name: CORAL_SESSIONS
+              Value: pool-0,pool-1,pool-2,pool-3,pool-4
+            - Name: CORAL_SSE_URL
+              Value: http://localhost:5555/sse/v1/devmode/app/priv
+            - Name: S3_BUCKET_NAME
+              Value: !Ref S3BucketName
+            - Name: AGENT_NAME
+              Value: barron
+          Secrets:
+            - Name: MODEL_API_KEY
+              ValueFrom: !ImportValue pardon-production-OpenAIAPIKeySecretArn
+            - Name: HELIUS_API_KEY
+              ValueFrom: !ImportValue pardon-production-HeliusAPIKeySecretArn
+            - Name: SOLANA_PRIVATE_KEY
+              ValueFrom: !ImportValue pardon-production-SolanaPrivateKeyBarronArn
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: agent-barron
+          DependsOn:
+            - ContainerName: coral-server
+              Condition: START
+
+  # ECS Service
+  ECSService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub ${EnvironmentName}-service
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref TaskDefinition
+      DesiredCount: !Ref DesiredCount
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          SecurityGroups:
+            - !ImportValue pardon-production-ECSSecurityGroup
+          Subnets: !Split [',', !ImportValue pardon-production-PrivateSubnets]
+          AssignPublicIp: DISABLED
+      LoadBalancers:
+        - ContainerName: coral-server
+          ContainerPort: 5555
+          TargetGroupArn: !ImportValue pardon-production-TargetGroup-Arn
+      HealthCheckGracePeriodSeconds: 60
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+
+  # Auto Scaling Target
+  AutoScalingTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MaxCapacity: !Ref MaxCapacity
+      MinCapacity: !Ref MinCapacity
+      ResourceId: !Sub service/${ECSCluster}/${ECSService.Name}
+      RoleARN: !Sub arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+
+  # Auto Scaling Policy (CPU)
+  AutoScalingPolicyCPU:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub ${EnvironmentName}-cpu-scaling
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref AutoScalingTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        TargetValue: 70.0
+        ScaleInCooldown: 300
+        ScaleOutCooldown: 60
+
+  # Auto Scaling Policy (Memory)
+  AutoScalingPolicyMemory:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub ${EnvironmentName}-memory-scaling
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref AutoScalingTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageMemoryUtilization
+        TargetValue: 80.0
+        ScaleInCooldown: 300
+        ScaleOutCooldown: 60
+
+Outputs:
+  ClusterArn:
+    Description: ARN of the ECS cluster
+    Value: !GetAtt ECSCluster.Arn
+    Export:
+      Name: !Sub ${EnvironmentName}-Cluster-Arn
+
+  ServiceArn:
+    Description: ARN of the ECS service
+    Value: !Ref ECSService
+    Export:
+      Name: !Sub ${EnvironmentName}-Service-Arn
+
+  TaskDefinitionArn:
+    Description: ARN of the task definition
+    Value: !Ref TaskDefinition
+    Export:
+      Name: !Sub ${EnvironmentName}-TaskDefinition-Arn
+

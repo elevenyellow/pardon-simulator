@@ -1,0 +1,143 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Pardon Simulator - RDS PostgreSQL with Read Replica'
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: pardon-production
+    Description: Environment name prefix
+
+  DBInstanceClass:
+    Type: String
+    Default: db.t3.medium
+    Description: RDS instance class
+    AllowedValues:
+      - db.t3.micro
+      - db.t3.small
+      - db.t3.medium
+      - db.t3.large
+
+  DBUsername:
+    Type: String
+    Default: pardon_admin
+    Description: Database master username
+    NoEcho: true
+
+  DBPassword:
+    Type: String
+    Description: Database master password (min 8 characters)
+    NoEcho: true
+    MinLength: 8
+
+  DBName:
+    Type: String
+    Default: pardon_simulator
+    Description: Initial database name
+
+  AllocatedStorage:
+    Type: Number
+    Default: 20
+    Description: Allocated storage in GB
+    MinValue: 20
+    MaxValue: 100
+
+  BackupRetentionPeriod:
+    Type: Number
+    Default: 7
+    Description: Number of days to retain backups
+    MinValue: 1
+    MaxValue: 35
+
+Resources:
+  # DB Parameter Group (enforce SSL)
+  DBParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      DBParameterGroupName: !Sub ${EnvironmentName}-postgres-params
+      Description: PostgreSQL parameter group with SSL enforcement
+      Family: postgres15
+      Parameters:
+        rds.force_ssl: '1'
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-postgres-params
+
+  # DB Subnet Group
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub ${EnvironmentName}-db-subnet-group
+      DBSubnetGroupDescription: Subnet group for RDS
+      SubnetIds: !Split [',', !ImportValue pardon-production-PrivateSubnets]
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-db-subnet-group
+
+  # Primary DB Instance
+  DBInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Sub ${EnvironmentName}-db
+      DBName: !Ref DBName
+      Engine: postgres
+      EngineVersion: '15.15'
+      DBInstanceClass: !Ref DBInstanceClass
+      AllocatedStorage: !Ref AllocatedStorage
+      StorageType: gp3
+      StorageEncrypted: true
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      VPCSecurityGroups:
+        - !ImportValue pardon-production-RDSSecurityGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      DBParameterGroupName: !Ref DBParameterGroup
+      MultiAZ: true
+      BackupRetentionPeriod: !Ref BackupRetentionPeriod
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      EnableCloudwatchLogsExports:
+        - postgresql
+      DeletionProtection: true
+      PubliclyAccessible: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-db-primary
+
+  # Read Replica (for analytics and reporting)
+  DBReadReplica:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub ${EnvironmentName}-db-replica
+      SourceDBInstanceIdentifier: !Ref DBInstance
+      DBInstanceClass: !Ref DBInstanceClass
+      PubliclyAccessible: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-db-replica
+
+Outputs:
+  DBInstanceEndpoint:
+    Description: Primary database endpoint
+    Value: !GetAtt DBInstance.Endpoint.Address
+    Export:
+      Name: !Sub ${EnvironmentName}-DB-Endpoint
+
+  DBInstancePort:
+    Description: Database port
+    Value: !GetAtt DBInstance.Endpoint.Port
+    Export:
+      Name: !Sub ${EnvironmentName}-DB-Port
+
+  DBReadReplicaEndpoint:
+    Description: Read replica endpoint
+    Value: !GetAtt DBReadReplica.Endpoint.Address
+    Export:
+      Name: !Sub ${EnvironmentName}-DB-Replica-Endpoint
+
+  DBConnectionString:
+    Description: PostgreSQL connection string format
+    Value: !Sub 'postgresql://${DBUsername}:PASSWORD@${DBInstance.Endpoint.Address}:${DBInstance.Endpoint.Port}/${DBName}'
+    Export:
+      Name: !Sub ${EnvironmentName}-DB-ConnectionString
+

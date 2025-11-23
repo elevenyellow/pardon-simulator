@@ -1,0 +1,195 @@
+# Artillery Load Test Configuration
+# Tests Pardon Simulator with 100 concurrent users
+# Run with: artillery run tests/load/artillery.yml
+
+config:
+  target: "https://pardonsimulator.com"
+  phases:
+    # Warm-up: 0 to 20 users over 2 minutes
+    - duration: 120
+      arrivalRate: 1
+      rampTo: 10
+      name: "Warm-up"
+    
+    # Ramp-up: 20 to 100 users over 5 minutes
+    - duration: 300
+      arrivalRate: 10
+      rampTo: 50
+      name: "Ramp-up"
+    
+    # Sustained load: 100 concurrent users for 30 minutes
+    - duration: 1800
+      arrivalRate: 50
+      name: "Sustained load"
+    
+    # Cool-down: 100 to 0 users over 2 minutes
+    - duration: 120
+      arrivalRate: 50
+      rampTo: 0
+      name: "Cool-down"
+  
+  processor: "./load-test-processor.js"
+  
+  # Environment variables
+  variables:
+    testMode: true
+  
+  # HTTP configuration
+  http:
+    timeout: 30
+    pool: 100
+  
+  # Plugins
+  plugins:
+    metrics-by-endpoint:
+      stripQueryString: true
+  
+  # Custom metrics
+  ensure:
+    maxErrorRate: 1  # Max 1% error rate
+    p95: 3000  # 95th percentile response time < 3 seconds
+    p99: 5000  # 99th percentile response time < 5 seconds
+
+scenarios:
+  # Scenario 1: New User Flow
+  - name: "New User Registration and Chat"
+    weight: 30
+    flow:
+      - post:
+          url: "/api/chat/session"
+          json:
+            userWallet: "{{ $randomWallet() }}"
+          capture:
+            - json: "$.sessionId"
+              as: "sessionId"
+          expect:
+            - statusCode: 200
+      
+      - think: 3
+      
+      - post:
+          url: "/api/chat/thread"
+          json:
+            sessionId: "{{ sessionId }}"
+          capture:
+            - json: "$.threadId"
+              as: "threadId"
+          expect:
+            - statusCode: 200
+      
+      - think: 5
+      
+      - post:
+          url: "/api/chat/send"
+          json:
+            sessionId: "{{ sessionId }}"
+            threadId: "{{ threadId }}"
+            content: "@cz What's happening with crypto markets?"
+            agentId: "cz"
+            userWallet: "{{ $randomWallet() }}"
+          expect:
+            - statusCode: 200
+      
+      - think: 10
+  
+  # Scenario 2: Returning User Flow
+  - name: "Returning User Chat"
+    weight: 50
+    flow:
+      - post:
+          url: "/api/chat/session"
+          json:
+            userWallet: "{{ $existingWallet() }}"
+          capture:
+            - json: "$.sessionId"
+              as: "sessionId"
+          expect:
+            - statusCode: 200
+      
+      - think: 2
+      
+      - post:
+          url: "/api/chat/thread"
+          json:
+            sessionId: "{{ sessionId }}"
+          capture:
+            - json: "$.threadId"
+              as: "threadId"
+          expect:
+            - statusCode: 200
+      
+      - think: 3
+      
+      # Multiple messages in conversation
+      - loop:
+          - post:
+              url: "/api/chat/send"
+              json:
+                sessionId: "{{ sessionId }}"
+                threadId: "{{ threadId }}"
+                content: "{{ $randomMessage() }}"
+                agentId: "{{ $randomAgent() }}"
+                userWallet: "{{ $existingWallet() }}"
+              expect:
+                - statusCode: 200
+          - think: 8
+        count: 3
+  
+  # Scenario 3: Multi-Agent Conversation
+  - name: "Multi-Agent Discussion"
+    weight: 15
+    flow:
+      - post:
+          url: "/api/chat/session"
+          json:
+            userWallet: "{{ $existingWallet() }}"
+          capture:
+            - json: "$.sessionId"
+              as: "sessionId"
+          expect:
+            - statusCode: 200
+      
+      - post:
+          url: "/api/chat/thread"
+          json:
+            sessionId: "{{ sessionId }}"
+          capture:
+            - json: "$.threadId"
+              as: "threadId"
+          expect:
+            - statusCode: 200
+      
+      # Ask multiple agents in sequence
+      - post:
+          url: "/api/chat/send"
+          json:
+            sessionId: "{{ sessionId }}"
+            threadId: "{{ threadId }}"
+            content: "@cz @sbf What do you think about recent regulations?"
+            agentId: "cz"
+            userWallet: "{{ $existingWallet() }}"
+      
+      - think: 15
+      
+      - post:
+          url: "/api/chat/send"
+          json:
+            sessionId: "{{ sessionId }}"
+            threadId: "{{ threadId }}"
+            content: "@donald What's your take on this?"
+            agentId: "donald"
+            userWallet: "{{ $existingWallet() }}"
+      
+      - think: 15
+  
+  # Scenario 4: Leaderboard Check
+  - name: "Check Leaderboard"
+    weight: 5
+    flow:
+      - get:
+          url: "/api/leaderboard?weekId={{ $currentWeek() }}"
+          expect:
+            - statusCode: 200
+      
+      - think: 5
+

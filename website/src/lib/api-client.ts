@@ -12,10 +12,22 @@ export interface SendMessageRequest {
   userWallet?: string;  // User's wallet address for message persistence
 }
 
+export interface SendMessageOptions {
+  paymentPayload?: unknown;
+  logContext?: Record<string, any>;
+}
+
 export interface SendMessageResponse {
   success: boolean;
   messages: CoralMessage[];
   paymentRequired?: PaymentRequest;
+  paymentSettlement?: {
+    transaction?: string;
+    network?: string;
+    payer?: string;
+    settled?: boolean;
+    solanaExplorer?: string;
+  };
   error?: string;
 }
 
@@ -73,8 +85,10 @@ export interface VerifyPaymentResponse {
 class APIClient {
   private baseUrl: string;
 
-  constructor() {
-    this.baseUrl ='/api';
+  constructor(baseUrl?: string) {
+    // Use provided baseUrl or default to relative path for browser
+    // In tests, pass full URL like 'http://localhost:3000/api'
+    this.baseUrl = baseUrl || (typeof window !== 'undefined' ? '/api' : 'http://localhost:3000/api');
   }
 
   /**
@@ -95,31 +109,64 @@ class APIClient {
 
   /**
    * Create a new thread
+   * Retries if agent is not ready (503)
    */
-  async createThread(sessionId: string, agentId: string): Promise<CreateThreadResponse> {
-    const response = await fetch(`${this.baseUrl}/chat/thread`, {
-      method:'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ sessionId, agentId }),
-    });
+  async createThread(sessionId: string, agentId: string, retries: number = 5, delayMs: number = 2000): Promise<CreateThreadResponse> {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      const response = await fetch(`${this.baseUrl}/chat/thread`, {
+        method:'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ sessionId, agentId }),
+      });
 
-    if (!response.ok) {
-      throw new Error(`Failed to create thread: ${response.statusText}`);
+      if (response.ok) {
+        const data = await response.json();
+        console.log('[API Client] Thread created', {
+          sessionId,
+          agentId,
+          threadId: data.threadId || data.id,
+        });
+        return data;
+      }
+
+      // If agent not ready (503), retry after delay
+      if (response.status === 503) {
+        const errorData = await response.json();
+        console.warn(`[Thread Creation] Attempt ${attempt}/${retries}: ${errorData.message}`);
+        
+        if (attempt < retries) {
+          console.log(`[Thread Creation] Waiting ${delayMs}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+          continue;
+        }
+      }
+
+      // For other errors, throw immediately
+      const errorText = await response.text().catch(() => response.statusText);
+      throw new Error(`Failed to create thread: ${errorText}`);
     }
 
-    return response.json();
+    throw new Error(`Failed to create thread after ${retries} attempts: Agent not ready`);
   }
 
   /**
    * Send message to agent
    * Returns 402 if payment required
    */
-  async sendMessage(request: SendMessageRequest): Promise<SendMessageResponse> {
-    console.log('API Client: Sending message to', request.agentId);
+  async sendMessage(
+    request: SendMessageRequest,
+    options?: SendMessageOptions
+  ): Promise<SendMessageResponse> {
+    console.log('API Client: Sending message to', request.agentId, options?.logContext || '');
     
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (options?.paymentPayload) {
+      headers['X-PAYMENT'] = JSON.stringify(options.paymentPayload);
+    }
+
     const response = await fetch(`${this.baseUrl}/chat/send`, {
       method:'POST',
-      headers: {'Content-Type':'application/json'},
+      headers,
       body: JSON.stringify(request),
     });
 
@@ -173,9 +220,20 @@ class APIClient {
       throw new Error(data.error ||`Failed to send message: ${response.statusText}`);
     }
 
+    let paymentSettlement: SendMessageResponse['paymentSettlement'];
+    const paymentResponseHeader = response.headers.get('X-PAYMENT-RESPONSE');
+    if (paymentResponseHeader) {
+      try {
+        paymentSettlement = JSON.parse(paymentResponseHeader);
+      } catch (err) {
+        console.warn('[API Client] Failed to parse X-PAYMENT-RESPONSE header:', err);
+      }
+    }
+
     return {
       success: true,
       messages: data.messages || [],
+      paymentSettlement,
     };
   }
 
@@ -222,6 +280,9 @@ class APIClient {
   }
 }
 
-// Export singleton instance
+// Export singleton instance (for browser use)
 export const apiClient = new APIClient();
+
+// Export class for tests (allows custom baseUrl)
+export { APIClient };
 

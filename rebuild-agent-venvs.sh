@@ -1,22 +1,29 @@
 #!/usr/bin/env bash
-# Rebuild all agent virtual environments with correct architecture
+# Platform-agnostic script to rebuild all agent virtual environments
+# Automatically detects and matches the current runtime architecture
 
 set -e
 
 echo "🔨 Rebuilding agent virtual environments..."
 echo ""
 
-# Detect system architecture
-ARCH=$(uname -m)
-echo "Current shell architecture: $ARCH"
+# Detect current runtime architecture (what Python actually runs as)
+RUNTIME_ARCH=$(python3 -c "import platform; print(platform.machine())")
+echo "🔍 Detected runtime architecture: $RUNTIME_ARCH"
 
-# Use python3 directly - universal binaries will run natively
-# in the shell's architecture without needing arch command
+# Use python3 directly - it will run in the architecture of the calling process
 export PYTHON_CMD="python3"
 
-echo "Using Python command: $PYTHON_CMD"
+echo "📦 Using Python: $PYTHON_CMD"
 $PYTHON_CMD --version
-python3 -c "import platform; print(f'Running as: {platform.machine()}')"
+echo "✓ Python will install packages for: $RUNTIME_ARCH"
+echo ""
+
+# Note for users
+echo "ℹ️  If you're getting architecture mismatches:"
+echo "   - Check if your terminal/tmux is running under Rosetta"
+echo "   - Run: file \$(which tmux) or file \$(which python3)"
+echo "   - All tools should match the same architecture"
 echo ""
 
 AGENTS=("trump-donald" "trump-melania" "trump-eric" "trump-donjr" "trump-barron" "cz" "sbf")

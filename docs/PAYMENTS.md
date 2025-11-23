@@ -48,7 +48,7 @@ The system supports two types of payment flows:
 
 **Dynamic payments** requested by agents during conversation.
 
-**Example**: "Influence Trump's opinion" service costs 50 USDC
+**Example**: Premium service requests with variable pricing (e.g., 0.01-0.10 USDC depending on service)
 
 **Flow**:
 1. User sends message to agent

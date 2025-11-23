@@ -1,6 +1,9 @@
 import { NextResponse } from'next/server';
+import { NextRequest } from'next/server';
 import fs from'fs';
 import path from'path';
+import { getUserSessionPool, selectHealthiestPool, isValidPoolId } from'@/lib/sessionPooling';
+import { sanitizeWalletAddress } from'@/lib/security/sanitize';
 
 //  Backend-only Coral Server URL (never exposed to browser)
 const CORAL_SERVER_URL = process.env.CORAL_SERVER_URL ||'http://localhost:5555';
@@ -8,11 +11,18 @@ const CORAL_SERVER_URL = process.env.CORAL_SERVER_URL ||'http://localhost:5555';
 /**
  * POST /api/chat/session
  * Create a new Coral session
+ * 
+ * SESSION POOLING: Users are distributed across multiple Coral sessions (pool-0 through pool-4)
+ * to prevent resource exhaustion. Each pool handles ~30-40 concurrent threads.
  */
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
     console.log('Creating Coral session...');
     console.log('Coral Server URL:', CORAL_SERVER_URL);
+    
+    // Get user wallet from request body for pool assignment
+    const body = await request.json().catch(() => ({}));
+    const userWallet = body.userWallet ? sanitizeWalletAddress(body.userWallet) : null;
     
     // Check if connecting to production ECS server (where agents are already running)
     // vs local docker-compose server (where agents need to be spawned)
@@ -20,13 +30,26 @@ export async function POST() {
                                            CORAL_SERVER_URL.includes('pardon-alb');
     
     if (isConnectingToProductionServer) {
-      // Production ECS: Agents auto-create "production-main" session when they connect
-      // via the /sse/v1/devmode/ endpoint. We just need to wait for it to exist.
-      const sessionId = 'production-main';
-      console.log(`Connecting to PRODUCTION ECS - Checking session: ${sessionId}`);
+      // Production ECS: Multi-pool architecture
+      // Agents connect to multiple sessions (pool-0 through pool-4)
+      // Assign user to pool based on wallet hash for consistent routing
+      
+      let sessionId: string;
+      
+      if (userWallet) {
+        // Use consistent hashing for returning users
+        sessionId = getUserSessionPool(userWallet);
+        console.log(`[SessionPooling] Assigned wallet ${userWallet.slice(0, 8)}... to ${sessionId} (hash-based)`);
+      } else {
+        // For new/anonymous users, select healthiest pool
+        sessionId = await selectHealthiestPool();
+        console.log(`[SessionPooling] Assigned anonymous user to ${sessionId} (health-based)`);
+      }
+      
+      console.log(`Connecting to PRODUCTION ECS - Using session pool: ${sessionId}`);
       
       try {
-        // Check if the session exists - poll with retries for agents to connect
+        // Check if the session pool exists - poll with retries for agents to connect
         const maxRetries = 3;
         const retryDelay = 2000; // 2 seconds
         
@@ -45,23 +68,23 @@ export async function POST() {
           console.log(`Active sessions (attempt ${attempt}/${maxRetries}):`, activeSessions);
 
           if (activeSessions.includes(sessionId)) {
-            console.log(`✓ Session "${sessionId}" is active`);
+            console.log(`✓ Session pool "${sessionId}" is active`);
             return NextResponse.json({ sessionId });
           }
 
           // Session not found yet
           if (attempt < maxRetries) {
-            console.log(`Session "${sessionId}" not found yet. Agents may still be connecting. Retrying in ${retryDelay}ms...`);
+            console.log(`Session pool "${sessionId}" not found yet. Agents may still be connecting. Retrying in ${retryDelay}ms...`);
             await new Promise(resolve => setTimeout(resolve, retryDelay));
           }
         }
 
         // After all retries, session still doesn't exist
-        console.error(`Session "${sessionId}" not found after ${maxRetries} attempts`);
+        console.error(`Session pool "${sessionId}" not found after ${maxRetries} attempts`);
         return NextResponse.json(
           { 
             error: 'session_not_ready',
-            message: `Session "${sessionId}" is not available yet. Agents may still be starting up.`,
+            message: `Session pool "${sessionId}" is not available yet. Agents may still be starting up.`,
             details: 'Please wait a moment and try again. If this persists, check that agent containers are running.',
             sessionId: null
           },

@@ -166,6 +166,8 @@ jobs:
                 .environment |= map(
                   if .name == "MODEL_API_KEY" then .value = $MODEL_KEY
                   elif .name == "SOLANA_RPC_URL" then .value = $RPC_URL
+                  elif .name == "CORAL_SESSIONS" then .value = "pool-0,pool-1,pool-2,pool-3,pool-4"
+                  elif .name == "CORAL_SSE_URL" then .value = "http://localhost:5555/sse/v1/devmode/app/priv"
                   elif .name == "SOLANA_PRIVATE_KEY" then .value = $CZ_PRIV
                   elif .name == "SOLANA_PUBLIC_ADDRESS" then .value = $CZ_PUB
                   elif .name == "WALLET_WHITE_HOUSE" then .value = $WHITE_HOUSE
@@ -183,6 +185,8 @@ jobs:
                 .environment |= map(
                   if .name == "MODEL_API_KEY" then .value = $MODEL_KEY
                   elif .name == "SOLANA_RPC_URL" then .value = $RPC_URL
+                  elif .name == "CORAL_SESSIONS" then .value = "pool-0,pool-1,pool-2,pool-3,pool-4"
+                  elif .name == "CORAL_SSE_URL" then .value = "http://localhost:5555/sse/v1/devmode/app/priv"
                   elif .name == "SOLANA_PRIVATE_KEY" then .value = $SBF_PRIV
                   elif .name == "SOLANA_PUBLIC_ADDRESS" then .value = $SBF_PUB
                   elif .name == "WALLET_WHITE_HOUSE" then .value = $WHITE_HOUSE
@@ -200,6 +204,8 @@ jobs:
                 .environment |= map(
                   if .name == "MODEL_API_KEY" then .value = $MODEL_KEY
                   elif .name == "SOLANA_RPC_URL" then .value = $RPC_URL
+                  elif .name == "CORAL_SESSIONS" then .value = "pool-0,pool-1,pool-2,pool-3,pool-4"
+                  elif .name == "CORAL_SSE_URL" then .value = "http://localhost:5555/sse/v1/devmode/app/priv"
                   elif .name == "SOLANA_PRIVATE_KEY" then .value = $DONALD_PRIV
                   elif .name == "SOLANA_PUBLIC_ADDRESS" then .value = $DONALD_PUB
                   elif .name == "WALLET_WHITE_HOUSE" then .value = $WHITE_HOUSE
@@ -217,6 +223,8 @@ jobs:
                 .environment |= map(
                   if .name == "MODEL_API_KEY" then .value = $MODEL_KEY
                   elif .name == "SOLANA_RPC_URL" then .value = $RPC_URL
+                  elif .name == "CORAL_SESSIONS" then .value = "pool-0,pool-1,pool-2,pool-3,pool-4"
+                  elif .name == "CORAL_SSE_URL" then .value = "http://localhost:5555/sse/v1/devmode/app/priv"
                   elif .name == "SOLANA_PRIVATE_KEY" then .value = $MELANIA_PRIV
                   elif .name == "SOLANA_PUBLIC_ADDRESS" then .value = $MELANIA_PUB
                   elif .name == "WALLET_WHITE_HOUSE" then .value = $WHITE_HOUSE
@@ -234,6 +242,8 @@ jobs:
                 .environment |= map(
                   if .name == "MODEL_API_KEY" then .value = $MODEL_KEY
                   elif .name == "SOLANA_RPC_URL" then .value = $RPC_URL
+                  elif .name == "CORAL_SESSIONS" then .value = "pool-0,pool-1,pool-2,pool-3,pool-4"
+                  elif .name == "CORAL_SSE_URL" then .value = "http://localhost:5555/sse/v1/devmode/app/priv"
                   elif .name == "SOLANA_PRIVATE_KEY" then .value = $ERIC_PRIV
                   elif .name == "SOLANA_PUBLIC_ADDRESS" then .value = $ERIC_PUB
                   elif .name == "WALLET_WHITE_HOUSE" then .value = $WHITE_HOUSE
@@ -251,6 +261,8 @@ jobs:
                 .environment |= map(
                   if .name == "MODEL_API_KEY" then .value = $MODEL_KEY
                   elif .name == "SOLANA_RPC_URL" then .value = $RPC_URL
+                  elif .name == "CORAL_SESSIONS" then .value = "pool-0,pool-1,pool-2,pool-3,pool-4"
+                  elif .name == "CORAL_SSE_URL" then .value = "http://localhost:5555/sse/v1/devmode/app/priv"
                   elif .name == "SOLANA_PRIVATE_KEY" then .value = $DONJR_PRIV
                   elif .name == "SOLANA_PUBLIC_ADDRESS" then .value = $DONJR_PUB
                   elif .name == "WALLET_WHITE_HOUSE" then .value = $WHITE_HOUSE
@@ -268,6 +280,8 @@ jobs:
                 .environment |= map(
                   if .name == "MODEL_API_KEY" then .value = $MODEL_KEY
                   elif .name == "SOLANA_RPC_URL" then .value = $RPC_URL
+                  elif .name == "CORAL_SESSIONS" then .value = "pool-0,pool-1,pool-2,pool-3,pool-4"
+                  elif .name == "CORAL_SSE_URL" then .value = "http://localhost:5555/sse/v1/devmode/app/priv"
                   elif .name == "SOLANA_PRIVATE_KEY" then .value = $BARRON_PRIV
                   elif .name == "SOLANA_PUBLIC_ADDRESS" then .value = $BARRON_PUB
                   elif .name == "WALLET_WHITE_HOUSE" then .value = $WHITE_HOUSE

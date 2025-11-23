@@ -163,8 +163,8 @@ Opens at: http://localhost:5555
 ### First Time Setup
 
 ```bash
-# 1. Create all environment files
-./setup-local-env.sh
+# 1. Configure environment files (see SETUP.md)
+# Copy and edit configuration files as needed
 
 # 2. Start Coral Server (Terminal 1)
 ./start-server.sh
@@ -191,8 +191,7 @@ cd website && npm run dev  # Terminal 2
 # 1. Edit configuration with new keys
 nano agents-session-configuration.json
 
-# 2. Regenerate .env files
-./setup-local-env.sh
+# 2. Update .env files as needed in each agent directory
 
 # 3. Restart services
 ./complete-restart.sh

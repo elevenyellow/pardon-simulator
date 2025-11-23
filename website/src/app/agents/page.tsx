@@ -13,11 +13,11 @@ interface Agent {
 
 export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([
-    { id:'donald-trump', name:'Donald Trump', title:'President of the United States'},
-    { id:'melania-trump', name:'Melania Trump', title:'First Lady'},
-    { id:'eric-trump', name:'Eric Trump', title:'Executive VP, Trump Organization'},
-    { id:'donjr-trump', name:'Donald Trump Jr', title:'Political Activist'},
-    { id:'barron-trump', name:'Barron Trump', title:'Crypto Prodigy'},
+    { id:'trump-donald', name:'Donald Trump', title:'President of the United States'},
+    { id:'trump-melania', name:'Melania Trump', title:'First Lady'},
+    { id:'trump-eric', name:'Eric Trump', title:'Executive VP, Trump Organization'},
+    { id:'trump-donjr', name:'Donald Trump Jr', title:'Political Activist'},
+    { id:'trump-barron', name:'Barron Trump', title:'Crypto Prodigy'},
     { id:'cz', name:'Changpeng Zhao (CZ)', title:'Binance Founder'},
     { id:'sbf', name:'Sam Bankman-Fried (SBF)', title:'Former FTX CEO (Player)'}
   ]);

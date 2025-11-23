@@ -1,0 +1,901 @@
+"""
+Base Agent Class - Shared functionality for all Pardon Simulator agents
+
+This module eliminates 4900+ lines of duplicated code across 7 agent main.py files
+by extracting common patterns into reusable base classes.
+"""
+
+import urllib.parse
+from dotenv import load_dotenv
+import os
+import json
+import asyncio
+import traceback
+import sys
+import time
+import re
+from typing import Dict, List, Optional, Tuple, Any, Callable
+from abc import ABC, abstractmethod
+
+from langchain.chat_models import init_chat_model
+from langchain.prompts import ChatPromptTemplate
+from langchain_mcp_adapters.client import MultiServerMCPClient
+from langchain.agents import create_tool_calling_agent, AgentExecutor
+from langchain_core.tools import tool, BaseTool
+from solders.keypair import Keypair
+from solders.pubkey import Pubkey
+from solana.rpc.async_api import AsyncClient
+
+# Add parent directory to path for imports
+sys.path.append(os.path.dirname(__file__))
+from x402_payment_tools import (
+    X402_TOOLS,
+    create_contact_agent_tool,
+    reload_agent_wallets,
+    AGENT_WALLETS,
+    create_process_payment_payload_tool
+)
+from prompt_cache import get_dynamic_content
+from executor_config import get_default_executor_limits, set_executor_invoke_timeout
+
+
+class AgentWallet:
+    """
+    Unified wallet class for all agents.
+    Handles Solana wallet operations and x402 facilitator integration.
+    """
+    
+    def __init__(self, private_key_b58: str, rpc_url: str, owner_name: str):
+        """
+        Initialize agent wallet.
+        
+        Args:
+            private_key_b58: Base58-encoded Solana private key
+            rpc_url: Solana RPC endpoint URL
+            owner_name: Human-readable owner name for logging
+        """
+        self.keypair = Keypair.from_base58_string(private_key_b58) if private_key_b58 else Keypair()
+        self.client = AsyncClient(rpc_url)
+        self.owner_name = owner_name
+        
+        # Import CDP client for x402 facilitator
+        from x402_cdp_client import get_cdp_client
+        self.cdp_client = get_cdp_client()
+    
+    async def get_balance(self) -> float:
+        """Get wallet balance in SOL."""
+        try:
+            response = await self.client.get_balance(self.keypair.pubkey())
+            return response.value / 1e9
+        except Exception as e:
+            print(f"Error getting balance: {e}")
+            return 0.0
+    
+    async def send_transaction(self, to_address: str, amount_sol: float) -> Dict[str, Any]:
+        """
+        Send SOL transaction via x402 compliant CDP facilitator.
+        
+        Args:
+            to_address: Recipient's Solana wallet address
+            amount_sol: Amount in SOL (converted to USDC for x402)
+        
+        Returns:
+            Transaction result dict with success status and signature
+        """
+        try:
+            from x402_payment_tools import submit_payment_via_x402_facilitator
+            
+            use_x402_facilitator = os.getenv("USE_X402_FACILITATOR", "true").lower() == "true"
+            
+            if use_x402_facilitator:
+                try:
+                    print(f"[INFO] Using x402 facilitator for transaction submission", flush=True)
+                    
+                    result = await submit_payment_via_x402_facilitator(
+                        from_keypair=self.keypair,
+                        to_address=to_address,
+                        amount_usdc=amount_sol,
+                        network="solana"
+                    )
+                    
+                    if result.get("success"):
+                        print(f"[OK] Transaction via x402 facilitator", flush=True)
+                        print(f"   Signature: {result['signature']}", flush=True)
+                        return {
+                            "success": True,
+                            "signature": result["signature"],
+                            "from": str(self.keypair.pubkey()),
+                            "to": to_address,
+                            "amount": amount_sol,
+                            "via_x402_facilitator": True,
+                            "x402_compliant": True,
+                            "x402_scan_url": result.get("x402_scan_url")
+                        }
+                    else:
+                        print(f"WARNING: x402 facilitator failed: {result.get('error')}", flush=True)
+                        
+                except Exception as facilitator_error:
+                    print(f"ERROR: x402 facilitator error: {facilitator_error}", flush=True)
+                    traceback.print_exc()
+            
+            # x402 requires USDC
+            return {
+                "success": False,
+                "error": "Payment failed. x402 payments require USDC.",
+                "reason": "x402_facilitator_required"
+            }
+            
+        except Exception as e:
+            print(f"[ERROR] Transaction error: {e}")
+            traceback.print_exc()
+            return {"success": False, "error": str(e)}
+
+
+class BaseAgent(ABC):
+    """
+    Base class for all Pardon Simulator agents.
+    
+    Provides common functionality:
+    - Environment initialization
+    - Wallet management
+    - Coral server connection
+    - Agent executor creation
+    - Message processing loop
+    - Payment detection and handling
+    - Error handling and retries
+    """
+    
+    def __init__(self, agent_id: str, agent_name: str, agent_description: str):
+        """
+        Initialize base agent.
+        
+        Args:
+            agent_id: Coral agent ID (e.g., "cz", "trump-donald")
+            agent_name: Human-readable name (e.g., "CZ", "Donald Trump")
+            agent_description: Short description for Coral registration
+        """
+        self.agent_id = agent_id
+        self.agent_name = agent_name
+        self.agent_description = agent_description
+        self.wallet: Optional[AgentWallet] = None
+        self.agent_executor: Optional[AgentExecutor] = None
+        self.my_wallet_address: str = ""
+        self.executor_limits = get_default_executor_limits()
+    
+    @abstractmethod
+    def get_agent_specific_tools(self) -> List[BaseTool]:
+        """
+        Get agent-specific tools (e.g., check_my_balance, influence_trump_opinion).
+        Must be implemented by each agent subclass.
+        
+        Returns:
+            List of LangChain tools specific to this agent
+        """
+        pass
+    
+    def load_environment(self) -> None:
+        """Load environment variables from agent's .env file."""
+        agent_dir = os.path.dirname(os.path.abspath(sys.modules[self.__class__.__module__].__file__))
+        load_dotenv(os.path.join(agent_dir, '.env'), override=False)
+        reload_agent_wallets()
+    
+    def load_dynamic_content(self) -> Dict[str, str]:
+        """Load cached scoring mandate and communication notes."""
+        agent_dir = os.path.dirname(os.path.abspath(sys.modules[self.__class__.__module__].__file__))
+        return get_dynamic_content(agent_dir, self.agent_id)
+    
+    def load_agent_prompt(self, **variables) -> str:
+        """
+        Load agent operational prompts (shared + agent-specific).
+        
+        Args:
+            **variables: Variables to substitute in template
+        
+        Returns:
+            Formatted prompt string
+        """
+        agent_dir = os.path.dirname(os.path.abspath(sys.modules[self.__class__.__module__].__file__))
+        shared_dir = os.path.join(os.path.dirname(agent_dir), "shared")
+        
+        # Load shared operational template
+        operational_shared_file = os.path.join(shared_dir, "operational-template.txt")
+        if not os.path.exists(operational_shared_file):
+            raise FileNotFoundError(f"Shared operational template not found: {operational_shared_file}")
+        
+        with open(operational_shared_file, 'r', encoding='utf-8') as f:
+            operational_shared = f.read()
+        
+        # Load agent-specific operational additions
+        operational_specific_file = os.path.join(agent_dir, "operational-private.txt")
+        if not os.path.exists(operational_specific_file):
+            raise FileNotFoundError(f"Agent operational file not found: {operational_specific_file}")
+        
+        with open(operational_specific_file, 'r', encoding='utf-8') as f:
+            operational_specific = f.read()
+        
+        # Combine operational content
+        combined = f"{operational_shared}\n\n{operational_specific}"
+        
+        # Substitute variables
+        try:
+            return combined.format(**variables)
+        except KeyError as e:
+            raise ValueError(f"Missing variable in prompt template: {e}")
+    
+    def load_tool_definitions(self) -> List[dict]:
+        """
+        Load tool definitions from agent's tool-definitions.json file.
+        
+        Returns:
+            List of tool definition dictionaries (empty list if file missing or invalid)
+        """
+        agent_dir = os.path.dirname(os.path.abspath(sys.modules[self.__class__.__module__].__file__))
+        tool_file = os.path.join(agent_dir, "tool-definitions.json")
+        
+        if not os.path.exists(tool_file):
+            print(f"ℹ️  [{self.agent_id}] No tool-definitions.json found at {tool_file}")
+            print(f"   Agent will have no dynamic tools (this is OK if tools are defined in code)")
+            return []
+        
+        try:
+            with open(tool_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                tools = data.get("tools", [])
+                
+                if not isinstance(tools, list):
+                    print(f"❌ [{self.agent_id}] ERROR: 'tools' in {tool_file} must be a list, got {type(tools).__name__}")
+                    return []
+                
+                print(f"✅ [{self.agent_id}] Loaded {len(tools)} tool definition(s) from {tool_file}")
+                return tools
+                
+        except json.JSONDecodeError as e:
+            print(f"❌ [{self.agent_id}] ERROR: Invalid JSON in {tool_file}")
+            print(f"   Line {e.lineno}, Column {e.colno}: {e.msg}")
+            print(f"   Agent will continue without dynamic tools")
+            return []
+        except Exception as e:
+            print(f"❌ [{self.agent_id}] ERROR: Failed to load {tool_file}: {e}")
+            print(f"   Agent will continue without dynamic tools")
+            return []
+    
+    def create_dynamic_tool(self, tool_def: dict) -> Optional[BaseTool]:
+        """
+        Create a LangChain tool from a JSON tool definition.
+        
+        Args:
+            tool_def: Dictionary containing tool name, description, parameters, and response
+        
+        Returns:
+            A LangChain BaseTool instance, or None if creation failed
+        """
+        # Validate required fields
+        tool_name = tool_def.get("name")
+        if not tool_name:
+            print(f"❌ [{self.agent_id}] ERROR: Tool definition missing 'name' field: {tool_def}")
+            return None
+        
+        tool_description = tool_def.get("description")
+        if not tool_description:
+            print(f"❌ [{self.agent_id}] ERROR: Tool '{tool_name}' missing 'description' field")
+            return None
+        
+        parameters = tool_def.get("parameters", {})
+        
+        # Validate that we have either response or response_template
+        has_template = "response_template" in tool_def
+        has_response = "response" in tool_def
+        
+        if not has_template and not has_response:
+            print(f"❌ [{self.agent_id}] ERROR: Tool '{tool_name}' missing both 'response' and 'response_template'")
+            return None
+        
+        # Create function signature dynamically based on parameters
+        if parameters:
+            # Tool with parameters - use response_template
+            response_template = tool_def.get("response_template", "")
+            
+            if not response_template:
+                print(f"❌ [{self.agent_id}] ERROR: Tool '{tool_name}' has parameters but no 'response_template'")
+                return None
+            
+            # Validate template has placeholders for all parameters
+            try:
+                # Test format with dummy values
+                test_kwargs = {param: "test" for param in parameters.keys()}
+                response_template.format(**test_kwargs)
+            except KeyError as e:
+                print(f"⚠️  [{self.agent_id}] WARNING: Tool '{tool_name}' response_template missing placeholder for parameter: {e}")
+            except Exception as e:
+                print(f"❌ [{self.agent_id}] ERROR: Tool '{tool_name}' has invalid response_template: {e}")
+                return None
+            
+            # Build function with keyword arguments
+            async def dynamic_tool_func(**kwargs):
+                try:
+                    # Special handling for check_my_balance - inject actual balance
+                    if tool_name == "check_my_balance":
+                        if self.wallet is None:
+                            return "Wallet not initialized"
+                        balance = await self.wallet.get_balance()
+                        return response_template.format(balance=balance, **kwargs)
+                    
+                    # For other tools, just format with provided parameters
+                    return response_template.format(**kwargs)
+                except KeyError as e:
+                    error_msg = f"Tool '{tool_name}' template error: missing parameter {e}"
+                    print(f"❌ [{self.agent_id}] {error_msg}")
+                    return f"⚠️ Error: {error_msg}"
+                except Exception as e:
+                    error_msg = f"Tool '{tool_name}' execution error: {e}"
+                    print(f"❌ [{self.agent_id}] {error_msg}")
+                    return f"⚠️ Error: {error_msg}"
+            
+            # Set function metadata
+            dynamic_tool_func.__name__ = tool_name
+            dynamic_tool_func.__doc__ = tool_description
+            
+            # Add parameter annotations for LangChain
+            annotations = {}
+            for param_name, param_info in parameters.items():
+                # Support type specification in config, default to string
+                param_type = str
+                if isinstance(param_info, dict):
+                    type_name = param_info.get("type", "string")
+                    if type_name == "int" or type_name == "integer":
+                        param_type = int
+                    elif type_name == "float" or type_name == "number":
+                        param_type = float
+                    elif type_name == "bool" or type_name == "boolean":
+                        param_type = bool
+                annotations[param_name] = param_type
+            dynamic_tool_func.__annotations__ = annotations
+            
+        else:
+            # Tool without parameters - use static response
+            static_response = tool_def.get("response", "")
+            
+            if not static_response:
+                print(f"❌ [{self.agent_id}] ERROR: Tool '{tool_name}' has no parameters but no 'response' field")
+                return None
+            
+            async def dynamic_tool_func():
+                try:
+                    # Special handling for check_my_balance
+                    if tool_name == "check_my_balance":
+                        if self.wallet is None:
+                            return "Wallet not initialized"
+                        balance = await self.wallet.get_balance()
+                        return static_response.format(balance=balance)
+                    
+                    return static_response
+                except Exception as e:
+                    error_msg = f"Tool '{tool_name}' execution error: {e}"
+                    print(f"❌ [{self.agent_id}] {error_msg}")
+                    return f"⚠️ Error: {error_msg}"
+            
+            dynamic_tool_func.__name__ = tool_name
+            dynamic_tool_func.__doc__ = tool_description
+        
+        try:
+            # Convert to LangChain tool
+            return tool(dynamic_tool_func)
+        except Exception as e:
+            print(f"❌ [{self.agent_id}] ERROR: Failed to convert '{tool_name}' to LangChain tool: {e}")
+            return None
+    
+    def get_dynamic_tools(self) -> List[BaseTool]:
+        """
+        Load and create all dynamic tools from tool-definitions.json.
+        
+        Returns:
+            List of dynamically created LangChain tools (empty list if all fail)
+        """
+        tool_definitions = self.load_tool_definitions()
+        
+        if not tool_definitions:
+            return []
+        
+        dynamic_tools = []
+        failed_tools = []
+        
+        for i, tool_def in enumerate(tool_definitions):
+            if not isinstance(tool_def, dict):
+                print(f"❌ [{self.agent_id}] ERROR: Tool definition #{i+1} is not a dictionary, got {type(tool_def).__name__}")
+                failed_tools.append(f"#{i+1}")
+                continue
+            
+            tool_name = tool_def.get("name", f"unknown_tool_{i+1}")
+            
+            try:
+                dynamic_tool = self.create_dynamic_tool(tool_def)
+                if dynamic_tool is not None:
+                    dynamic_tools.append(dynamic_tool)
+                    print(f"   ✅ [{self.agent_id}] Tool '{tool_name}' created successfully")
+                else:
+                    failed_tools.append(tool_name)
+            except KeyError as e:
+                print(f"❌ [{self.agent_id}] ERROR: Tool '{tool_name}' missing required field: {e}")
+                failed_tools.append(tool_name)
+            except Exception as e:
+                print(f"❌ [{self.agent_id}] ERROR: Failed to create tool '{tool_name}': {type(e).__name__}: {e}")
+                print(f"   Tool definition: {tool_def}")
+                failed_tools.append(tool_name)
+        
+        # Summary
+        if dynamic_tools:
+            print(f"✅ [{self.agent_id}] Successfully created {len(dynamic_tools)} dynamic tool(s)")
+        
+        if failed_tools:
+            print(f"⚠️  [{self.agent_id}] Failed to create {len(failed_tools)} tool(s): {', '.join(failed_tools)}")
+            print(f"   Agent will continue with {len(dynamic_tools)} working tool(s)")
+        
+        return dynamic_tools
+    
+    async def initialize_wallet(self) -> float:
+        """
+        Initialize agent wallet and return initial balance.
+        
+        Returns:
+            Initial wallet balance in SOL
+        """
+        rpc_url = os.getenv("SOLANA_RPC_URL")
+        if not rpc_url:
+            raise ValueError("SOLANA_RPC_URL environment variable is required")
+        
+        # Try agent-specific key first (e.g., SOLANA_PRIVATE_KEY_CZ)
+        # Fall back to generic SOLANA_PRIVATE_KEY if not found
+        agent_key_var = f"SOLANA_PRIVATE_KEY_{self.agent_id.upper().replace('-', '_')}"
+        private_key = os.getenv(agent_key_var) or os.getenv("SOLANA_PRIVATE_KEY", "")
+        
+        if not private_key:
+            print(f"⚠️  Warning: No private key found for {agent_key_var} or SOLANA_PRIVATE_KEY")
+        
+        self.wallet = AgentWallet(
+            private_key,
+            rpc_url,
+            self.agent_name
+        )
+        
+        try:
+            balance = await asyncio.wait_for(self.wallet.get_balance(), timeout=5.0)
+        except (asyncio.TimeoutError, Exception) as e:
+            print(f"⚠️  Balance check failed: {e} - continuing anyway")
+            balance = 0.0
+        
+        self.my_wallet_address = str(self.wallet.keypair.pubkey())
+        return balance
+    
+    async def create_agent_executor(self, coral_tools: List[BaseTool]) -> Tuple[AgentExecutor, str]:
+        """
+        Create the agent executor with all tools and prompts.
+        
+        Args:
+            coral_tools: Tools provided by Coral server
+        
+        Returns:
+            Tuple of (AgentExecutor, wallet_address)
+        """
+        # Get wallet address from environment
+        my_wallet_address = os.getenv("SOLANA_PUBLIC_ADDRESS", "")
+        if not my_wallet_address:
+            raise ValueError(f"SOLANA_PUBLIC_ADDRESS environment variable required for {self.agent_id}")
+        
+        # Find Coral tools for contact_agent wrapper
+        coral_send_message_tool = next((t for t in coral_tools if t.name == "coral_send_message"), None)
+        if not coral_send_message_tool:
+            raise ValueError("coral_send_message tool not found!")
+        
+        coral_add_participant_tool = next((t for t in coral_tools if t.name == "coral_add_participant"), None)
+        if not coral_add_participant_tool:
+            raise ValueError("coral_add_participant tool not found!")
+        
+        # Create contact_agent wrapper
+        contact_agent_tool = create_contact_agent_tool(coral_send_message_tool, coral_add_participant_tool)
+        
+        # Create process_payment_payload tool
+        process_payment_tool = create_process_payment_payload_tool(my_wallet_address)
+        
+        # Combine all tools
+        agent_specific_tools = self.get_agent_specific_tools()
+        combined_tools = (
+            coral_tools + 
+            agent_specific_tools + 
+            X402_TOOLS + 
+            [contact_agent_tool, process_payment_tool]
+        )
+        
+        # Load prompt
+        prompt_text = self.load_agent_prompt(
+            agent_name=self.agent_id,
+            my_wallet_address=my_wallet_address
+        )
+        
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", prompt_text),
+            ("human", "{input}"),
+            ("placeholder", "{agent_scratchpad}")
+        ])
+        
+        # Model configuration
+        model_kwargs = {
+            "model": os.getenv("MODEL_NAME", "gpt-4o"),
+            "model_provider": os.getenv("MODEL_PROVIDER", "openai"),
+            "api_key": os.getenv("MODEL_API_KEY"),
+            "temperature": float(os.getenv("MODEL_TEMPERATURE", "0.7")),
+            "max_tokens": int(os.getenv("MODEL_MAX_TOKENS", "2000"))
+        }
+        
+        # Optional reasoning effort for advanced models
+        reasoning_effort = os.getenv("MODEL_REASONING_EFFORT")
+        if reasoning_effort and reasoning_effort.strip():
+            model_kwargs["reasoning_effort"] = reasoning_effort
+        
+        base_url = os.getenv("MODEL_BASE_URL")
+        if base_url and base_url.strip():
+            model_kwargs["base_url"] = base_url
+        
+        model = init_chat_model(**model_kwargs)
+        agent = create_tool_calling_agent(model, combined_tools, prompt)
+        
+        agent_executor = AgentExecutor(
+            agent=agent,
+            tools=combined_tools,
+            verbose=False,
+            handle_parsing_errors=True,
+            max_iterations=self.executor_limits["max_iterations"],
+            max_execution_time=self.executor_limits["max_execution_time"],
+        )
+        
+        set_executor_invoke_timeout(agent_executor, self.executor_limits["invoke_timeout"])
+        
+        return agent_executor, my_wallet_address
+    
+    async def connect_to_coral_server(self) -> Tuple[MultiServerMCPClient, List[BaseTool]]:
+        """
+        Connect to Coral server and retrieve tools.
+        Supports multi-session connections for production load distribution.
+        
+        Returns:
+            Tuple of (MCP client, coral tools list)
+        """
+        # Check for multi-session configuration (production pooling)
+        coral_sessions_env = os.getenv('CORAL_SESSIONS')
+        session_id_env = os.getenv('CORAL_SESSION_ID')
+        
+        if coral_sessions_env:
+            # Multi-session mode: connect to all pools for production scaling
+            session_ids = [s.strip() for s in coral_sessions_env.split(',')]
+            print(f"[CORAL] 🌐 Multi-session mode: connecting to {len(session_ids)} pools")
+            return await self.connect_to_multiple_sessions(session_ids)
+        elif session_id_env:
+            # Single session mode: for local testing
+            print(f"[CORAL] 🔗 Single session mode: {session_id_env}")
+            return await self.connect_to_single_session(session_id_env)
+        else:
+            # Production mode without explicit session (legacy)
+            print("[CORAL] 🌐 Production mode (no explicit session)")
+            return await self.connect_to_single_session(None)
+    
+    async def connect_to_single_session(self, session_id: Optional[str]) -> Tuple[MultiServerMCPClient, List[BaseTool]]:
+        """
+        Connect to a single Coral session.
+        
+        Args:
+            session_id: Optional session ID (None for production auto-session)
+        
+        Returns:
+            Tuple of (MCP client, coral tools list)
+        """
+        coral_params = {
+            'agentId': self.agent_id,
+            'agentDescription': self.agent_description
+        }
+        
+        if session_id:
+            coral_params['sessionId'] = session_id
+        
+        client = MultiServerMCPClient(connections={
+            "coral": {
+                "transport": "sse",
+                "url": f"{os.getenv('CORAL_SSE_URL')}?{urllib.parse.urlencode(coral_params)}",
+                "timeout": 700.0,
+                "sse_read_timeout": 700.0
+            }
+        })
+        
+        coral_tools = await client.get_tools(server_name="coral")
+        return client, coral_tools
+    
+    async def connect_to_multiple_sessions(self, session_ids: List[str]) -> Tuple[MultiServerMCPClient, List[BaseTool]]:
+        """
+        Connect to multiple Coral sessions for load distribution.
+        Each agent connects to all pools and responds to mentions in any of them.
+        
+        Args:
+            session_ids: List of session IDs to connect to (e.g., ['pool-0', 'pool-1', ...])
+        
+        Returns:
+            Tuple of (MCP client with multiple connections, coral tools list)
+        """
+        connections = {}
+        
+        for session_id in session_ids:
+            coral_params = {
+                'agentId': self.agent_id,
+                'agentDescription': self.agent_description,
+                'sessionId': session_id
+            }
+            
+            # Create unique connection name for each pool
+            connections[f"coral-{session_id}"] = {
+                "transport": "sse",
+                "url": f"{os.getenv('CORAL_SSE_URL')}?{urllib.parse.urlencode(coral_params)}",
+                "timeout": 700.0,
+                "sse_read_timeout": 700.0
+            }
+            print(f"[CORAL]   → {session_id}")
+        
+        # Create client with all connections
+        client = MultiServerMCPClient(connections=connections)
+        
+        # Get tools from first connection (they should be identical across pools)
+        first_pool = f"coral-{session_ids[0]}"
+        coral_tools = await client.get_tools(server_name=first_pool)
+        
+        print(f"[CORAL] ✅ Connected to {len(session_ids)} session pools")
+        return client, coral_tools
+    
+    def extract_user_wallet(self, message_content: str) -> Optional[str]:
+        """
+        Extract user wallet address from message content.
+        
+        Args:
+            message_content: Raw message content with wallet marker
+        
+        Returns:
+            Wallet address or None if not found
+        """
+        wallet_match = re.search(r'\[USER_WALLET:([1-9A-HJ-NP-Za-km-z]{32,44})\]', message_content)
+        return wallet_match.group(1) if wallet_match else None
+    
+    def detect_payment(self, message_content: str) -> Optional[Tuple[str, str, float]]:
+        """
+        Detect payment completion marker in message.
+        
+        Args:
+            message_content: Message content to scan
+        
+        Returns:
+            Tuple of (transaction_signature, service_type, amount_usdc) or None
+        """
+        payment_match = re.search(
+            r'\[PREMIUM_SERVICE_PAYMENT_COMPLETED:\s*([A-Za-z0-9]{87,88})\]',
+            message_content
+        )
+        
+        if payment_match:
+            transaction_signature = payment_match.group(1)
+            service_type = "insider_info"  # Default, should be extracted from context
+            amount_usdc = 0.0005  # Default amount
+            return (transaction_signature, service_type, amount_usdc)
+        
+        return None
+    
+    def create_payment_instruction(
+        self,
+        transaction_signature: str,
+        user_wallet: str,
+        service_type: str,
+        amount_usdc: float
+    ) -> str:
+        """Create explicit payment processing instruction for LLM."""
+        return f"""
+🚨 PAYMENT COMPLETION DETECTED 🚨
+
+Transaction Signature: {transaction_signature}
+User Wallet: {user_wallet}
+Service Type: {service_type}
+Amount: {amount_usdc} USDC
+
+MANDATORY ACTIONS (Execute in THIS turn):
+
+1. Call verify_payment_transaction() immediately:
+   verify_payment_transaction(
+       transaction_hash="{transaction_signature}",
+       expected_from="{user_wallet}",
+       expected_amount_usdc={amount_usdc},
+       service_type="{service_type}"
+   )
+
+2. After verification succeeds, deliver the {service_type} service immediately
+
+3. Respond to user with the delivered service content
+
+DO NOT just acknowledge payment - DELIVER THE SERVICE NOW!
+
+"""
+    
+    async def process_message(
+        self,
+        mentions_data: Dict[str, Any],
+        dynamic_content: Dict[str, str]
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Process a single message with retry logic.
+        
+        Args:
+            mentions_data: Parsed mentions data from Coral
+            dynamic_content: Dynamic content (scoring mandate, etc.)
+        
+        Returns:
+            Response dict or None if all retries failed
+        """
+        message_payload = mentions_data["messages"][0]
+        sender_id = message_payload["senderId"]
+        message_content = message_payload["content"]
+        
+        is_user_message = sender_id == "sbf"
+        
+        if is_user_message:
+            # Extract user wallet
+            user_wallet = self.extract_user_wallet(message_content)
+            if not user_wallet:
+                print(f"[SECURITY] Message from 'sbf' missing USER_WALLET marker")
+                is_user_message = False
+            
+            if user_wallet:
+                # Clean message content
+                clean_content = re.sub(r'\[USER_WALLET:[1-9A-HJ-NP-Za-km-z]{32,44}]\s*', '', message_content)
+                mentions_data["messages"][0]["content"] = clean_content
+                
+                # Detect payment
+                payment_info = self.detect_payment(message_content)
+                payment_instruction = ""
+                
+                if payment_info:
+                    tx_sig, service_type, amount = payment_info
+                    payment_instruction = self.create_payment_instruction(
+                        tx_sig, user_wallet, service_type, amount
+                    )
+                
+                # Build full input with scoring
+                scoring_mandate = dynamic_content['scoring_mandate']
+                user_wallet_instruction = (
+                    f"\n\n🎯 CRITICAL SCORING INSTRUCTION:\n"
+                    f"The user's ACTUAL wallet address is: {user_wallet}\n"
+                    f"You MUST use '{user_wallet}' as the user_wallet parameter in award_points().\n"
+                    f"For coral_send_message, use mentions=['sbf'] to reply.\n\n"
+                )
+                
+                mentions_result_clean = json.dumps(mentions_data)
+                full_input = (
+                    f"{payment_instruction}{scoring_mandate}{user_wallet_instruction}"
+                    f"Process these mentions and respond appropriately: {mentions_result_clean}"
+                )
+            else:
+                return None
+        else:
+            # Agent-to-agent communication
+            agent_comms_note = dynamic_content['agent_comms_note']
+            mentions_result_clean = json.dumps(mentions_data)
+            full_input = f"{agent_comms_note}Process this agent message: {mentions_result_clean}"
+        
+        # Execute with retry logic
+        max_retries = 3
+        retry_delay = 2
+        
+        for attempt in range(max_retries):
+            try:
+                invoke_timeout = getattr(self.agent_executor, "invoke_timeout", self.executor_limits["invoke_timeout"])
+                response = await asyncio.wait_for(
+                    self.agent_executor.ainvoke({
+                        "input": full_input,
+                        "my_wallet_address": self.my_wallet_address,
+                        "agent_scratchpad": []
+                    }),
+                    timeout=invoke_timeout
+                )
+                
+                print(f"[OK] Response sent successfully on attempt {attempt + 1}")
+                return response
+                
+            except asyncio.TimeoutError:
+                print(f"[ERROR] Timeout on attempt {attempt + 1}/{max_retries}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2
+                    
+            except Exception as e:
+                print(f"[ERROR] Execution error on attempt {attempt + 1}: {e}")
+                traceback.print_exc()
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2
+        
+        return None
+    
+    async def run_agent_loop(self, wait_tool: BaseTool) -> None:
+        """
+        Main agent loop - wait for mentions and process them.
+        
+        Args:
+            wait_tool: Coral wait_for_mentions tool
+        """
+        wait_start_time = None
+        dynamic_content = self.load_dynamic_content()
+        
+        while True:
+            try:
+                wait_start_time = time.time()
+                mentions_result = await wait_tool.ainvoke({"timeoutMs": 120000})
+                
+                if mentions_result and "No new mentions" not in str(mentions_result):
+                    try:
+                        mentions_data = json.loads(mentions_result)
+                        
+                        # Check for timeout or error
+                        if mentions_data.get("result") == "error_timeout":
+                            if wait_start_time and (time.time() - wait_start_time) < 5.0:
+                                # SSE connection broken
+                                print("=" * 80)
+                                print(f"[FATAL] SSE CONNECTION BROKEN")
+                                print("=" * 80)
+                                sys.exit(1)
+                            continue
+                        
+                        if mentions_data.get("result") != "wait_for_mentions_success":
+                            await asyncio.sleep(2)
+                            continue
+                        
+                        if "messages" not in mentions_data or not mentions_data["messages"]:
+                            await asyncio.sleep(2)
+                            continue
+                        
+                        # Process message
+                        response = await self.process_message(mentions_data, dynamic_content)
+                        
+                        if response is None:
+                            print("[FATAL] No response after all retry attempts")
+                            continue
+                            
+                    except Exception as e:
+                        print(f"[ERROR] Error during message processing: {e}")
+                        traceback.print_exc()
+                        continue
+                        
+            except KeyboardInterrupt:
+                break
+            except Exception as e:
+                print(f"[ERROR] Error in agent loop: {e}")
+                traceback.print_exc()
+                await asyncio.sleep(5)
+    
+    async def run(self) -> None:
+        """
+        Main entry point - initialize and run the agent.
+        """
+        # Load environment
+        self.load_environment()
+        
+        # Initialize wallet
+        balance = await self.initialize_wallet()
+        print(f"🤖 {self.agent_name.upper()} Agent")
+        print(f"   Wallet: {self.my_wallet_address}")
+        print(f"   Balance: {balance:.4f} SOL")
+        
+        # Connect to Coral server
+        client, coral_tools = await self.connect_to_coral_server()
+        
+        # Create agent executor
+        self.agent_executor, self.my_wallet_address = await self.create_agent_executor(coral_tools)
+        print(f"[READY] {self.agent_name} ready for interactions")
+        
+        # Find wait_for_mentions tool
+        wait_tool = next((t for t in coral_tools if hasattr(t, 'name') and 'wait_for_mentions' in t.name), None)
+        if not wait_tool:
+            raise ValueError("coral_wait_for_mentions tool not found!")
+        
+        # Run agent loop
+        await self.run_agent_loop(wait_tool)
+

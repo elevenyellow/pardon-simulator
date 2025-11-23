@@ -1,15 +1,14 @@
-import { NextRequest, NextResponse } from'next/server';
-import { Connection, PublicKey } from'@solana/web3.js';
-import { getAccount } from'@solana/spl-token';
-
-const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL;
-
-if (!SOLANA_RPC_URL) {
-  throw new Error('SOLANA_RPC_URL environment variable is required');
-}
+import { NextRequest, NextResponse } from 'next/server';
+import { Connection, PublicKey } from '@solana/web3.js';
+import { getAccount } from '@solana/spl-token';
 
 export async function POST(request: NextRequest) {
   try {
+    // Get RPC URL from environment (check multiple possible env var names)
+    const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL || 
+                          process.env.NEXT_PUBLIC_SOLANA_RPC_URL ||
+                          'https://api.mainnet-beta.solana.com';
+    
     const { accounts, mint } = await request.json();
 
     if (!accounts || !Array.isArray(accounts)) {
@@ -21,7 +20,7 @@ export async function POST(request: NextRequest) {
 
     console.log(`Checking ${accounts.length} token accounts...`);
 
-    const connection = new Connection(SOLANA_RPC_URL!,'confirmed');
+    const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
     const mintPubkey = new PublicKey(mint);
 
     const accountsStatus = await Promise.all(

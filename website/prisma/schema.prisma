@@ -37,6 +37,7 @@ model Session {
   weekId          String    // Format: "2024-W45"
   messageCount    Int       @default(0)
   lastActivityAt  DateTime  @default(now())
+  walletAddress   String?   // Denormalized for faster queries
   
   user            User      @relation(fields: [userId], references: [id])
   threads         Thread[]
@@ -46,6 +47,7 @@ model Session {
   @@index([coralSessionId])
   @@index([startTime])
   @@index([lastActivityAt])
+  @@index([walletAddress])
 }
 
 model Thread {
@@ -71,10 +73,15 @@ model Message {
   timestamp       DateTime  @default(now())
   mentions        String[]  // Array of agent IDs
   isIntermediary  Boolean   @default(false)
+  metadata        Json?     // For fallback messages and other metadata
   
   thread          Thread    @relation(fields: [threadId], references: [id])
+  createdAt       DateTime  @default(now())
   
   @@index([threadId, timestamp])
+  @@index([threadId, createdAt])
+  @@index([senderId])
+  @@index([threadId, senderId])
 }
 
 model Score {
@@ -90,13 +97,16 @@ model Score {
   agentId         String?   // Which agent awarded/deducted points
   messageId       String?   // Which message triggered this score change
   timestamp       DateTime  @default(now())
+  createdAt       DateTime  @default(now())
   
   user            User      @relation(fields: [userId], references: [id])
   session         Session   @relation(fields: [sessionId], references: [id])
   thread          Thread?   @relation(fields: [threadId], references: [id])
   
   @@index([userId, timestamp])
+  @@index([userId, createdAt])
   @@index([sessionId, timestamp])
+  @@index([sessionId])
   @@index([category])
   @@index([agentId])
 }

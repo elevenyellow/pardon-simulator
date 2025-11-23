@@ -73,6 +73,8 @@ export async function GET(request: NextRequest) {
         
         console.log(`Created leaderboard entry: Rank ${i + 1} - ${session.user.username} (Score: ${session.currentScore})`);
       }
+    }, {
+      timeout: 30000, // 30 seconds for weekly reset (may process many sessions)
     });
     
     // Calculate prize distribution (90+ scorers qualify)

@@ -52,6 +52,7 @@ export class ScoringRepository {
     } = params;
     
     // Move everything inside transaction to prevent race conditions
+    // Increased timeout from 5s to 20s for testing (handles slower operations during concurrent tests)
     const result = await prisma.$transaction(async (tx) => {
       // Fetch session data first (needed by other calculations)
       const session = await tx.session.findUnique({
@@ -144,6 +145,8 @@ export class ScoringRepository {
       ]);
       
       return { scoreRecord, newScore, premiumBonusApplied, weekId: session.weekId };
+    }, {
+      timeout: 20000, // 20 seconds (increased from default 5s for test environments)
     });
     
     // Record service usage AFTER transaction (outside to avoid deadlocks)

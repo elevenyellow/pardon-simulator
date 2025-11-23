@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { USER_SENDER_ID } from '@/lib/constants';
 
 const CORAL_SERVER_URL = process.env.CORAL_SERVER_URL || 'http://localhost:5555';
 
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
               // Filter out premium service payment confirmation echoes from user
               // These are needed in the DB for agent-to-agent forwarding, but shouldn't show to user
               const filteredMessages = newMessages.filter((msg: any) => {
-                const isUserMessage = msg.senderId === 'sbf';
+                const isUserMessage = msg.senderId === USER_SENDER_ID;
                 const hasPaymentMarker = msg.content?.includes('[PREMIUM_SERVICE_PAYMENT_COMPLETED]');
                 
                 // Keep agent messages, keep user messages without the marker

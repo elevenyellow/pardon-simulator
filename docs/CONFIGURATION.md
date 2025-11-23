@@ -197,7 +197,7 @@ These example files are safe to commit and serve as templates:
 ```bash
 # LLM Configuration
 MODEL_API_KEY=sk-proj-...        # OpenAI API key
-MODEL_NAME=gpt-4o                 # Model to use
+MODEL_NAME=gpt-5.1                # Model to use
 
 # Solana Configuration
 SOLANA_RPC_URL=https://mainnet.helius-rpc.com/?api-key=...

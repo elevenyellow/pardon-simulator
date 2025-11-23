@@ -1,10 +1,40 @@
 version: '3.8'
 
-# Environment variables expected:
-# - AWS_ACCOUNT_ID: Your AWS account ID (or set ECR_REGISTRY directly)
-# - ECR_REGISTRY: Full ECR registry URL (defaults to AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com)
+# ==============================================================================
+# YAML Anchors - Reusable configuration templates
+# ==============================================================================
+
+x-agent-common: &agent-common
+  image: ${ECR_REGISTRY:-${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com}/pardon-agent:latest
+  restart: unless-stopped
+  networks:
+    - pardon-network
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10m"
+      max-file: "3"
+  depends_on:
+    coral-server:
+      condition: service_healthy
+
+x-agent-env-common: &agent-env-common
+  CORAL_SSE_URL: http://coral-server:5555/sse
+  BACKEND_URL: ${BACKEND_URL}
+  MODEL_API_KEY: ${MODEL_API_KEY}
+  MODEL_NAME: ${MODEL_NAME:-gpt-4o}
+  SOLANA_RPC_URL: ${SOLANA_RPC_URL}
+  AWS_REGION: ${AWS_REGION:-us-east-1}
+  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+  S3_BUCKET_NAME: ${S3_BUCKET_NAME:-pardon-simulator-configs}
+
+# ==============================================================================
+# Services
+# ==============================================================================
 
 services:
+  # Coral Server - Multi-agent orchestration
   coral-server:
     image: ${ECR_REGISTRY:-${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com}/coral-server:latest
     container_name: coral-server
@@ -25,217 +55,84 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # AI Agents - Using YAML anchors to eliminate duplication
   agent-cz:
-    image: ${ECR_REGISTRY:-${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com}/pardon-agent:latest
+    <<: *agent-common
     container_name: agent-cz
     working_dir: /app/cz
     command: ["/app/fetch-and-start.sh", "cz"]
     environment:
-      - AGENT_NAME=cz
-      - CORAL_AGENT_ID=cz
-      - CORAL_SSE_URL=http://coral-server:5555/sse
-      - BACKEND_URL=${BACKEND_URL}
-      - MODEL_API_KEY=${MODEL_API_KEY}
-      - MODEL_NAME=${MODEL_NAME:-gpt-4o}
-      - SOLANA_PRIVATE_KEY=${SOLANA_PRIVATE_KEY_CZ}
-      - SOLANA_RPC_URL=${SOLANA_RPC_URL}
-      - AWS_REGION=${AWS_REGION:-us-east-1}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - S3_BUCKET_NAME=${S3_BUCKET_NAME:-pardon-simulator-configs}
-    depends_on:
-      coral-server:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - pardon-network
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+      <<: *agent-env-common
+      AGENT_NAME: cz
+      CORAL_AGENT_ID: cz
+      SOLANA_PRIVATE_KEY: ${SOLANA_PRIVATE_KEY_CZ}
 
   agent-sbf:
-    image: ${ECR_REGISTRY:-${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com}/pardon-agent:latest
+    <<: *agent-common
     container_name: agent-sbf
     working_dir: /app/sbf
     command: ["/app/fetch-and-start.sh", "sbf"]
     environment:
-      - AGENT_NAME=sbf
-      - CORAL_AGENT_ID=sbf
-      - CORAL_SSE_URL=http://coral-server:5555/sse
-      - BACKEND_URL=${BACKEND_URL}
-      - MODEL_API_KEY=${MODEL_API_KEY}
-      - MODEL_NAME=${MODEL_NAME:-gpt-4o}
-      - SOLANA_PRIVATE_KEY=${SOLANA_PRIVATE_KEY_SBF}
-      - SOLANA_RPC_URL=${SOLANA_RPC_URL}
-      - AWS_REGION=${AWS_REGION:-us-east-1}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - S3_BUCKET_NAME=${S3_BUCKET_NAME:-pardon-simulator-configs}
-    depends_on:
-      coral-server:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - pardon-network
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+      <<: *agent-env-common
+      AGENT_NAME: sbf
+      CORAL_AGENT_ID: sbf
+      SOLANA_PRIVATE_KEY: ${SOLANA_PRIVATE_KEY_SBF}
 
   agent-trump-donald:
-    image: ${ECR_REGISTRY:-${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com}/pardon-agent:latest
+    <<: *agent-common
     container_name: agent-trump-donald
     working_dir: /app/trump-donald
     command: ["/app/fetch-and-start.sh", "trump-donald"]
     environment:
-      - AGENT_NAME=trump-donald
-      - CORAL_AGENT_ID=trump-donald
-      - CORAL_SSE_URL=http://coral-server:5555/sse
-      - BACKEND_URL=${BACKEND_URL}
-      - MODEL_API_KEY=${MODEL_API_KEY}
-      - MODEL_NAME=${MODEL_NAME:-gpt-4o}
-      - SOLANA_PRIVATE_KEY=${SOLANA_PRIVATE_KEY_DONALD}
-      - SOLANA_RPC_URL=${SOLANA_RPC_URL}
-      - AWS_REGION=${AWS_REGION:-us-east-1}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - S3_BUCKET_NAME=${S3_BUCKET_NAME:-pardon-simulator-configs}
-    depends_on:
-      coral-server:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - pardon-network
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+      <<: *agent-env-common
+      AGENT_NAME: trump-donald
+      CORAL_AGENT_ID: trump-donald
+      SOLANA_PRIVATE_KEY: ${SOLANA_PRIVATE_KEY_DONALD}
 
   agent-trump-melania:
-    image: ${ECR_REGISTRY:-${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com}/pardon-agent:latest
+    <<: *agent-common
     container_name: agent-trump-melania
     working_dir: /app/trump-melania
     command: ["/app/fetch-and-start.sh", "trump-melania"]
     environment:
-      - AGENT_NAME=trump-melania
-      - CORAL_AGENT_ID=trump-melania
-      - CORAL_SSE_URL=http://coral-server:5555/sse
-      - BACKEND_URL=${BACKEND_URL}
-      - MODEL_API_KEY=${MODEL_API_KEY}
-      - MODEL_NAME=${MODEL_NAME:-gpt-4o}
-      - SOLANA_PRIVATE_KEY=${SOLANA_PRIVATE_KEY_MELANIA}
-      - SOLANA_RPC_URL=${SOLANA_RPC_URL}
-      - AWS_REGION=${AWS_REGION:-us-east-1}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - S3_BUCKET_NAME=${S3_BUCKET_NAME:-pardon-simulator-configs}
-    depends_on:
-      coral-server:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - pardon-network
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+      <<: *agent-env-common
+      AGENT_NAME: trump-melania
+      CORAL_AGENT_ID: trump-melania
+      SOLANA_PRIVATE_KEY: ${SOLANA_PRIVATE_KEY_MELANIA}
 
   agent-trump-eric:
-    image: ${ECR_REGISTRY:-${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com}/pardon-agent:latest
+    <<: *agent-common
     container_name: agent-trump-eric
     working_dir: /app/trump-eric
     command: ["/app/fetch-and-start.sh", "trump-eric"]
     environment:
-      - AGENT_NAME=trump-eric
-      - CORAL_AGENT_ID=trump-eric
-      - CORAL_SSE_URL=http://coral-server:5555/sse
-      - BACKEND_URL=${BACKEND_URL}
-      - MODEL_API_KEY=${MODEL_API_KEY}
-      - MODEL_NAME=${MODEL_NAME:-gpt-4o}
-      - SOLANA_PRIVATE_KEY=${SOLANA_PRIVATE_KEY_ERIC}
-      - SOLANA_RPC_URL=${SOLANA_RPC_URL}
-      - AWS_REGION=${AWS_REGION:-us-east-1}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - S3_BUCKET_NAME=${S3_BUCKET_NAME:-pardon-simulator-configs}
-    depends_on:
-      coral-server:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - pardon-network
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+      <<: *agent-env-common
+      AGENT_NAME: trump-eric
+      CORAL_AGENT_ID: trump-eric
+      SOLANA_PRIVATE_KEY: ${SOLANA_PRIVATE_KEY_ERIC}
 
   agent-trump-donjr:
-    image: ${ECR_REGISTRY:-${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com}/pardon-agent:latest
+    <<: *agent-common
     container_name: agent-trump-donjr
     working_dir: /app/trump-donjr
     command: ["/app/fetch-and-start.sh", "trump-donjr"]
     environment:
-      - AGENT_NAME=trump-donjr
-      - CORAL_AGENT_ID=trump-donjr
-      - CORAL_SSE_URL=http://coral-server:5555/sse
-      - BACKEND_URL=${BACKEND_URL}
-      - MODEL_API_KEY=${MODEL_API_KEY}
-      - MODEL_NAME=${MODEL_NAME:-gpt-4o}
-      - SOLANA_PRIVATE_KEY=${SOLANA_PRIVATE_KEY_DONJR}
-      - SOLANA_RPC_URL=${SOLANA_RPC_URL}
-      - AWS_REGION=${AWS_REGION:-us-east-1}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - S3_BUCKET_NAME=${S3_BUCKET_NAME:-pardon-simulator-configs}
-    depends_on:
-      coral-server:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - pardon-network
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+      <<: *agent-env-common
+      AGENT_NAME: trump-donjr
+      CORAL_AGENT_ID: trump-donjr
+      SOLANA_PRIVATE_KEY: ${SOLANA_PRIVATE_KEY_DONJR}
 
   agent-trump-barron:
-    image: ${ECR_REGISTRY:-${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com}/pardon-agent:latest
+    <<: *agent-common
     container_name: agent-trump-barron
     working_dir: /app/trump-barron
     command: ["/app/fetch-and-start.sh", "trump-barron"]
     environment:
-      - AGENT_NAME=trump-barron
-      - CORAL_AGENT_ID=trump-barron
-      - CORAL_SSE_URL=http://coral-server:5555/sse
-      - BACKEND_URL=${BACKEND_URL}
-      - MODEL_API_KEY=${MODEL_API_KEY}
-      - MODEL_NAME=${MODEL_NAME:-gpt-4o}
-      - SOLANA_PRIVATE_KEY=${SOLANA_PRIVATE_KEY_BARRON}
-      - SOLANA_RPC_URL=${SOLANA_RPC_URL}
-      - AWS_REGION=${AWS_REGION:-us-east-1}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - S3_BUCKET_NAME=${S3_BUCKET_NAME:-pardon-simulator-configs}
-    depends_on:
-      coral-server:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - pardon-network
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+      <<: *agent-env-common
+      AGENT_NAME: trump-barron
+      CORAL_AGENT_ID: trump-barron
+      SOLANA_PRIVATE_KEY: ${SOLANA_PRIVATE_KEY_BARRON}
 
 networks:
   pardon-network:
     driver: bridge
-

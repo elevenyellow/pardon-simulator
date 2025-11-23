@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from'next/server';
+import { USER_SENDER_ID } from'@/lib/constants';
 
 //  Backend-only Coral Server URL (never exposed to browser)
 const CORAL_SERVER_URL = process.env.CORAL_SERVER_URL ||'http://localhost:5555';
@@ -20,15 +21,20 @@ export async function POST(request: NextRequest) {
 
     console.log(`Creating thread for session ${sessionId} with agent ${agentId}`);
 
+    // NOTE: Coral Server doesn't have a REST API endpoint to check agent registration
+    // Agents auto-register when they connect via SSE, so we proceed with thread creation
+    // If the agent isn't registered yet, thread creation will fail with appropriate error
+
     // Create thread via Coral Server debug API
+    // NOTE: User always plays as SBF - this is the fixed player identity in the game
     const response = await fetch(
-`${CORAL_SERVER_URL}/api/v1/debug/thread/app/priv/${sessionId}/sbf`,
+`${CORAL_SERVER_URL}/api/v1/debug/thread/app/priv/${sessionId}/${USER_SENDER_ID}`,
       {
         method:'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({
           threadName:'Pardon Simulator Chat',
-          participantIds: [agentId,'sbf'],
+          participantIds: [agentId, USER_SENDER_ID],
         }),
       }
     );

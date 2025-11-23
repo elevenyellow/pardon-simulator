@@ -14,7 +14,7 @@ description = "Base58 encoded Solana private key for CZ's wallet"
 [options.MODEL_NAME]
 type = "string"
 description = "What model to use (e.g 'gpt-4o', 'gpt-5.1', 'grok-2')"
-default = "gpt-5.1"
+default = "gpt-4o"
 
 [options.MODEL_PROVIDER]
 type = "string"

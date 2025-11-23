@@ -13,7 +13,7 @@ description = "Base58 encoded Solana private key"
 
 [options.MODEL_NAME]
 type = "string"
-default = "gpt-5.1"
+default = "gpt-4o"
 
 [options.MODEL_PROVIDER]
 type = "string"

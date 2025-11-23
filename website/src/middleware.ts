@@ -136,24 +136,25 @@ async function verifyPayment(paymentPayload: string, amount: number, recipient: 
  * x402 Payment Middleware
  */
 export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  try {
+    const { pathname } = request.nextUrl;
 
-  // Check if this route requires payment
-  if (!requiresPayment(pathname)) {
-    return NextResponse.next();
-  }
+    // Check if this route requires payment
+    if (!requiresPayment(pathname)) {
+      return NextResponse.next();
+    }
 
-  // Check for X-PAYMENT header
-  const paymentHeader = request.headers.get('X-PAYMENT');
+    // Check for X-PAYMENT header
+    const paymentHeader = request.headers.get('X-PAYMENT');
 
-  if (!paymentHeader) {
-    // No payment provided - return 402
-    const amount = getPaymentAmount(pathname, request);
-    const paymentId =`payment-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-    
-    console.log(`[x402] Payment required for ${pathname}: ${amount} ${PAYMENT_CONFIG.currency}`);
-    return create402Response(amount, paymentId);
-  }
+    if (!paymentHeader) {
+      // No payment provided - return 402
+      const amount = getPaymentAmount(pathname, request);
+      const paymentId =`payment-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+      
+      console.log(`[x402] Payment required for ${pathname}: ${amount} ${PAYMENT_CONFIG.currency}`);
+      return create402Response(amount, paymentId);
+    }
 
   // Payment provided - verify it
   console.log(`[x402] Verifying payment for ${pathname}`);
@@ -187,6 +188,15 @@ export async function middleware(request: NextRequest) {
       headers: requestHeaders,
     },
   });
+  } catch (error: any) {
+    console.error('[x402 Middleware] Error:', error);
+    console.error('[x402 Middleware] Stack:', error.stack);
+    // Return 500 on middleware error
+    return NextResponse.json(
+      { error: 'internal_error', message: 'Middleware error: ' + error.message },
+      { status: 500 }
+    );
+  }
 }
 
 // Configure which routes the middleware applies to

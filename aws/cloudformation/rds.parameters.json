@@ -1,0 +1,27 @@
+[
+  {
+    "ParameterKey": "DBUsername",
+    "ParameterValue": "vigilante_vaca_poderosa"
+  },
+  {
+    "ParameterKey": "DBPassword",
+    "ParameterValue": "Pard0nSim2025!SecureDB#Prod$"
+  },
+  {
+    "ParameterKey": "DBName",
+    "ParameterValue": "pardon_simulator"
+  },
+  {
+    "ParameterKey": "DBInstanceClass",
+    "ParameterValue": "db.t3.medium"
+  },
+  {
+    "ParameterKey": "AllocatedStorage",
+    "ParameterValue": "20"
+  },
+  {
+    "ParameterKey": "BackupRetentionPeriod",
+    "ParameterValue": "7"
+  }
+]
+

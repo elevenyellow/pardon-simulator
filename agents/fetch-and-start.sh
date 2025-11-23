@@ -20,7 +20,7 @@ REGION=${AWS_REGION:-us-east-1}
 echo "📥 Fetching configs from S3 (${BUCKET_NAME})..."
 
 # Fetch config files from S3
-FILES=("operational-private.txt" "personality-public.txt" "scoring-config.txt" "tool-descriptions.txt")
+FILES=("operational-private.txt" "personality-public.txt" "scoring-config.txt" "tool-descriptions.txt" "tool-definitions.json")
 
 for file in "${FILES[@]}"; do
   s3_path="s3://${BUCKET_NAME}/current/agents/${AGENT_NAME}/${file}"

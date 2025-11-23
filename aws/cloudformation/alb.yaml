@@ -1,0 +1,121 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Pardon Simulator - Application Load Balancer'
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: pardon-production
+    Description: Environment name prefix
+
+  CertificateArn:
+    Type: String
+    Description: ARN of ACM certificate for HTTPS (leave empty to skip HTTPS)
+    Default: ''
+
+Conditions:
+  HasCertificate: !Not [!Equals [!Ref CertificateArn, '']]
+
+Resources:
+  # Application Load Balancer
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub ${EnvironmentName}-alb
+      Type: application
+      Scheme: internet-facing
+      IpAddressType: ipv4
+      Subnets: !Split [',', !ImportValue pardon-production-PublicSubnets]
+      SecurityGroups:
+        - !ImportValue pardon-production-ALBSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-alb
+
+  # Target Group for Coral Server
+  CoralServerTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${EnvironmentName}-coral-tg
+      Port: 5555
+      Protocol: HTTP
+      VpcId: !ImportValue pardon-production-VPC
+      TargetType: ip
+      HealthCheckEnabled: true
+      HealthCheckPath: /health
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: 200
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '30'
+        - Key: stickiness.enabled
+          Value: 'true'
+        - Key: stickiness.type
+          Value: 'lb_cookie'
+        - Key: stickiness.lb_cookie.duration_seconds
+          Value: '3600'
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-coral-tg
+
+  # HTTP Listener
+  HTTPListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - !If
+          - HasCertificate
+          - Type: redirect
+            RedirectConfig:
+              Protocol: HTTPS
+              Port: '443'
+              StatusCode: HTTP_301
+          - Type: forward
+            TargetGroupArn: !Ref CoralServerTargetGroup
+
+  # HTTPS Listener (only if certificate provided)
+  HTTPSListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: HasCertificate
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref CertificateArn
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref CoralServerTargetGroup
+
+Outputs:
+  LoadBalancerArn:
+    Description: ARN of the Application Load Balancer
+    Value: !Ref ApplicationLoadBalancer
+    Export:
+      Name: !Sub ${EnvironmentName}-ALB-Arn
+
+  LoadBalancerDNS:
+    Description: DNS name of the Application Load Balancer
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub ${EnvironmentName}-ALB-DNS
+
+  TargetGroupArn:
+    Description: ARN of the Coral Server target group
+    Value: !Ref CoralServerTargetGroup
+    Export:
+      Name: !Sub ${EnvironmentName}-TargetGroup-Arn
+
+  LoadBalancerFullName:
+    Description: Full name of the load balancer (for CloudWatch metrics)
+    Value: !GetAtt ApplicationLoadBalancer.LoadBalancerFullName
+    Export:
+      Name: !Sub ${EnvironmentName}-ALB-FullName
+

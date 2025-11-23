@@ -1,7 +1,25 @@
-// Learn more: https://github.com/testing-library/jest-dom
-import '@testing-library/jest-dom'
+// Jest setup for polyfills needed by Solana libraries
+const { TextEncoder, TextDecoder } = require('util');
+const crypto = require('crypto');
 
-// Mock environment variables for tests
-process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test?schema=public'
-process.env.SOLANA_RPC_URL = 'https://api.devnet.solana.com'
+global.TextEncoder = TextEncoder;
+global.TextDecoder = TextDecoder;
 
+// Polyfill crypto for Node environment
+if (typeof global.crypto === 'undefined') {
+  global.crypto = crypto.webcrypto;
+}
+
+// Mock uuid to avoid ESM issues
+jest.mock('uuid', () => {
+  return {
+    v4: () => crypto.randomUUID(),
+  };
+});
+
+// Suppress console warnings during tests (optional)
+// global.console = {
+//   ...console,
+//   warn: jest.fn(),
+//   error: jest.fn(),
+// };

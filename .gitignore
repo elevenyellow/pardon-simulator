@@ -170,10 +170,14 @@ secrets.toml
 *.pem
 
 # Root-level environment files (production deployment)
+.env.secrets
 .env.production
 .env.development
 .env.production.local
 .env.development.local
+# Allow example/template files
+!.env.secrets.example
+!.env.*.example
 
 # Agent-specific environment files (local dev per-agent)
 agents/*/.env
@@ -213,6 +217,7 @@ agents/shared/personality-template.txt
 # Agent content files (extracted from code for easy customization)
 # Keep the .example versions for templates
 agents/*/tool-descriptions.txt
+agents/*/tool-definitions.json
 agents/*/scoring-config.txt
 agents/shared/scoring-mandate.txt
 agents/shared/agent-comms-note.txt

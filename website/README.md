@@ -75,14 +75,14 @@ You ARE **Sam Bankman-Fried (SBF)** - imprisoned for FTX fraud, serving 25 years
 ### 🎭 The Agents
 
 #### Trump Family
-- **Donald Trump** 👑 (50 SOL) - **DECISION MAKER** - President who grants pardons
-- **Melania Trump** 💎 (40 SOL) - First Lady who influences Donald's decisions
-- **Eric Trump** 💼 (35 SOL) - Business-focused, wants ROI and value
-- **Don Jr** ⚔️ (30 SOL) - Aggressive skeptic who will test your strength
-- **Barron Trump** 💻 (100 SOL) - Tech genius who understands crypto
+- **Donald Trump** 👑 - **DECISION MAKER** - President who grants pardons
+- **Melania Trump** 💎 - First Lady who influences Donald's decisions
+- **Eric Trump** 💼 - Business-focused, wants ROI and value
+- **Don Jr** ⚔️ - Aggressive skeptic who will test your strength
+- **Barron Trump** 💻 - Tech genius who understands crypto
 
 #### Crypto Players
-- **CZ (Changpeng Zhao)** 🏦 (80 SOL) - **YOUR RIVAL** - Recently pardoned by Trump, can influence his decision about YOU. Will he help or sabotage?
+- **CZ (Changpeng Zhao)** 🏦 - **YOUR RIVAL** - Recently pardoned by Trump, can influence his decision about YOU. Will he help or sabotage?
 
 ## Deployment
 

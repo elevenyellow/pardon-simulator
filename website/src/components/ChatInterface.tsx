@@ -13,6 +13,7 @@ import {
 } from'@/lib/conversationCache';
 import ReactMarkdown from'react-markdown';
 import remarkGfm from'remark-gfm';
+import { USER_SENDER_ID, USER_SENDER_DISPLAY_NAME } from'@/lib/constants';
 
 interface Message {
   id: string;
@@ -449,8 +450,8 @@ export default function ChatInterface({
             let pendingPaymentRequest: { request: PaymentRequest; messageId: string } | null = null;
             
             const newMessages: Message[] = data.messages.map((m: any) => {
-              const isFromUser = m.senderId === 'sbf';
-              const mentionsUser = m.mentions?.includes('sbf');
+              const isFromUser = m.senderId === USER_SENDER_ID;
+              const mentionsUser = m.mentions?.includes(USER_SENDER_ID);
               const isIntermediary = !isFromUser && !mentionsUser;
               
               // Check for payment request in agent messages and clean content
@@ -492,7 +493,7 @@ export default function ChatInterface({
               const updated = prev.map(prevMsg => {
                 if (prevMsg.id.startsWith('optimistic-')) {
                   const serverVersion = newMessages.find(serverMsg => 
-                    serverMsg.senderId === 'sbf' &&
+                    serverMsg.senderId === USER_SENDER_ID &&
                     stripDebugMarkers(serverMsg.content).trim() === stripDebugMarkers(prevMsg.content).trim()
                   );
                   
@@ -512,7 +513,7 @@ export default function ChatInterface({
               prev.forEach(prevMsg => {
                 if (prevMsg.id.startsWith('optimistic-')) {
                   const serverVersion = newMessages.find(serverMsg => 
-                    serverMsg.senderId === 'sbf' &&
+                    serverMsg.senderId === USER_SENDER_ID &&
                     stripDebugMarkers(serverMsg.content).trim() === stripDebugMarkers(prevMsg.content).trim()
                   );
                   if (serverVersion) {
@@ -784,8 +785,8 @@ export default function ChatInterface({
       
       const allMessages: Message[] = coralMessages
         .map((m: any) => {
-          const isFromUser = m.senderId === 'sbf';
-          const mentionsUser = m.mentions?.includes('sbf');
+          const isFromUser = m.senderId === USER_SENDER_ID;
+          const mentionsUser = m.mentions?.includes(USER_SENDER_ID);
           const isIntermediary = !isFromUser && !mentionsUser;
           
           // Check for payment request in agent messages
@@ -834,7 +835,7 @@ export default function ChatInterface({
         //  Strip debug markers for comparison to prevent duplicates
         const existingUserMessageContents = new Set(
           prev
-            .filter(m => m.senderId ==='sbf')
+            .filter(m => m.senderId === USER_SENDER_ID)
             .map(m => stripDebugMarkers(m.content).trim())
         );
         
@@ -850,7 +851,7 @@ export default function ChatInterface({
           
           // For user messages, check if we have an optimistic version with same content
           //  Strip debug markers from Coral message for comparison
-          if (m.senderId ==='sbf') {
+          if (m.senderId === USER_SENDER_ID) {
             const strippedContent = stripDebugMarkers(m.content).trim();
             if (existingUserMessageContents.has(strippedContent)) {
               return false; // Don't add as"new"if we have optimistic version
@@ -864,7 +865,7 @@ export default function ChatInterface({
         
         // Handle payment confirmations: remove optimistic ones if real ones exist
         const hasRealPaymentConfirmation = allMessages.some(m =>
-          m.senderId ==='sbf'&& m.content.includes('Payment sent! Transaction signature:')
+          m.senderId === USER_SENDER_ID && m.content.includes('Payment sent! Transaction signature:')
         );
         
         let filteredPrev = hasRealPaymentConfirmation
@@ -875,7 +876,7 @@ export default function ChatInterface({
         const updated = filteredPrev.map(prevMsg => {
           if (prevMsg.id.startsWith('optimistic-')) {
             const serverVersion = allMessages.find(serverMsg => 
-              serverMsg.senderId === 'sbf' &&
+              serverMsg.senderId === USER_SENDER_ID &&
               stripDebugMarkers(serverMsg.content).trim() === stripDebugMarkers(prevMsg.content).trim()
             );
             
@@ -895,7 +896,7 @@ export default function ChatInterface({
         filteredPrev.forEach(prevMsg => {
           if (prevMsg.id.startsWith('optimistic-')) {
             const serverVersion = allMessages.find(serverMsg => 
-              serverMsg.senderId === 'sbf' &&
+              serverMsg.senderId === USER_SENDER_ID &&
               stripDebugMarkers(serverMsg.content).trim() === stripDebugMarkers(prevMsg.content).trim()
             );
             if (serverVersion) {
@@ -1083,8 +1084,8 @@ export default function ChatInterface({
       // No payment required - show optimistic message now
       const userMessage: Message = {
         id:`optimistic-${Date.now()}`,
-        senderId:'sbf',
-        sender:'You (SBF)',
+        senderId: USER_SENDER_ID,
+        sender: USER_SENDER_DISPLAY_NAME,
         content: messageContent,
         timestamp: new Date(),
         isAgent: false,
@@ -1201,8 +1202,8 @@ export default function ChatInterface({
       
       const userMessage: Message = {
         id: `optimistic-${Date.now()}`,
-        senderId: 'sbf',
-        sender: 'You (SBF)',
+        senderId: USER_SENDER_ID,
+        sender: USER_SENDER_DISPLAY_NAME,
         content: displayContent,
         timestamp: userMessageTimestamp,
         isAgent: false,
@@ -1291,7 +1292,7 @@ export default function ChatInterface({
       if (retryResult.messages) {
         // Process agent messages
         const newAgentMessages = retryResult.messages
-          .filter((m: any) => m.senderId !=='sbf')
+          .filter((m: any) => m.senderId !== USER_SENDER_ID)
           .map((m: any) => ({
             id: m.id ||`msg-${Date.now()}-${Math.random()}`,
             senderId: m.senderId,
