@@ -587,18 +587,36 @@ class BaseAgent(ABC):
         Returns:
             Tuple of (MCP client, coral tools list)
         """
-        coral_params = {
-            'agentId': self.agent_id,
-            'agentDescription': self.agent_description
-        }
+        base_url = os.getenv('CORAL_SSE_URL')
         
-        if session_id:
-            coral_params['sessionId'] = session_id
+        # If sessionId is provided and base URL contains path components, append to path
+        # Otherwise use query parameters (for /sse endpoint)
+        if session_id and '/sse/v1/' in base_url:
+            # Append sessionId to path for /sse/v1/devmode/{app}/{priv}/{sessionId} format
+            url = f"{base_url}/{session_id}"
+            coral_params = {
+                'agentId': self.agent_id,
+                'agentDescription': self.agent_description
+            }
+        else:
+            # Use query parameters for simple /sse endpoint
+            coral_params = {
+                'agentId': self.agent_id,
+                'agentDescription': self.agent_description
+            }
+            if session_id:
+                coral_params['sessionId'] = session_id
+            url = f"{base_url}?{urllib.parse.urlencode(coral_params)}"
+            coral_params = {}  # Already in URL
+        
+        # Add any remaining query params
+        if coral_params:
+            url = f"{url}?{urllib.parse.urlencode(coral_params)}"
         
         client = MultiServerMCPClient(connections={
             "coral": {
                 "transport": "sse",
-                "url": f"{os.getenv('CORAL_SSE_URL')}?{urllib.parse.urlencode(coral_params)}",
+                "url": url,
                 "timeout": 700.0,
                 "sse_read_timeout": 700.0
             }
@@ -619,22 +637,39 @@ class BaseAgent(ABC):
             Tuple of (MCP client with multiple connections, coral tools list)
         """
         connections = {}
+        base_url = os.getenv('CORAL_SSE_URL')
         
         for session_id in session_ids:
-            coral_params = {
-                'agentId': self.agent_id,
-                'agentDescription': self.agent_description,
-                'sessionId': session_id
-            }
+            # Format URL correctly based on endpoint type
+            if '/sse/v1/' in base_url:
+                # Append sessionId to path for /sse/v1/devmode/{app}/{priv}/{sessionId} format
+                url = f"{base_url}/{session_id}"
+                coral_params = {
+                    'agentId': self.agent_id,
+                    'agentDescription': self.agent_description
+                }
+            else:
+                # Use query parameters for simple /sse endpoint
+                coral_params = {
+                    'agentId': self.agent_id,
+                    'agentDescription': self.agent_description,
+                    'sessionId': session_id
+                }
+                url = f"{base_url}?{urllib.parse.urlencode(coral_params)}"
+                coral_params = {}  # Already in URL
+            
+            # Add any remaining query params
+            if coral_params:
+                url = f"{url}?{urllib.parse.urlencode(coral_params)}"
             
             # Create unique connection name for each pool
             connections[f"coral-{session_id}"] = {
                 "transport": "sse",
-                "url": f"{os.getenv('CORAL_SSE_URL')}?{urllib.parse.urlencode(coral_params)}",
+                "url": url,
                 "timeout": 700.0,
                 "sse_read_timeout": 700.0
             }
-            print(f"[CORAL]   → {session_id}")
+            print(f"[CORAL]   → {session_id} @ {url}")
         
         # Create client with all connections
         client = MultiServerMCPClient(connections=connections)
