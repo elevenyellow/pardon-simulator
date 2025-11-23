@@ -21,6 +21,17 @@ RUN pip install --no-cache-dir boto3 python-dotenv poetry && \
 # Copy shared configuration files (required by all agents)
 COPY shared/ /app/shared/
 
+# Copy shared base files (CRITICAL - required for all agents)
+COPY base_agent.py /app/
+COPY executor_config.py /app/
+COPY worker_pool.py /app/
+COPY prompt_cache.py /app/
+COPY payment/ /app/payment/
+COPY utils/ /app/utils/
+
+# Copy shared x402 payment tools
+COPY x402_*.py /app/
+
 # Copy CZ and SBF agents (working agents without dependency conflicts)
 COPY cz/ /app/cz/
 COPY sbf/ /app/sbf/
@@ -31,15 +42,6 @@ COPY trump-melania/ /app/trump-melania/
 COPY trump-eric/ /app/trump-eric/
 COPY trump-donjr/ /app/trump-donjr/
 COPY trump-barron/ /app/trump-barron/
-
-# Copy shared x402 payment tools
-COPY x402_*.py /app/cz/
-COPY x402_*.py /app/sbf/
-COPY x402_*.py /app/trump-donald/
-COPY x402_*.py /app/trump-melania/
-COPY x402_*.py /app/trump-eric/
-COPY x402_*.py /app/trump-donjr/
-COPY x402_*.py /app/trump-barron/
 
 # Install dependencies for CZ and SBF (working agents)
 # Remove any existing .venv directories and set poetry config in each directory
