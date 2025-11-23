@@ -64,6 +64,31 @@ done
 echo ""
 echo "✅ Configs loaded successfully!"
 echo ""
+echo "⏳ Waiting for Coral Server to be ready..."
+
+# Wait for Coral Server to be responding (max 60 seconds)
+CORAL_URL="${CORAL_SSE_URL%%\?*}"  # Extract base URL without query params
+MAX_RETRIES=30
+RETRY_COUNT=0
+
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+  if curl -s -f --max-time 2 "${CORAL_URL}" > /dev/null 2>&1 || \
+     curl -s -f --max-time 2 "http://localhost:5555/v1/devmode/app/priv/sessions" > /dev/null 2>&1; then
+    echo "✅ Coral Server is ready!"
+    break
+  fi
+  
+  RETRY_COUNT=$((RETRY_COUNT + 1))
+  if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+    echo "  Attempt $RETRY_COUNT/$MAX_RETRIES - waiting 2s..."
+    sleep 2
+  else
+    echo "⚠️  WARNING: Coral Server not responding after ${MAX_RETRIES} attempts"
+    echo "   Proceeding anyway - connection errors may occur"
+  fi
+done
+
+echo ""
 echo "🚀 Starting ${AGENT_NAME} agent..."
 echo "=========================================="
 
