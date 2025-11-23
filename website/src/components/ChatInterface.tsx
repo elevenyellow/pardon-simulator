@@ -1001,9 +1001,9 @@ export default function ChatInterface({
         console.log('[Payment Flow] Not triggering payment flow - missing requirements');
       }
     } catch (err: any) {
-      // Check if this is a session not found error (server restart)
-      if (err.code === 'SESSION_NOT_FOUND' || err.status === 410) {
-        console.log('[Session Recovery] Session no longer exists, recreating...');
+      // Check if this is a session not found or thread/session mismatch error (server restart)
+      if (err.code === 'SESSION_NOT_FOUND' || err.code === 'THREAD_SESSION_MISMATCH' || err.status === 410) {
+        console.log('[Session Recovery] Session/thread mismatch detected, recreating...');
         
         // Stop polling
         if (pollIntervalRef.current) {
@@ -1012,10 +1012,13 @@ export default function ChatInterface({
         }
         setPolling(false);
         
-        // Clear all state
+        // Clear all state including thread ID
         setSessionId(null);
         setMessages([]);
         sessionInitializedRef.current = false;
+        
+        // 🔧 FIX: Clear thread ID in parent to stop 404 spam
+        onThreadCreated('');
         
         // Clear cache for current wallet
         if (publicKey) {
@@ -1023,7 +1026,7 @@ export default function ChatInterface({
         }
         
         // Show user notification
-        showToast('Server restarted. Reconnecting...', 'info');
+        showToast('Session expired. Reconnecting...', 'info');
         
         // Recreate session
         await initializeSession();

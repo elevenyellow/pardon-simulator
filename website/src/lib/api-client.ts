@@ -245,11 +245,12 @@ class APIClient {
 `${this.baseUrl}/chat/messages?sessionId=${sessionId}&threadId=${threadId}`    );
 
     if (!response.ok) {
-      // 410 Gone = session no longer exists (server restart)
+      // 410 Gone = session no longer exists or thread/session mismatch
       if (response.status === 410) {
         const data = await response.json();
-        const error: any = new Error(data.message || 'Session no longer exists');
-        error.code = 'SESSION_NOT_FOUND';
+        const error: any = new Error(data.message || 'Session/thread mismatch');
+        // Use the specific error code from backend if available
+        error.code = data.error?.toUpperCase() || 'SESSION_NOT_FOUND';
         error.status = 410;
         throw error;
       }

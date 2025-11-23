@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from'next/server';
 import { restoreCoralSession } from '@/lib/sessionRestoration';
 import { USER_SENDER_ID } from '@/lib/constants';
+import { prisma } from '@/lib/prisma';
 
 //  Backend-only Coral Server URL (never exposed to browser)
 const CORAL_SERVER_URL = process.env.CORAL_SERVER_URL ||'http://localhost:5555';
@@ -20,6 +21,32 @@ export async function GET(request: NextRequest) {
         { error:'Missing required parameters: sessionId, threadId'},
         { status: 400 }
       );
+    }
+
+    // 🔧 FIX: Validate thread belongs to session BEFORE hitting Coral
+    // This prevents 404 spam when frontend has stale thread ID after session recreation
+    try {
+      const thread = await prisma.thread.findFirst({
+        where: { coralThreadId: threadId },
+        include: { session: true }
+      });
+
+      // If thread exists but belongs to different session, it's stale
+      if (thread && thread.session.coralSessionId !== sessionId) {
+        console.log(
+          `[Messages API] Thread ${threadId} belongs to session ${thread.session.coralSessionId}, not ${sessionId}. Signaling frontend to reset.`
+        );
+        return NextResponse.json(
+          {
+            error: 'thread_session_mismatch',
+            message: 'Thread belongs to a different session. Please create a new thread.',
+          },
+          { status: 410 } // 410 Gone - tells frontend to reset
+        );
+      }
+    } catch (dbError) {
+      // DB error, log but continue - Coral is source of truth
+      console.warn('[Messages API] DB check failed, continuing to Coral:', dbError);
     }
 
     // Get messages from Coral Server
