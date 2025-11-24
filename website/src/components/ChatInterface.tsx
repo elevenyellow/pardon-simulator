@@ -720,7 +720,8 @@ export default function ChatInterface({
   const initializeSession = async () => {
     try {
       setLoading(true);
-      const session = await apiClient.createSession();
+      // Pass wallet address for consistent pool assignment in production
+      const session = await apiClient.createSession(publicKey?.toString());
       setSessionId(session.sessionId);
     } catch (err) {
       console.error('Session creation failed:', err);

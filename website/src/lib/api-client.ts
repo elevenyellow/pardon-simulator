@@ -95,11 +95,16 @@ class APIClient {
 
   /**
    * Create a new session
+   * 
+   * @param userWallet - Optional wallet address for consistent pool assignment in production
    */
-  async createSession(): Promise<CreateSessionResponse> {
+  async createSession(userWallet?: string): Promise<CreateSessionResponse> {
+    const body = userWallet ? JSON.stringify({ userWallet }) : undefined;
+    
     const response = await fetch(`${this.baseUrl}/chat/session`, {
       method:'POST',
       headers: {'Content-Type':'application/json'},
+      body,
     });
 
     if (!response.ok) {
