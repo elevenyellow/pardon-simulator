@@ -1055,14 +1055,40 @@ export default function ChatInterface({
     }
 
     try {
+      // 🔧 FIX: Add retry mechanism for thread not found errors
+      // Handles race condition in production pool architecture where thread
+      // creation succeeds but Coral needs a moment to fully register it
+      let response;
+      let attempt = 0;
+      const maxAttempts = 2;
       
-      const response = await apiClient.sendMessage({
-        sessionId,
-        threadId,
-        content: messageContent,
-        agentId: selectedAgent,
-        userWallet: publicKey?.toString(),
-      });
+      while (attempt < maxAttempts) {
+        try {
+          response = await apiClient.sendMessage({
+            sessionId,
+            threadId,
+            content: messageContent,
+            agentId: selectedAgent,
+            userWallet: publicKey?.toString(),
+          });
+          
+          // Success - break out of retry loop
+          break;
+          
+        } catch (error: any) {
+          attempt++;
+          
+          // If it's a "thread not found" error and we have attempts left, retry
+          if (attempt < maxAttempts && error.message?.toLowerCase().includes('not found')) {
+            console.log(`[Send] Thread not found, retrying (${attempt}/${maxAttempts})...`);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            continue;
+          }
+          
+          // Otherwise, throw the error
+          throw error;
+        }
+      }
 
       //  Check for HTTP 402 Payment Required (x402 protocol!)
       if (response.paymentRequired) {

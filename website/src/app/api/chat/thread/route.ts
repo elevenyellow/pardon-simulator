@@ -70,6 +70,37 @@ export async function POST(request: NextRequest) {
 
     console.log('Thread created:', threadId);
 
+    // 🔧 FIX: Verify thread is actually accessible before returning
+    // Small delay + verification to ensure Coral has committed the thread
+    // This prevents race conditions in production pool architecture
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    // Verify thread exists by fetching it
+    const verifyResponse = await fetch(
+      `${CORAL_SERVER_URL}/api/v1/debug/thread/${threadId}`,
+      { method: 'GET', headers: { 'Content-Type': 'application/json' } }
+    );
+
+    if (!verifyResponse.ok) {
+      console.warn(`Thread ${threadId} created but not immediately accessible, retrying...`);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // One more check
+      const retryVerify = await fetch(
+        `${CORAL_SERVER_URL}/api/v1/debug/thread/${threadId}`,
+        { method: 'GET', headers: { 'Content-Type': 'application/json' } }
+      );
+      
+      if (!retryVerify.ok) {
+        console.error(`Thread ${threadId} still not accessible after retry`);
+        // Don't fail the request, but log for monitoring
+      } else {
+        console.log(`Thread ${threadId} verified after retry`);
+      }
+    } else {
+      console.log(`Thread ${threadId} verified immediately`);
+    }
+
     // 🔧 FIX: Save thread to database immediately so it can be restored if coral server restarts
     try {
       await withRetry(async () => {

@@ -875,7 +875,9 @@ async function handlePOST(request: NextRequest) {
     if (!sendResponse.ok && sendResponse.status === 404) {
       const errorText = await sendResponse.text();
       
-      if (errorText.includes('Thread not found') || errorText.includes('Session not found')) {
+      // Flexible pattern matching to catch variations like "Thread with id xxx not found"
+      if ((errorText.toLowerCase().includes('thread') && errorText.toLowerCase().includes('not found')) || 
+          (errorText.toLowerCase().includes('session') && errorText.toLowerCase().includes('not found'))) {
         console.log('[Send API] Thread/Session not found, attempting restoration...');
         
         const restored = await restoreCoralSession(threadId);
