@@ -22,7 +22,7 @@ x-agent-env-common: &agent-env-common
   CORAL_SSE_URL: http://coral-server:5555/sse
   BACKEND_URL: ${BACKEND_URL}
   MODEL_API_KEY: ${MODEL_API_KEY}
-  MODEL_NAME: ${MODEL_NAME:-gpt-4o}
+  MODEL_NAME: ${MODEL_NAME:-gpt-5.1}
   SOLANA_RPC_URL: ${SOLANA_RPC_URL}
   AWS_REGION: ${AWS_REGION:-us-east-1}
   AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}

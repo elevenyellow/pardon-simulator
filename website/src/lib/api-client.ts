@@ -10,6 +10,8 @@ export interface SendMessageRequest {
   agentId: string;
   paymentSignature?: string;  // Included when retrying after payment
   userWallet?: string;  // User's wallet address for message persistence
+  walletSignature?: string;  // Wallet signature for verification
+  walletMessage?: string;  // Original signed message for verification
 }
 
 export interface SendMessageOptions {
@@ -112,11 +114,30 @@ class APIClient {
    * Retries if agent is not ready (503)
    */
   async createThread(sessionId: string, agentId: string, userWallet?: string, retries: number = 5, delayMs: number = 2000): Promise<CreateThreadResponse> {
+    // Get signature from localStorage if userWallet is provided
+    let signatureData = null;
+    if (userWallet && typeof window !== 'undefined') {
+      const stored = localStorage.getItem(`wallet_verification_${userWallet}`);
+      if (stored) {
+        try {
+          signatureData = JSON.parse(stored);
+        } catch (e) {
+          console.warn('[API Client] Failed to parse stored signature');
+        }
+      }
+    }
+    
     for (let attempt = 1; attempt <= retries; attempt++) {
       const response = await fetch(`${this.baseUrl}/chat/thread`, {
         method:'POST',
         headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ sessionId, agentId, userWallet }),
+        body: JSON.stringify({ 
+          sessionId, 
+          agentId, 
+          userWallet,
+          walletSignature: signatureData?.signature,
+          walletMessage: signatureData?.message
+        }),
       });
 
       if (response.ok) {
@@ -158,6 +179,20 @@ class APIClient {
     options?: SendMessageOptions
   ): Promise<SendMessageResponse> {
     console.log('API Client: Sending message to', request.agentId, options?.logContext || '');
+    
+    // Get signature from localStorage if userWallet is provided
+    if (request.userWallet && typeof window !== 'undefined' && !request.walletSignature) {
+      const stored = localStorage.getItem(`wallet_verification_${request.userWallet}`);
+      if (stored) {
+        try {
+          const signatureData = JSON.parse(stored);
+          request.walletSignature = signatureData.signature;
+          request.walletMessage = signatureData.message;
+        } catch (e) {
+          console.warn('[API Client] Failed to parse stored signature');
+        }
+      }
+    }
     
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (options?.paymentPayload) {

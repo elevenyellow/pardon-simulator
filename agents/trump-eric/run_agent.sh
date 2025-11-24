@@ -1,30 +1,13 @@
 #!/usr/bin/env bash
 set -e
 
-# Use python3 directly - universal binaries run natively in shell's architecture
-PYTHON_CMD="python3"
 VENV_PYTHON=".venv/bin/python"
 
-echo "Using Python: $PYTHON_CMD"
-$PYTHON_CMD --version
-python3 -c "import platform; print(f'Running as: {platform.machine()}')" 2>/dev/null || true
-
-# Install dependencies if not already installed
-if [ ! -d ".venv" ]; then
-    echo "Creating virtual environment..."
-    $PYTHON_CMD -m venv .venv
-    
-    source .venv/bin/activate
-    
-    echo "Upgrading pip and installing wheel..."
-    pip install --upgrade pip wheel setuptools
-    
-    echo "Installing dependencies..."
-    pip install --no-cache-dir langchain==0.3.25 langchain-community==0.3.24 langchain-core langchain-mcp-adapters==0.1.7 langchain-openai==0.3.26 python-dotenv solana solders base58 cdp-sdk aiohttp certifi requests
+# Force x86_64 to match Java architecture
+if [[ "$OSTYPE" == "darwin"* ]] && [[ "$(uname -m)" == "arm64" ]]; then
+    # Force x86_64 (Rosetta) to match Java
+    exec arch -x86_64 $VENV_PYTHON -u "$@"
 else
-    source .venv/bin/activate
+    # Non-macOS or x86_64 system
+    exec $VENV_PYTHON -u "$@"
 fi
-
-echo "Starting Eric Trump agent..."
-arch -arm64 $VENV_PYTHON -u "$@"
-

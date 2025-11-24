@@ -39,7 +39,7 @@ try:
     # Try to make a simple API call
     print("\nTesting API call...")
     response = client.chat.completions.create(
-        model="gpt-4o-mini",  # Use cheaper model for testing
+        model="gpt-5-mini",  # Use cheaper model for testing
         messages=[
             {"role": "user", "content": "Say 'API key works!'"}
         ],

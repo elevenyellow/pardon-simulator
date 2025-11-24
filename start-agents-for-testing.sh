@@ -81,7 +81,7 @@ start_agent() {
     
     # Start agent in background with output redirected to log
     cd "$agent_dir"
-    ../../$PYTHON_EXEC main.py > "../../logs/${agent_name}.log" 2>&1 &
+    CORAL_SSE_URL="${CORAL_SSE_URL:-http://localhost:5555/sse}" ../../$PYTHON_EXEC main.py > "../../logs/${agent_name}.log" 2>&1 &
     local pid=$!
     cd ../..
     

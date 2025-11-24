@@ -10,6 +10,7 @@ import { createFacilitatorConfig } from'@coinbase/x402';
 import type { PaymentPayload, PaymentRequirements } from'x402/types';
 import { restoreCoralSession } from'@/lib/sessionRestoration';
 import { USER_SENDER_ID } from'@/lib/constants';
+import { verifyWalletSignature } from'@/lib/wallet-verification';
 
 const CORAL_SERVER_URL = process.env.CORAL_SERVER_URL ||'http://localhost:5555';
 const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL;
@@ -100,6 +101,33 @@ async function handlePOST(request: NextRequest) {
     const agentId = rawBody.agentId ? sanitizeText(rawBody.agentId) :'';
     const userWallet = rawBody.userWallet ? sanitizeWalletAddress(rawBody.userWallet) : null;
     const paymentSignature = rawBody.paymentSignature ? sanitizeSignature(rawBody.paymentSignature) : undefined;
+    const walletSignature = rawBody.walletSignature;
+    const walletMessage = rawBody.walletMessage;
+
+    // Verify wallet ownership if signature provided
+    if (walletSignature && walletMessage && userWallet) {
+      const isValid = verifyWalletSignature({
+        walletAddress: userWallet,
+        signature: walletSignature,
+        message: walletMessage
+      });
+      
+      if (!isValid) {
+        console.warn('[Security] Invalid wallet signature from IP:', getClientIP(request.headers));
+        logInjectionAttempt(
+          getClientIP(request.headers),
+          '/api/chat/send',
+          'invalid_wallet_signature',
+          'signature_forgery'
+        );
+        return NextResponse.json(
+          { error: 'Invalid wallet signature' },
+          { status: 401 }
+        );
+      }
+      
+      console.log('[Security] Wallet signature verified for:', userWallet);
+    }
 
     if (!sessionId || !threadId || !content || !agentId) {
       return NextResponse.json(
@@ -158,8 +186,24 @@ async function handlePOST(request: NextRequest) {
       );
     }
     
-    // Check if this is a premium service payment notification
-    const isPremiumServicePayment = content.includes('[PREMIUM_SERVICE_PAYMENT_COMPLETED]');
+    // Check if this is a premium service payment by inspecting payment data
+    const paymentData = request.headers.get('X-Payment-Data');
+    let isPremiumServicePayment = false;
+    
+    if (paymentData) {
+      try {
+        const paymentPayload = JSON.parse(paymentData);
+        // Premium services have a service_type field (EXCLUDING message_fee) or custom amount != 0.01
+        // message_fee is infrastructure-level gatekeeping and should never reach agents
+        isPremiumServicePayment = (paymentPayload.service_type && paymentPayload.service_type !== 'message_fee') || 
+                                  (paymentPayload.amount_usdc && paymentPayload.amount_usdc !== 0.01);
+        if (isPremiumServicePayment) {
+          console.log('[x402] Detected premium service payment:', paymentPayload.service_type || 'custom amount');
+        }
+      } catch (e) {
+        // Not valid JSON or no service_type - treat as regular message fee
+      }
+    }
     
     const isPaymentConfirmation = paymentSignature !== undefined || 
                                   content.includes('Payment sent!') || 
@@ -183,13 +227,8 @@ async function handlePOST(request: NextRequest) {
     }
 
     const paymentVerified = request.headers.get('X-Payment-Verified');
-    const paymentData = request.headers.get('X-Payment-Data');
+    // paymentData already declared above for premium service detection
     let settlementResult: any = null;
-    
-    // Both regular message fees and premium service payments use the same CDP settlement flow
-    if (isPremiumServicePayment) {
-      console.log('[x402] Premium service payment - will settle via CDP');
-    }
 
     // Settle all payments (both message fees and premium services) via CDP facilitator
     if (paymentVerified ==='true'&& paymentData) {
@@ -216,22 +255,45 @@ async function handlePOST(request: NextRequest) {
         
         console.log(`[CDP] Payment amount: ${amountUsdc} USDC (${amountMicroUsdc} micro-USDC)`);
         
+        // Extract service metadata for x402 transparency
+        const serviceType = frontendPayload.service_type;
+        
+        // Create privacy-safe, descriptive description
+        let description = 'Pardon Simulator Message Fee';
+        if (isPremiumServicePayment && serviceType) {
+          // Convert service_type to human-readable format (e.g., "connection_intro" -> "Connection Introduction")
+          const serviceLabel = serviceType
+            .split('_')
+            .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+          description = `Premium Service: ${serviceLabel}`;
+          console.log(`[x402] Enhanced metadata: service=${serviceType}, agent=${agentId}, description="${description}"`);
+        }
+        
         const to = process.env.WALLET_WHITE_HOUSE ||'';
         const x402Requirements = {
           network:'solana',
           scheme:'exact',
           payTo: to,
-          maxAmountRequired: amountMicroUsdc, // Use actual amount from payment request
+          maxAmountRequired: amountMicroUsdc,
           asset:'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
           resource:`${process.env.NEXT_PUBLIC_BASE_URL ||'https://pardonsimulator.com'}/api/chat/send`,
-          description:'Pardon Simulator Chat Message',
+          description: description,
           mimeType:'application/json',
           outputSchema: {
             data:'string'
           },
           maxTimeoutSeconds: 300,
           extra: {
-            feePayer:'L54zkaPQFeTn1UsEqieEXBqWrPShiaZEPD7mS5WXfQg'
+            feePayer:'L54zkaPQFeTn1UsEqieEXBqWrPShiaZEPD7mS5WXfQg',
+            category: isPremiumServicePayment ? 'premium_service' : 'message_fee',
+            appVersion: '1.0.0',
+            ...(isPremiumServicePayment && serviceType && {
+              serviceType: serviceType,
+              agentId: agentId,
+              sessionId: sessionId,
+              isPremiumService: true
+            })
           }
         };
         
@@ -421,23 +483,74 @@ async function handlePOST(request: NextRequest) {
               }
               
               console.log('[CDP Fallback] Using signature for on-chain verification:', signature);
-              console.log('[CDP Fallback] Waiting 3s for transaction to settle on-chain...');
               
-              // Wait for transaction to potentially settle
-              await new Promise(resolve => setTimeout(resolve, 3000));
-              
-              // Verify the transaction on-chain using Helius RPC
-              const connection = new Connection(SOLANA_RPC_URL!, 'confirmed');
-              console.log('[CDP Fallback] Checking transaction on-chain...');
-              
-              const txInfo = await connection.getTransaction(signature, {
-                maxSupportedTransactionVersion: 0,
-                commitment: 'confirmed'
+              // CHECK IF THIS TRANSACTION WAS ALREADY PROCESSED (DUPLICATE DETECTION)
+              // This prevents duplicate messages to agent when user retries after CDP errors
+              const existingPayment = await prisma.payment.findFirst({
+                where: {
+                  signature: signature,
+                  verified: true
+                }
               });
+
+              if (existingPayment) {
+                console.log('[CDP Fallback] ✅ Transaction already processed:', signature);
+                console.log('[CDP Fallback] Existing payment ID:', existingPayment.id, 'Amount:', existingPayment.amount);
+                
+                // Transaction was already settled successfully! Use existing data
+                settlementResult = {
+                  success: true,
+                  transaction: signature,
+                  network: 'solana',
+                  payer: existingPayment.fromWallet,
+                  solanaExplorer: `https://explorer.solana.com/tx/${signature}`,
+                  note: 'Transaction already processed (duplicate request prevented)',
+                  isDuplicate: true
+                };
+                
+                console.log('[CDP Fallback] Skipping verification for duplicate payment, proceeding to message delivery');
+                
+                // Skip the on-chain verification loop and proceed directly
+              } else {
+                // NEW TRANSACTION - Proceed with on-chain verification
+                console.log('[CDP Fallback] New transaction detected, verifying on-chain...');
+              
+              // IMPROVED: Wait longer and retry multiple times for on-chain verification
+              // Solana transactions can take time to propagate, especially during high load
+              const connection = new Connection(SOLANA_RPC_URL!, 'confirmed');
+              const maxRetries = 4;
+              const waitTimeMs = 3000; // 3 seconds between attempts
+              let txInfo = null;
+              
+              console.log(`[CDP Fallback] Waiting for transaction to settle on-chain (up to ${maxRetries * waitTimeMs / 1000} seconds)...`);
+              
+              for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                // Wait before checking (including first attempt to give transaction time to propagate)
+                await new Promise(resolve => setTimeout(resolve, waitTimeMs));
+                
+                console.log(`[CDP Fallback] Checking transaction on-chain (attempt ${attempt}/${maxRetries})...`);
+                
+                try {
+                  txInfo = await connection.getTransaction(signature, {
+                    maxSupportedTransactionVersion: 0,
+                    commitment: 'confirmed'
+                  });
+                  
+                  if (txInfo) {
+                    console.log('[CDP Fallback] ✅ Transaction found on-chain!');
+                    break; // Success! Exit retry loop
+                  } else {
+                    console.log(`[CDP Fallback] Transaction not yet visible (attempt ${attempt}/${maxRetries})`);
+                  }
+                } catch (rpcError: any) {
+                  console.error(`[CDP Fallback] RPC error on attempt ${attempt}:`, rpcError.message);
+                  // Continue to next retry
+                }
+              }
               
               if (!txInfo) {
-                console.error('[CDP Fallback] Transaction not found on-chain');
-                throw new Error('Transaction not found on blockchain after CDP error');
+                console.error('[CDP Fallback] Transaction not found after all retries');
+                throw new Error(`Transaction not found on blockchain after CDP error (checked ${maxRetries} times over ${maxRetries * waitTimeMs / 1000} seconds)`);
               }
               
               if (txInfo.meta?.err) {
@@ -485,6 +598,8 @@ async function handlePOST(request: NextRequest) {
                 // Don't fail the whole request if storage fails
               }
               
+              } // End of "else" block for new transaction verification
+              
             } catch (fallbackError: any) {
               console.error('[CDP Fallback] On-chain verification failed:', fallbackError.message);
               // Include both CDP error and fallback error for debugging
@@ -510,45 +625,180 @@ async function handlePOST(request: NextRequest) {
             throw new Error('No transaction signature returned from CDP settle');
           }
 
-          settlementResult = {
-            success: true,
-            transaction: txSignature,
-            network:'solana',
-            payer: settleResult.payer || frontendPayload.from,
-            solanaExplorer:`https://explorer.solana.com/tx/${txSignature}`,
-          };
-          
-          console.log('[CDP] Settlement result:', settlementResult);
-          
-          // Store payment in database
-          try {
-            const paymentAmount = amountUsdc;
-            const serviceType = isPremiumServicePayment ? 'premium_service' : 'message_fee';
+          // CHECK IF THIS TRANSACTION WAS ALREADY PROCESSED (DUPLICATE DETECTION)
+          const existingPayment = await prisma.payment.findFirst({
+            where: {
+              signature: txSignature,
+              verified: true
+            }
+          });
+
+          if (existingPayment) {
+            console.log('[CDP] ✅ Transaction already processed:', txSignature);
+            console.log('[CDP] Existing payment ID:', existingPayment.id, 'Amount:', existingPayment.amount);
             
-            const payment = await prisma.payment.create({
-              data: {
-                fromWallet: settlementResult.payer,
-                toWallet: to,
-                toAgent: agentId,
-                amount: paymentAmount,
-                currency:'USDC',
-                signature: txSignature,
-                serviceType,
-                verified: true,
-                verifiedAt: new Date(),
-                isAgentToAgent: false,
-                initiatedBy: userWallet
-              }
-            });
-            console.log('[CDP] Payment stored in database:', txSignature, 'ID:', payment.id);
-          } catch (storeError: any) {
-            console.error('[CDP] Failed to store payment in database:', storeError.message);
-            // Don't fail the whole request if storage fails
+            settlementResult = {
+              success: true,
+              transaction: txSignature,
+              network: 'solana',
+              payer: existingPayment.fromWallet,
+              solanaExplorer: `https://explorer.solana.com/tx/${txSignature}`,
+              note: 'Transaction already processed (duplicate request prevented)',
+              isDuplicate: true
+            };
+          } else {
+            // NEW TRANSACTION - store in database
+            settlementResult = {
+              success: true,
+              transaction: txSignature,
+              network:'solana',
+              payer: settleResult.payer || frontendPayload.from,
+              solanaExplorer:`https://explorer.solana.com/tx/${txSignature}`,
+            };
+            
+            console.log('[CDP] Settlement result:', settlementResult);
+            
+            // Store payment in database
+            try {
+              const paymentAmount = amountUsdc;
+              const serviceType = isPremiumServicePayment ? 'premium_service' : 'message_fee';
+              
+              const payment = await prisma.payment.create({
+                data: {
+                  fromWallet: settlementResult.payer,
+                  toWallet: to,
+                  toAgent: agentId,
+                  amount: paymentAmount,
+                  currency:'USDC',
+                  signature: txSignature,
+                  serviceType,
+                  verified: true,
+                  verifiedAt: new Date(),
+                  isAgentToAgent: false,
+                  initiatedBy: userWallet
+                }
+              });
+              console.log('[CDP] Payment stored in database:', txSignature, 'ID:', payment.id);
+            } catch (storeError: any) {
+              console.error('[CDP] Failed to store payment in database:', storeError.message);
+              // Don't fail the whole request if storage fails
+            }
           }
         }
       } catch (error: any) {
         console.error('CDP settlement error:', error.message);
         
+        // For premium service payments, handle failure gracefully
+        if (isPremiumServicePayment) {
+          console.log('[Premium Service] Payment failed - handling gracefully');
+          
+          // Extract service info for logging and error message
+          let serviceType = 'premium service';
+          let amountUsdc = 0;
+          
+          if (paymentData) {
+            try {
+              const paymentPayload = JSON.parse(paymentData);
+              serviceType = paymentPayload.service_type || 'premium service';
+              amountUsdc = paymentPayload.amount_usdc || 0;
+            } catch (e) {
+              console.error('[Premium Service] Failed to parse payment data:', e);
+            }
+          }
+          
+          // Get wallet addresses
+          const treasuryWallet = process.env.WALLET_WHITE_HOUSE || '';
+          
+          // Log failed payment attempt to database for debugging
+          try {
+            await prisma.payment.create({
+              data: {
+                fromWallet: userWallet,
+                toWallet: treasuryWallet,
+                toAgent: agentId,
+                amount: amountUsdc,
+                currency: 'USDC',
+                signature: `failed-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+                serviceType: 'premium_service_failed',
+                verified: false,
+                isAgentToAgent: false,
+                initiatedBy: userWallet,
+                x402Error: `CDP settlement failed: ${error.message} | Service: ${serviceType} | Failed at: ${new Date().toISOString()}`
+              }
+            });
+            console.log('[Premium Service] Failed payment logged to database');
+          } catch (dbError: any) {
+            console.error('[Premium Service] Failed to log payment:', dbError.message);
+          }
+          
+          // Post a system error message directly to the thread (no agent involvement)
+          const systemErrorMessage = `🔧 System Notice: The prison payphone experienced technical difficulties while processing your payment. Service requested: ${serviceType} (${amountUsdc} USDC). Please try again in a few moments. CDC Facility Management apologizes for the inconvenience.`;
+          
+          try {
+            const errorMsgResponse = await fetch(
+              `${CORAL_SERVER_URL}/api/v1/debug/thread/sendMessage/app/priv/${sessionId}/prison`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  threadId,
+                  content: systemErrorMessage,
+                  mentions: ['sbf'], // Direct the system notice to the user
+                }),
+              }
+            );
+            
+            if (errorMsgResponse.ok) {
+              console.log('[Premium Service] System error message posted to thread');
+              
+              // Save system message to database - need to look up Thread record by coralThreadId
+              const threadRecord = await prisma.thread.findFirst({
+                where: { coralThreadId: threadId }
+              });
+              
+              if (threadRecord) {
+                await prisma.message.create({
+                  data: {
+                    threadId: threadRecord.id,
+                    senderId: 'prison',
+                    content: systemErrorMessage,
+                    timestamp: new Date(),
+                    mentions: ['sbf'],
+                    isIntermediary: false,
+                    metadata: {
+                      isSystemError: true,
+                      originalError: error.message,
+                      serviceType,
+                      amountUsdc,
+                      paymentFailed: true
+                    }
+                  }
+                });
+                console.log('[Premium Service] System error message saved to database');
+              } else {
+                console.warn('[Premium Service] Thread not found in database, skipping message save');
+              }
+            } else {
+              console.error('[Premium Service] Failed to post system message:', errorMsgResponse.status);
+            }
+          } catch (threadError: any) {
+            console.error('[Premium Service] Error posting system message:', threadError.message);
+          }
+          
+          // Return 503 Service Unavailable (NOT 402!)
+          // This prevents frontend from thinking payment succeeded
+          return NextResponse.json(
+            { 
+              error: 'Payment processor temporarily unavailable',
+              details: 'CDP payment facilitator is experiencing issues. Your transaction was not completed.',
+              retryable: true,
+              systemMessage: 'A system notice has been posted to the chat explaining the issue.'
+            },
+            { status: 503 } // Service Unavailable - prevents payment loop
+          );
+        }
+        
+        // For non-premium service payments (shouldn't happen), just set error state
         settlementResult = {
           success: false,
           error: error.message ||'CDP settlement failed',
@@ -579,11 +829,30 @@ async function handlePOST(request: NextRequest) {
     let contentWithWallet =`[USER_WALLET:${userWallet}] ${content}`;
     
     // If this is a premium service payment with a successful settlement, append transaction info for agent verification
+    // NOTE: message_fee is NOT included here - it's infrastructure gatekeeping, not an agent service
+    // Agents should never see message_fee payments; they only see payments for actual agent services
     if (isPremiumServicePayment && settlementResult?.success && settlementResult?.transaction) {
       console.log('[Premium Service] Appending payment completion marker with tx:', settlementResult.transaction);
-      contentWithWallet +=`\n[PREMIUM_SERVICE_PAYMENT_COMPLETED: ${settlementResult.transaction}]`;
-    } else if (isPremiumServicePayment) {
-      console.log('[Premium Service] Payment marker NOT added. settlementResult:', settlementResult);
+      
+      // Extract service info from the payment data header (already parsed earlier)
+      let serviceType = 'unknown';
+      let amountUsdc = 0;
+      
+      if (paymentData) {
+        try {
+          const paymentPayload = JSON.parse(paymentData);
+          serviceType = paymentPayload.service_type || 'unknown';
+          amountUsdc = paymentPayload.amount_usdc || 0;
+        } catch (e) {
+          console.error('[Premium Service] Failed to parse payment data for marker:', e);
+        }
+      }
+      
+      // Enhanced marker with service_type and amount for agent verification
+      contentWithWallet +=`\n[PREMIUM_SERVICE_PAYMENT_COMPLETED: ${settlementResult.transaction}|${serviceType}|${amountUsdc}]`;
+      console.log(`[Premium Service] Enhanced marker added: service=${serviceType}, amount=${amountUsdc} USDC`);
+    } else if (isPremiumServicePayment && !settlementResult?.success) {
+      console.log('[Premium Service] Payment marker NOT added - settlement failed:', settlementResult?.error || 'unknown error');
     }
     
     // Try to send the message

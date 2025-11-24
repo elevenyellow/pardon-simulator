@@ -735,8 +735,7 @@ export default function ChatInterface({
     
     try {
       setLoading(true);
-      const userWallet = publicKey?.toBase58();
-      const thread = await apiClient.createThread(sessionId, selectedAgent, userWallet);
+      const thread = await apiClient.createThread(sessionId, selectedAgent, publicKey?.toString());
       onThreadCreated(thread.threadId);
       
       // Only add welcome message if there are no existing messages (e.g., from cache)
@@ -1001,9 +1000,9 @@ export default function ChatInterface({
         console.log('[Payment Flow] Not triggering payment flow - missing requirements');
       }
     } catch (err: any) {
-      // Check if this is a session not found or thread/session mismatch error (server restart)
-      if (err.code === 'SESSION_NOT_FOUND' || err.code === 'THREAD_SESSION_MISMATCH' || err.status === 410) {
-        console.log('[Session Recovery] Session/thread mismatch detected, recreating...');
+      // Check if this is a session not found error (server restart)
+      if (err.code === 'SESSION_NOT_FOUND' || err.status === 410) {
+        console.log('[Session Recovery] Session no longer exists, recreating...');
         
         // Stop polling
         if (pollIntervalRef.current) {
@@ -1012,13 +1011,10 @@ export default function ChatInterface({
         }
         setPolling(false);
         
-        // Clear all state including thread ID
+        // Clear all state
         setSessionId(null);
         setMessages([]);
         sessionInitializedRef.current = false;
-        
-        // 🔧 FIX: Clear thread ID in parent to stop 404 spam
-        onThreadCreated('');
         
         // Clear cache for current wallet
         if (publicKey) {
@@ -1026,7 +1022,7 @@ export default function ChatInterface({
         }
         
         // Show user notification
-        showToast('Session expired. Reconnecting...', 'info');
+        showToast('Server restarted. Reconnecting...', 'info');
         
         // Recreate session
         await initializeSession();
@@ -1192,14 +1188,15 @@ export default function ChatInterface({
           paymentId: signedTx.payment_id,
           from: signedTx.from,
           to: signedTx.to,
-          amount_usdc: amount
+          amount_usdc: amount,
+          service_type: paymentReq.service_type  // Include service type for backend marker
         };
 
       // Show user's message and loading indicator together to avoid timing/ordering issues
       const userMessageTimestamp = new Date();
       
       // For premium services, show a payment confirmation message to user
-      // But the full message is still sent to agent in the database (line 1217)
+      // This same content will be saved to database (avoiding duplicate original message)
       const displayContent = isPremiumService
         ? `Payment for premium service: ${paymentReq.service_type?.replace(/_/g, ' ')}`
         : originalMessageContent;
@@ -1235,14 +1232,14 @@ export default function ChatInterface({
         // Send to /api/chat/send with X-PAYMENT header
         // The middleware will verify and settle the payment via CDP facilitator
         
-        // For premium services, send a notification message
-        // For regular messages, send the original content
-      const messageContent = isPremiumService
-        ? `[PREMIUM_SERVICE_PAYMENT_COMPLETED] ${originalMessageContent}`.trim()
-        : originalMessageContent;
+        // Send the SAME content as what we're displaying to the user
+        // For premium services: payment confirmation (original message already sent in step 1)
+        // For message_fee: the actual message (first time sending)
+      const messageContent = displayContent;
       
       // Log message being sent to agent for debugging
       console.log('[Payment Flow] Message to agent:', messageContent.substring(0, 200));
+      console.log('[Payment Flow] Is premium service:', isPremiumService);
 
       const retryResponse = await fetch('/api/chat/send', {
         method:'POST',

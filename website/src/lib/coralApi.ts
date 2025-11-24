@@ -119,7 +119,7 @@ export async function createThread(
 }
 
 /**
- * Send a message in a thread using debug API
+ * Send a message in a thread using production API
  * Player sends as SBF (the player character)
  */
 export async function sendMessage(
@@ -129,7 +129,7 @@ export async function sendMessage(
   mentions: string[],
   senderAgent: string ='sbf'): Promise<void> {
   try {
-    const endpoint =`${BASE_URL}/api/v1/debug/thread/sendMessage/${APPLICATION_ID}/${PRIVACY_KEY}/${sessionId}/${senderAgent}`;
+    const endpoint =`${BASE_URL}/api/v1/message/devmode/${APPLICATION_ID}/${PRIVACY_KEY}/${sessionId}?sessionId=${senderAgent}`;
     
     // Format message with @ mentions
     const mentionsStr = mentions.map(m =>`@${m}`).join('');

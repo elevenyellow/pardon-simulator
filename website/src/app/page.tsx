@@ -6,6 +6,7 @@ import { useWallet } from'@solana/wallet-adapter-react';
 import AgentSelector from'@/components/AgentSelector';
 import ChatInterface from'@/components/ChatInterface';
 import'@/lib/console-filter';  // Suppress excessive wallet SDK and CSS logging
+import bs58 from'bs58';
 
 //  Fix hydration error: Load wallet button only on client-side
 const WalletMultiButton = dynamic(
@@ -16,7 +17,7 @@ const WalletMultiButton = dynamic(
 type GameScreen ='initial'|'loading'|'game';
 
 export default function Home() {
-  const { publicKey, connected, disconnect } = useWallet();
+  const { publicKey, connected, disconnect, signMessage } = useWallet();
   const [currentScreen, setCurrentScreen] = useState<GameScreen>('initial');
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [threadId, setThreadId] = useState<string | null>(null);
@@ -29,6 +30,10 @@ export default function Home() {
   const phoneDialRef = useRef<HTMLAudioElement | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [musicStarted, setMusicStarted] = useState(false);
+  
+  // Wallet verification state
+  const [walletVerified, setWalletVerified] = useState(false);
+  const [verifyingWallet, setVerifyingWallet] = useState(false);
 
   // Clear threads when wallet changes
   useEffect(() => {
@@ -106,6 +111,61 @@ export default function Home() {
     if (phoneDialRef.current) phoneDialRef.current.muted = newMuted;
   };
 
+  // Verify wallet ownership with signature
+  const verifyWalletOwnership = useCallback(async (): Promise<boolean> => {
+    if (!publicKey || !signMessage) {
+      console.error('[Wallet] Cannot verify - missing publicKey or signMessage');
+      return false;
+    }
+    
+    const walletAddress = publicKey.toString();
+    
+    // Check if already verified in localStorage
+    const stored = localStorage.getItem(`wallet_verification_${walletAddress}`);
+    if (stored) {
+      try {
+        const { signature, message, timestamp } = JSON.parse(stored);
+        const age = Date.now() - timestamp;
+        if (age < 7 * 24 * 60 * 60 * 1000) { // 7 days
+          console.log('[Wallet] Using cached signature verification');
+          setWalletVerified(true);
+          return true;
+        }
+      } catch (e) {
+        console.warn('[Wallet] Invalid cached signature data');
+      }
+    }
+    
+    // Request signature
+    try {
+      setVerifyingWallet(true);
+      const timestamp = Date.now();
+      const message = `Verify wallet ownership for Pardon Simulator\n\nDomain: pardonsimulator.com\nAddress: ${walletAddress}\nTimestamp: ${timestamp}`;
+      
+      console.log('[Wallet] Requesting signature for verification...');
+      const messageBytes = new TextEncoder().encode(message);
+      const signatureBytes = await signMessage(messageBytes);
+      const signature = bs58.encode(signatureBytes);
+      
+      // Store in localStorage
+      localStorage.setItem(`wallet_verification_${walletAddress}`, JSON.stringify({
+        signature,
+        message,
+        timestamp
+      }));
+      
+      setWalletVerified(true);
+      console.log('[Wallet] Signature verified and stored');
+      return true;
+    } catch (error) {
+      console.error('[Wallet] Signature request failed:', error);
+      alert('Wallet verification required to continue. Please sign the message to prove wallet ownership.');
+      return false;
+    } finally {
+      setVerifyingWallet(false);
+    }
+  }, [publicKey, signMessage]);
+
   // Start the game flow (loading screen -> game screen)
   const startGameFlow = useCallback(() => {
     if (!musicStarted) startMusic();
@@ -126,27 +186,57 @@ export default function Home() {
   }, [musicStarted]);
 
   // Handle START button click (only shown when wallet is already connected)
-  const handleStartClick = () => {
-    startGameFlow();
+  const handleStartClick = async () => {
+    // First verify wallet ownership
+    const verified = await verifyWalletOwnership();
+    if (verified) {
+      startGameFlow();
+    }
   };
   
-  // Watch for wallet connection on initial screen to automatically proceed
+  // Passively check for cached wallet verification when wallet connects
+  // Does NOT trigger signature request - only checks localStorage
   useEffect(() => {
-    // If we're on initial screen and wallet just connected, proceed to game
-    if (currentScreen ==='initial'&& connected) {
-      // Small delay to ensure user sees connection success
-      const timer = setTimeout(() => {
-        startGameFlow();
-      }, 500);
-
-      return () => clearTimeout(timer);
+    if (connected && publicKey) {
+      const walletAddress = publicKey.toString();
+      const stored = localStorage.getItem(`wallet_verification_${walletAddress}`);
+      
+      if (stored) {
+        try {
+          const { timestamp } = JSON.parse(stored);
+          const age = Date.now() - timestamp;
+          const MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days
+          
+          if (age >= 0 && age < MAX_AGE) {
+            console.log('[Wallet] Found valid cached signature');
+            setWalletVerified(true);
+          } else {
+            console.log('[Wallet] Cached signature expired');
+            setWalletVerified(false);
+          }
+        } catch (e) {
+          console.warn('[Wallet] Invalid cached signature data');
+          setWalletVerified(false);
+        }
+      } else {
+        console.log('[Wallet] No cached signature found');
+        setWalletVerified(false);
+      }
+    } else {
+      setWalletVerified(false);
     }
-  }, [connected, currentScreen, startGameFlow]);
+  }, [connected, publicKey]);
 
   // Handle logout - disconnect wallet and return to initial screen
   const handleLogout = async () => {
     try {
+      // Clear wallet signature from storage
+      if (publicKey) {
+        localStorage.removeItem(`wallet_verification_${publicKey.toString()}`);
+      }
+      
       await disconnect();
+      setWalletVerified(false);
       setCurrentScreen('initial');
       setSelectedAgent(null);
       setThreadId(null);
@@ -154,6 +244,11 @@ export default function Home() {
     } catch (error) {
       console.error('Error disconnecting wallet:', error);
       // Still navigate back even if disconnect fails
+      // Clear signature storage regardless
+      if (publicKey) {
+        localStorage.removeItem(`wallet_verification_${publicKey.toString()}`);
+      }
+      setWalletVerified(false);
       setCurrentScreen('initial');
       setSelectedAgent(null);
       setThreadId(null);
@@ -267,11 +362,12 @@ export default function Home() {
               ) : (
                 <button
                   onClick={handleStartClick}
-                  className="px-10 py-4 font-pixel text-sm text-white bg-[#66b680] border-[3px] border-[#4a8c60] uppercase tracking-wider transition-all hover:bg-[#7ac694] active:translate-y-1 pixel-art"                  style={{
+                  disabled={verifyingWallet}
+                  className="px-10 py-4 font-pixel text-sm text-white bg-[#66b680] border-[3px] border-[#4a8c60] uppercase tracking-wider transition-all hover:bg-[#7ac694] active:translate-y-1 pixel-art disabled:opacity-50 disabled:cursor-not-allowed"                  style={{
                     boxShadow:'0 6px 0 #3a6c48, 0 6px 16px rgba(0, 0, 0, 0.5), 0 0 16px rgba(102, 182, 128, 0.5), 0 0 32px rgba(102, 182, 128, 0.3)',
                     textShadow:'2px 2px 0 #3a6c48, 0 0 10px rgba(102, 182, 128, 0.8)'                  }}
                 >
-                  Start
+                  {verifyingWallet ? 'Verifying...' : 'Start'}
                 </button>
               )}
             </div>

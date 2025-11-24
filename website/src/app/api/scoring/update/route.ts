@@ -5,6 +5,7 @@ import { withRetry } from'@/lib/db-retry';
 import { strictRateLimiter } from'@/lib/middleware/rate-limit';
 import { sanitizeScoringRequest } from'@/lib/security/sanitize';
 import { getClientIP, logSuspiciousActivity } from'@/lib/security/monitoring';
+import { verifyWalletSignature } from'@/lib/wallet-verification';
 
 async function handlePOST(request: NextRequest) {
   try {
@@ -39,6 +40,80 @@ async function handlePOST(request: NextRequest) {
       agentId,
       messageId,
     } = sanitizationResult.sanitized!;
+    
+    // SECURITY: REQUIRE authentication (either wallet signature OR agent API key)
+    const walletSignature = rawBody.walletSignature;
+    const walletMessage = rawBody.walletMessage;
+    const agentApiKey = request.headers.get('X-Agent-API-Key');
+    
+    // Check if this is an agent request
+    const isAgentRequest = !!agentApiKey;
+    
+    if (isAgentRequest) {
+      // Validate agent API key
+      const expectedAgentKey = process.env.AGENT_API_KEY || process.env.CORAL_AGENT_API_KEY;
+      
+      if (!expectedAgentKey) {
+        console.error('[Security] AGENT_API_KEY not configured in environment');
+        return NextResponse.json(
+          { error: 'Agent authentication not configured' },
+          { status: 500 }
+        );
+      }
+      
+      if (agentApiKey !== expectedAgentKey) {
+        console.warn('[Security] Invalid agent API key from IP:', getClientIP(request.headers));
+        logSuspiciousActivity(
+          getClientIP(request.headers),
+          '/api/scoring/update',
+          'invalid_agent_api_key',
+          { userWallet: userWallet.substring(0, 8) + '...' }
+        );
+        return NextResponse.json(
+          { error: 'Invalid agent API key' },
+          { status: 401 }
+        );
+      }
+      
+      console.log('[Security] Agent API key verified for scoring update:', userWallet.substring(0, 8) + '...');
+    } else {
+      // User request - require wallet signature
+      if (!walletSignature || !walletMessage) {
+        console.warn('[Security] Scoring update attempt without signature from IP:', getClientIP(request.headers));
+        logSuspiciousActivity(
+          getClientIP(request.headers),
+          '/api/scoring/update',
+          'missing_wallet_signature',
+          { userWallet: userWallet.substring(0, 8) + '...' }
+        );
+        return NextResponse.json(
+          { error: 'Wallet signature required for scoring updates' },
+          { status: 401 }
+        );
+      }
+      
+      const isValid = verifyWalletSignature({
+        walletAddress: userWallet,
+        signature: walletSignature,
+        message: walletMessage
+      });
+      
+      if (!isValid) {
+        console.warn('[Security] Invalid wallet signature for scoring update from IP:', getClientIP(request.headers));
+        logSuspiciousActivity(
+          getClientIP(request.headers),
+          '/api/scoring/update',
+          'invalid_wallet_signature',
+          { userWallet: userWallet.substring(0, 8) + '...' }
+        );
+        return NextResponse.json(
+          { error: 'Invalid wallet signature' },
+          { status: 401 }
+        );
+      }
+      
+      console.log('[Security] Wallet signature verified for scoring update:', userWallet.substring(0, 8) + '...');
+    }
     
     // Extract additional fields (some not sanitized)
     const { coralSessionId, threadId } = rawBody;

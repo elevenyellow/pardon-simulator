@@ -490,8 +490,8 @@ class BaseAgent(ABC):
         if not coral_add_participant_tool:
             raise ValueError("coral_add_participant tool not found!")
         
-        # Create contact_agent wrapper
-        contact_agent_tool = create_contact_agent_tool(coral_send_message_tool, coral_add_participant_tool)
+        # Create contact_agent wrapper with agent_id for automatic confirmation
+        contact_agent_tool = create_contact_agent_tool(coral_send_message_tool, coral_add_participant_tool, self.agent_id)
         
         # Create process_payment_payload tool
         process_payment_tool = create_process_payment_payload_tool(my_wallet_address)
@@ -519,7 +519,7 @@ class BaseAgent(ABC):
         
         # Model configuration
         model_kwargs = {
-            "model": os.getenv("MODEL_NAME", "gpt-4o"),
+            "model": os.getenv("MODEL_NAME", "gpt-5.1"),
             "model_provider": os.getenv("MODEL_PROVIDER", "openai"),
             "api_key": os.getenv("MODEL_API_KEY"),
             "temperature": float(os.getenv("MODEL_TEMPERATURE", "0.7")),
@@ -551,13 +551,15 @@ class BaseAgent(ABC):
         
         return agent_executor, my_wallet_address
     
-    async def connect_to_coral_server(self) -> Tuple[MultiServerMCPClient, List[BaseTool]]:
+    async def connect_to_coral_server(self) -> Tuple[MultiServerMCPClient, List[BaseTool], Optional[Dict[str, List[BaseTool]]]]:
         """
         Connect to Coral server and retrieve tools.
         Supports multi-session connections for production load distribution.
         
         Returns:
-            Tuple of (MCP client, coral tools list)
+            Tuple of (MCP client, coral tools list, optional dict of all pool tools)
+                - all_pool_tools is None for single-session mode
+                - all_pool_tools is Dict[pool_name, tools] for multi-session mode
         """
         # Check for multi-session configuration (production pooling)
         coral_sessions_env = os.getenv('CORAL_SESSIONS')
@@ -577,7 +579,7 @@ class BaseAgent(ABC):
             print("[CORAL] 🌐 Production mode (no explicit session)")
             return await self.connect_to_single_session(None)
     
-    async def connect_to_single_session(self, session_id: Optional[str]) -> Tuple[MultiServerMCPClient, List[BaseTool]]:
+    async def connect_to_single_session(self, session_id: Optional[str]) -> Tuple[MultiServerMCPClient, List[BaseTool], None]:
         """
         Connect to a single Coral session.
         
@@ -585,13 +587,20 @@ class BaseAgent(ABC):
             session_id: Optional session ID (None for production auto-session)
         
         Returns:
-            Tuple of (MCP client, coral tools list)
+            Tuple of (MCP client, coral tools list, None for single-pool)
         """
         base_url = os.getenv('CORAL_SSE_URL')
         
-        # If sessionId is provided and base URL contains path components, append to path
-        # Otherwise use query parameters (for /sse endpoint)
-        if session_id and '/sse/v1/' in base_url:
+        # Check if URL already has the complete SSE path from Coral Server
+        # Coral format: /sse/v1/{app}/{priv}/{sessionId}/sse
+        if session_id and base_url.endswith('/sse'):
+            # URL already complete, don't append session_id again
+            url = base_url
+            coral_params = {
+                'agentId': self.agent_id,
+                'agentDescription': self.agent_description
+            }
+        elif session_id and '/sse/v1/' in base_url:
             # Append sessionId to path for /sse/v1/devmode/{app}/{priv}/{sessionId} format
             url = f"{base_url}/{session_id}"
             coral_params = {
@@ -623,9 +632,9 @@ class BaseAgent(ABC):
         })
         
         coral_tools = await client.get_tools(server_name="coral")
-        return client, coral_tools
+        return client, coral_tools, None
     
-    async def connect_to_multiple_sessions(self, session_ids: List[str]) -> Tuple[MultiServerMCPClient, List[BaseTool]]:
+    async def connect_to_multiple_sessions(self, session_ids: List[str]) -> Tuple[MultiServerMCPClient, List[BaseTool], Dict[str, List[BaseTool]]]:
         """
         Connect to multiple Coral sessions for load distribution.
         Each agent connects to all pools and responds to mentions in any of them.
@@ -634,7 +643,7 @@ class BaseAgent(ABC):
             session_ids: List of session IDs to connect to (e.g., ['pool-0', 'pool-1', ...])
         
         Returns:
-            Tuple of (MCP client with multiple connections, coral tools list)
+            Tuple of (MCP client, coral tools from first pool, dict of all pool tools)
         """
         connections = {}
         base_url = os.getenv('CORAL_SSE_URL')
@@ -674,12 +683,27 @@ class BaseAgent(ABC):
         # Create client with all connections
         client = MultiServerMCPClient(connections=connections)
         
-        # Get tools from first connection (they should be identical across pools)
-        first_pool = f"coral-{session_ids[0]}"
-        coral_tools = await client.get_tools(server_name=first_pool)
+        # Get tools from ALL pools and store them
+        all_pool_tools = {}
+        for session_id in session_ids:
+            pool_name = f"coral-{session_id}"
+            try:
+                tools = await client.get_tools(server_name=pool_name)
+                all_pool_tools[pool_name] = tools
+                print(f"[CORAL]   ✓ {pool_name}: {len(tools)} tools loaded")
+            except Exception as e:
+                print(f"[CORAL]   ✗ {pool_name}: Failed - {e}")
+                # Continue with other pools (partial OK strategy)
         
-        print(f"[CORAL] ✅ Connected to {len(session_ids)} session pools")
-        return client, coral_tools
+        # Return tools from first successful pool for backward compatibility
+        if not all_pool_tools:
+            raise RuntimeError("Failed to load tools from any pool")
+        
+        first_pool = f"coral-{session_ids[0]}"
+        coral_tools = all_pool_tools.get(first_pool) or list(all_pool_tools.values())[0]
+        
+        print(f"[CORAL] ✅ Connected to {len(session_ids)} session pools ({len(all_pool_tools)} successful)")
+        return client, coral_tools, all_pool_tools
     
     def extract_user_wallet(self, message_content: str) -> Optional[str]:
         """
@@ -704,15 +728,31 @@ class BaseAgent(ABC):
         Returns:
             Tuple of (transaction_signature, service_type, amount_usdc) or None
         """
+        # Enhanced marker format: [PREMIUM_SERVICE_PAYMENT_COMPLETED: tx|service|amount]
         payment_match = re.search(
-            r'\[PREMIUM_SERVICE_PAYMENT_COMPLETED:\s*([A-Za-z0-9]{87,88})\]',
+            r'\[PREMIUM_SERVICE_PAYMENT_COMPLETED:\s*([A-Za-z0-9]{87,88})\|(\w+)\|([\d.]+)\]',
             message_content
         )
         
         if payment_match:
             transaction_signature = payment_match.group(1)
-            service_type = "insider_info"  # Default, should be extracted from context
-            amount_usdc = 0.0005  # Default amount
+            service_type = payment_match.group(2)
+            amount_usdc = float(payment_match.group(3))
+            print(f"[PAYMENT DETECTION] Enhanced marker: tx={transaction_signature[:8]}..., service={service_type}, amount={amount_usdc} USDC")
+            return (transaction_signature, service_type, amount_usdc)
+        
+        # Fallback: old format without service info (for backwards compatibility)
+        legacy_match = re.search(
+            r'\[PREMIUM_SERVICE_PAYMENT_COMPLETED:\s*([A-Za-z0-9]{87,88})\]',
+            message_content
+        )
+        
+        if legacy_match:
+            print("[WARNING] Legacy payment marker detected - cannot extract service type/amount")
+            transaction_signature = legacy_match.group(1)
+            # Try to extract from context or use safe defaults
+            service_type = "unknown"
+            amount_usdc = 0.0005  # Minimum default
             return (transaction_signature, service_type, amount_usdc)
         
         return None
@@ -793,6 +833,37 @@ DO NOT just acknowledge payment - DELIVER THE SERVICE NOW!
                     payment_instruction = self.create_payment_instruction(
                         tx_sig, user_wallet, service_type, amount
                     )
+                else:
+                    # NO PAYMENT DETECTED - Check if this is a connection_intro request!
+                    # Add prominent detection instruction
+                    payment_instruction = f"""
+🚨 FIRST CHECK: IS THIS A CONNECTION_INTRO REQUEST? 🚨
+
+Before doing ANYTHING else, check if the user is asking you to contact another agent!
+
+DETECTION PATTERNS - If user message contains ANY of:
+- "Can you ask [agent]..."
+- "Would you ask [agent]..."
+- "Ask [agent] about..."
+- "Contact [agent]..."
+- "Talk to [agent] for me..."
+- "Get [agent]'s opinion..."
+- "Find out what [agent] thinks..."
+- "Reach out to [agent]..."
+- "Ping [agent]..."
+
+→ THIS IS A connection_intro REQUEST (0.002 USDC)
+→ YOU MUST CHARGE BEFORE CONTACTING ANYONE!
+
+MANDATORY WORKFLOW if connection_intro detected:
+1. Parse: target_agent and question
+2. IMMEDIATELY call request_premium_service(from_agent='sbf', to_agent='{self.agent_id}', service_type='connection_intro', details='...')
+3. Send payment request XML to user
+4. STOP - DO NOT contact agent yet - wait for payment!
+
+Only after payment verified should you call contact_agent()!
+
+"""
                 
                 # Build full input with scoring
                 scoring_mandate = dynamic_content['scoring_mandate']
@@ -920,17 +991,225 @@ DO NOT just acknowledge payment - DELIVER THE SERVICE NOW!
         print(f"   Balance: {balance:.4f} SOL")
         
         # Connect to Coral server
-        client, coral_tools = await self.connect_to_coral_server()
+        client, coral_tools, all_pool_tools = await self.connect_to_coral_server()
         
-        # Create agent executor
-        self.agent_executor, self.my_wallet_address = await self.create_agent_executor(coral_tools)
-        print(f"[READY] {self.agent_name} ready for interactions")
+        # Check if multi-pool mode
+        if all_pool_tools:
+            # Multi-pool mode: spawn a listener for each pool
+            print(f"[CORAL] 🔀 Multi-pool mode: listening to {len(all_pool_tools)} pools")
+            await self.run_multi_pool_loops(client, all_pool_tools)
+        else:
+            # Single-pool mode: run a single listener
+            # Create agent executor
+            self.agent_executor, self.my_wallet_address = await self.create_agent_executor(coral_tools)
+            print(f"[READY] {self.agent_name} ready for interactions")
+            
+            # Find wait_for_mentions tool
+            wait_tool = next((t for t in coral_tools if hasattr(t, 'name') and 'wait_for_mentions' in t.name), None)
+            if not wait_tool:
+                raise ValueError("coral_wait_for_mentions tool not found!")
+            
+            # Run agent loop
+            await self.run_agent_loop(wait_tool)
+    
+    async def run_multi_pool_loops(self, client: MultiServerMCPClient, all_pool_tools: Dict[str, List[BaseTool]]):
+        """Run concurrent listeners for multiple Coral session pools."""
+        print(f"[CORAL] Starting {len(all_pool_tools)} concurrent pool listeners...")
         
-        # Find wait_for_mentions tool
-        wait_tool = next((t for t in coral_tools if hasattr(t, 'name') and 'wait_for_mentions' in t.name), None)
-        if not wait_tool:
-            raise ValueError("coral_wait_for_mentions tool not found!")
+        # Load dynamic content once (shared across all pools)
+        dynamic_content = self.load_dynamic_content()
         
-        # Run agent loop
-        await self.run_agent_loop(wait_tool)
+        tasks = []
+        successful_pools = 0
+        
+        for pool_name, pool_tools in all_pool_tools.items():
+            try:
+                # Create agent executor for this pool
+                agent_executor, wallet_address = await self.create_agent_executor(pool_tools)
+                
+                # Find wait_for_mentions tool
+                wait_tool = next((t for t in pool_tools if hasattr(t, 'name') and 'wait_for_mentions' in t.name), None)
+                if not wait_tool:
+                    print(f"[WARNING] No wait_for_mentions tool for {pool_name}, skipping")
+                    continue
+                
+                # Spawn listener task
+                task = asyncio.create_task(
+                    self._run_pool_listener(pool_name, wait_tool, agent_executor, wallet_address, dynamic_content)
+                )
+                tasks.append(task)
+                successful_pools += 1
+                print(f"[CORAL]   ✓ {pool_name} listener started")
+                
+            except Exception as e:
+                print(f"[ERROR] Failed to create listener for {pool_name}: {e}")
+                # Continue with other pools (partial OK)
+        
+        if successful_pools == 0:
+            raise RuntimeError("No pool listeners could be started!")
+        
+        print(f"[CORAL] 🎧 Listening to {successful_pools} pools concurrently")
+        print(f"[READY] {self.agent_name} ready for interactions across all pools")
+        
+        # Wait for all listeners (they run indefinitely)
+        # Use return_exceptions=True to prevent one crash from killing others
+        await asyncio.gather(*tasks, return_exceptions=True)
+    
+    async def _run_pool_listener(self, pool_name: str, wait_tool: BaseTool, agent_executor, wallet_address: str, dynamic_content: Dict[str, str]):
+        """Listen for mentions in a specific pool."""
+        print(f"[{pool_name}] 🎧 Listener active")
+        
+        # Pool-specific state
+        wait_start_time = None
+        
+        while True:
+            try:
+                wait_start_time = time.time()
+                mentions_result = await wait_tool.ainvoke({"timeoutMs": 120000})
+                
+                if mentions_result and "No new mentions" not in str(mentions_result):
+                    try:
+                        mentions_data = json.loads(mentions_result)
+                        
+                        # Check for timeout or error
+                        if mentions_data.get("result") == "error_timeout":
+                            if wait_start_time and (time.time() - wait_start_time) < 5.0:
+                                print(f"[{pool_name}] ⚠️  SSE connection broken")
+                                # Don't exit - continue with other pools
+                                await asyncio.sleep(5)
+                            continue
+                        
+                        if mentions_data.get("result") != "wait_for_mentions_success":
+                            await asyncio.sleep(2)
+                            continue
+                        
+                        if "messages" not in mentions_data or not mentions_data["messages"]:
+                            await asyncio.sleep(2)
+                            continue
+                        
+                        # Process message using pool-specific executor
+                        await self._process_pool_message(pool_name, mentions_data, dynamic_content, agent_executor, wallet_address)
+                        
+                    except Exception as e:
+                        print(f"[{pool_name}] ⚠️  Error processing message: {e}")
+                        traceback.print_exc()
+                        await asyncio.sleep(2)
+                        
+            except KeyboardInterrupt:
+                print(f"[{pool_name}] Shutting down")
+                break
+            except Exception as e:
+                print(f"[{pool_name}] ⚠️  Listener error: {e}")
+                traceback.print_exc()
+                await asyncio.sleep(5)  # Brief pause before retrying
+                # Continue loop - don't exit (continue with other pools strategy)
+    
+    async def _process_pool_message(self, pool_name: str, mentions_data: Dict[str, Any], dynamic_content: Dict[str, str], agent_executor, wallet_address: str):
+        """Process a message from a specific pool using pool-specific executor."""
+        message_payload = mentions_data["messages"][0]
+        sender_id = message_payload["senderId"]
+        message_content = message_payload["content"]
+        
+        is_user_message = sender_id == "sbf"
+        
+        if is_user_message:
+            # Extract user wallet
+            user_wallet = self.extract_user_wallet(message_content)
+            if not user_wallet:
+                print(f"[{pool_name}] Message from 'sbf' missing USER_WALLET marker")
+                return
+            
+            # Clean message content
+            clean_content = re.sub(r'\[USER_WALLET:[1-9A-HJ-NP-Za-km-z]{32,44}]\s*', '', message_content)
+            mentions_data["messages"][0]["content"] = clean_content
+            
+            # Detect payment
+            payment_info = self.detect_payment(message_content)
+            payment_instruction = ""
+            
+            if payment_info:
+                tx_sig, service_type, amount = payment_info
+                payment_instruction = self.create_payment_instruction(tx_sig, user_wallet, service_type, amount)
+            else:
+                # NO PAYMENT DETECTED - Check if this is a connection_intro request!
+                # Add prominent detection instruction
+                payment_instruction = """
+🚨 FIRST CHECK: IS THIS A CONNECTION_INTRO REQUEST? 🚨
+
+Before doing ANYTHING else, check if the user is asking you to contact another agent!
+
+DETECTION PATTERNS - If user message contains ANY of:
+- "Can you ask [agent]..."
+- "Would you ask [agent]..."
+- "Ask [agent] about..."
+- "Contact [agent]..."
+- "Talk to [agent] for me..."
+- "Get [agent]'s opinion..."
+- "Find out what [agent] thinks..."
+- "Reach out to [agent]..."
+- "Ping [agent]..."
+
+→ THIS IS A connection_intro REQUEST (0.002 USDC)
+→ YOU MUST CHARGE BEFORE CONTACTING ANYONE!
+
+MANDATORY WORKFLOW if connection_intro detected:
+1. Parse: target_agent and question
+2. IMMEDIATELY call request_premium_service(from_agent='sbf', to_agent='{agent_name}', service_type='connection_intro', details='...')
+3. Send payment request XML to user
+4. STOP - DO NOT contact agent yet - wait for payment!
+
+Only after payment verified should you call contact_agent()!
+
+"""
+            
+            # Build full input with scoring
+            scoring_mandate = dynamic_content['scoring_mandate']
+            user_wallet_instruction = (
+                f"\n\n🎯 CRITICAL SCORING INSTRUCTION:\n"
+                f"The user's ACTUAL wallet address is: {user_wallet}\n"
+                f"You MUST use '{user_wallet}' as the user_wallet parameter in award_points().\n"
+                f"For coral_send_message, use mentions=['sbf'] to reply.\n\n"
+            )
+            
+            mentions_result_clean = json.dumps(mentions_data)
+            full_input = f"{payment_instruction}{scoring_mandate}{user_wallet_instruction}Process these mentions and respond appropriately: {mentions_result_clean}"
+        else:
+            # Agent-to-agent communication
+            agent_comms_note = dynamic_content['agent_comms_note']
+            mentions_result_clean = json.dumps(mentions_data)
+            full_input = f"{agent_comms_note}Process this agent message: {mentions_result_clean}"
+        
+        # Execute with retry logic using pool-specific executor
+        max_retries = 3
+        retry_delay = 2
+        
+        for attempt in range(max_retries):
+            try:
+                invoke_timeout = getattr(agent_executor, "invoke_timeout", self.executor_limits["invoke_timeout"])
+                response = await asyncio.wait_for(
+                    agent_executor.ainvoke({
+                        "input": full_input,
+                        "my_wallet_address": wallet_address,
+                        "agent_scratchpad": []
+                    }),
+                    timeout=invoke_timeout
+                )
+                
+                print(f"[{pool_name}] ✓ Response sent successfully")
+                return response
+                
+            except asyncio.TimeoutError:
+                print(f"[{pool_name}] ⚠️  Timeout on attempt {attempt + 1}/{max_retries}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2
+                    
+            except Exception as e:
+                print(f"[{pool_name}] ⚠️  Execution error on attempt {attempt + 1}: {e}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2
+        
+        print(f"[{pool_name}] ❌ All retry attempts failed")
+        return None
 

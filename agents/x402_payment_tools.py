@@ -1159,14 +1159,15 @@ async def confirm_payment_received(
 
 
 # Shared contact_agent utility function for agent-to-agent communication
-def create_contact_agent_tool(coral_send_message_tool, coral_add_participant_tool):
+def create_contact_agent_tool(coral_send_message_tool, coral_add_participant_tool, agent_id: str):
     """
-    Factory function to create a wrapper tool that automatically handles thread participation AND mentions.
-    This solves the LLM reliability issue with empty mentions arrays and ensures agents are in the thread.
+    Factory function to create a wrapper tool that automatically handles thread participation, mentions, AND user confirmation.
+    This solves the LLM reliability issue with empty mentions arrays and ensures proper message ordering.
 
     Args:
         coral_send_message_tool: The coral_send_message tool from coral_tools
         coral_add_participant_tool: The coral_add_participant tool from coral_tools
+        agent_id: The ID of the agent using this tool (e.g., "trump-melania")
 
     Returns:
         A contact_agent tool function that agents can use
@@ -1179,17 +1180,20 @@ def create_contact_agent_tool(coral_send_message_tool, coral_add_participant_too
     @tool
     async def contact_agent(agent_to_contact: str, message: str, current_thread_id: str) -> str:
         """
-        🎯 USE THIS TOOL to contact another agent (trump-donald, cz, trump-melania, etc.).
-        This tool automatically adds the agent to the thread and handles mentions correctly!
+        🎯 USE THIS TOOL to contact another agent on behalf of the user.
+        This tool automatically:
+        1. Adds the agent to the thread
+        2. Sends your message to them
+        3. Confirms to the user that you've reached out (in the correct order!)
 
         Parameters:
-        - agent_to_contact: Agent's name (e.g., "trump-donald", "cz", "trump-melania")
-        - message: Your message content (include @agent-name in the message!)
+        - agent_to_contact: Agent's name (e.g., "trump-barron", "trump-donald", "cz")
+        - message: Your message to the agent (include @agent-name!)
         - current_thread_id: The thread ID from the current conversation
 
-        Example: contact_agent("trump-donald", "@trump-donald SBF is asking about pardon", "thread-id-123")
+        Example: contact_agent("trump-barron", "@trump-barron What's your favorite food?", "thread-id-123")
 
-        DO NOT use coral_send_message directly! Use this tool instead!
+        After calling this tool, DO NOT send a separate confirmation message - it's automatic!
         """
         print(f"\n🎯 contact_agent called: {agent_to_contact}, message: {message[:50]}...")
 
@@ -1201,17 +1205,33 @@ def create_contact_agent_tool(coral_send_message_tool, coral_add_participant_too
         })
         print(f"✅ Add participant result: {add_result}")
 
-        # STEP 2: Send message with mentions array
-        print(f"📤 Calling coral_send_message: threadId={current_thread_id[:8]}..., mentions=['{agent_to_contact}'], content length={len(message)}")
-        result = await _coral_send_message_tool.ainvoke({
+        # STEP 2: Send message to target agent
+        print(f"📤 Sending message to {agent_to_contact}...")
+        await _coral_send_message_tool.ainvoke({
             "threadId": current_thread_id,
             "content": message,
-            "mentions": [agent_to_contact]  # ← Automatically filled!
+            "mentions": [agent_to_contact]
         })
+        print(f"✅ Message sent to {agent_to_contact}")
 
-        print(f"✅ coral_send_message returned: {result}")
-        print(f"✅ Message sent to {agent_to_contact} with mentions=['{agent_to_contact}']")
-        return f"✅ Successfully contacted {agent_to_contact}. {result}"
+        # STEP 3: Send confirmation to user (CRITICAL: This must happen AFTER step 2)
+        agent_display_name = agent_to_contact.replace('trump-', '').replace('-', ' ').title()
+        if agent_display_name.lower() == 'sbf':
+            agent_display_name = 'SBF'
+        elif agent_display_name.lower() == 'cz':
+            agent_display_name = 'CZ'
+        
+        confirmation_message = f"I've reached out to {agent_display_name}. Let's see what they say."
+        print(f"📨 Sending confirmation to user (sbf)...")
+        
+        await _coral_send_message_tool.ainvoke({
+            "threadId": current_thread_id,
+            "content": confirmation_message,
+            "mentions": ["sbf"]
+        })
+        print(f"✅ User confirmation sent")
+
+        return f"✅ Successfully contacted {agent_to_contact}. User has been notified."
 
     return contact_agent
 
@@ -1254,11 +1274,23 @@ async def _submit_score_async(
         if premium_service_amount > 0:
             payload["premiumServicePayment"] = premium_service_amount
         
+        # Get agent API key for authentication
+        agent_api_key = os.getenv("AGENT_API_KEY") or os.getenv("CORAL_AGENT_API_KEY")
+        if not agent_api_key:
+            print(f"⚠️  Warning: AGENT_API_KEY not set in environment - scoring may fail")
+        
+        headers = {
+            "Content-Type": "application/json"
+        }
+        if agent_api_key:
+            headers["X-Agent-API-Key"] = agent_api_key
+        
         backend_url = get_backend_url()
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 f"{backend_url}/api/scoring/update",
                 json=payload,
+                headers=headers,
                 timeout=aiohttp.ClientTimeout(total=10)
             ) as resp:
                 if resp.status == 200:
@@ -1631,6 +1663,62 @@ async def verify_payment_transaction(
     if to_agent is None:
         to_agent = os.getenv("CORAL_AGENT_ID", "unknown")
     
+    # ===== VALIDATION: Check transaction signature format =====
+    # Prevent wasting RPC calls on invalid signatures (UUIDs, message IDs, etc.)
+    
+    # Check for common mistakes: UUIDs/message IDs (contain dashes)
+    if '-' in transaction_hash:
+        print(f"❌ [VALIDATION] Invalid transaction format - contains dashes (likely a UUID/messageId)")
+        return f"""❌ INVALID TRANSACTION FORMAT
+
+You provided: {transaction_hash[:40]}...
+
+This appears to be a message ID or payment request ID, NOT a blockchain transaction signature.
+
+✅ Valid Solana transaction signatures:
+   - Are 87-88 characters long
+   - Contain ONLY base58 characters (no dashes/hyphens)
+   - Example: 5KxE7j3mN8qzYbPwQLpFkJ2hD9vX3rT6sM4nC8pQ1wZa2hN7fX8dR3vL1kW9mY4p
+
+❌ These are NOT transaction signatures:
+   - UUIDs with dashes: {transaction_hash}
+   - Payment IDs: white-house-treasury-connection_intro-1234567890
+   - Message IDs from Coral server
+
+WHAT TO DO:
+Ask the user to check if their payment actually completed successfully and provide the ACTUAL blockchain transaction signature from their wallet confirmation or Solana Explorer."""
+    
+    # Check signature length (Solana signatures are 87-88 characters)
+    if len(transaction_hash) < 87 or len(transaction_hash) > 88:
+        print(f"❌ [VALIDATION] Invalid signature length: {len(transaction_hash)} (expected 87-88)")
+        return f"""❌ INVALID TRANSACTION SIGNATURE LENGTH
+
+The provided signature has {len(transaction_hash)} characters.
+Valid Solana signatures are 87-88 characters long.
+
+You provided: {transaction_hash}
+
+Please ask the user to verify:
+1. Did they copy the complete transaction signature?
+2. Did they include any extra spaces or characters?
+3. Is this the signature from the blockchain, not a payment ID?"""
+    
+    # Check for valid base58 characters (rough validation)
+    import re
+    if not re.match(r'^[1-9A-HJ-NP-Za-km-z]+$', transaction_hash):
+        print(f"❌ [VALIDATION] Invalid characters in signature (not base58)")
+        return f"""❌ INVALID CHARACTERS IN SIGNATURE
+
+Solana transaction signatures use base58 encoding, which only includes:
+- Numbers: 1-9 (no zero)
+- Uppercase: A-Z (excluding I, O)
+- Lowercase: a-z (excluding l)
+
+Your signature contains invalid characters. Please ask the user to double-check they copied the correct transaction signature from their wallet or Solana Explorer."""
+    
+    print(f"✅ [VALIDATION] Transaction signature format is valid")
+    # ===== END VALIDATION =====
+    
     print(f"\n{'='*80}")
     print(f"[TEST_DEBUG] VERIFY PAYMENT TRANSACTION CALLED")
     print(f"[TEST_DEBUG] Timestamp: {time.time()}")
@@ -1738,21 +1826,107 @@ Please ensure you sent the correct payment."""
             initiated_by=expected_from
         )
         
-        return f"""✅ PAYMENT VERIFIED!
+        # Find service details from payment ledger
+        service_details = None
+        for payment_id, payment_data in payment_ledger.get("pending", {}).items():
+            if (payment_data.get("service") == service_type and 
+                payment_data.get("amount") == expected_amount_usdc):
+                service_details = payment_data.get("details", "")
+                break
+        
+        # Service-specific instructions
+        if service_type == "connection_intro":
+            return f"""✅ PAYMENT VERIFIED!
 
 Transaction: {transaction_hash}
 From: {details['from'][:8]}...{details['from'][-8:]}
 To: {details['to'][:8]}...{details['to'][-8:]}
 Amount: {details['amount']} {details['currency']}
-Timestamp: {details.get('timestamp', 'N/A')}
+Service: {service_type}
 
 🔍 View transaction:
 - x402scan: {result.get('x402ScanUrl', 'N/A')}
 - Solana Explorer: {result.get('solanaExplorer', 'N/A')}
 
-✅ Payment verified! Delivering service: {service_type}
+═══════════════════════════════════════════════════════════════
+🚨 CONNECTION INTRO - EXECUTE NOW! 🚨
+═══════════════════════════════════════════════════════════════
 
-YOU MAY NOW DELIVER THE SERVICE TO THE USER."""
+Context: {service_details or 'User wants you to contact another agent'}
+
+IMMEDIATELY call contact_agent() tool ONCE:
+   - Identify the target agent from conversation context
+   - Compose a natural message in YOUR voice
+   - Call: contact_agent(agent_to_contact="<target>", message="@<target> <your message>", current_thread_id=<thread>)
+   - Example: contact_agent("cz", "@cz Hey! SBF is asking if you'd consider hiring them at Binance. What do you think?", thread_id)
+
+🎯 What contact_agent() does automatically (you don't need to do anything else):
+   1. Sends your message to the target agent
+   2. Automatically sends confirmation to user: "I've reached out to [agent]. Let's see what they say."
+   
+🔒 After calling contact_agent(), you enter LOCK MODE:
+   - When the agent responds to you → DO NOTHING
+   - Do NOT reply to them
+   - Do NOT relay their response to the user
+   - The user can already see all agent-to-agent messages
+   - Stay silent until the USER speaks to you directly
+   - Your job is COMPLETE
+
+DO NOT:
+❌ Just acknowledge payment and do nothing
+❌ Ask "who do you want me to contact?" (you already know from context!)
+❌ Say "I'll contact them" without actually calling the tool
+❌ Send a separate confirmation message (contact_agent does this automatically!)
+❌ Respond when the contacted agent replies to you
+❌ Relay the agent's response back to the user (redundant!)
+
+EXECUTE contact_agent() NOW (in the same turn)!"""
+        
+        elif service_type in ["insider_info", "strategy_advice"]:
+            return f"""✅ PAYMENT VERIFIED!
+
+Transaction: {transaction_hash}
+From: {details['from'][:8]}...{details['from'][-8:]}
+To: {details['to'][:8]}...{details['to'][-8:]}
+Amount: {details['amount']} {details['currency']}
+Service: {service_type}
+
+🔍 View transaction:
+- x402scan: {result.get('x402ScanUrl', 'N/A')}
+- Solana Explorer: {result.get('solanaExplorer', 'N/A')}
+
+═══════════════════════════════════════════════════════════════
+🔥 SERVICE DELIVERY REQUIRED - {service_type.upper()} 🔥
+═══════════════════════════════════════════════════════════════
+
+Payment verified! Now deliver the premium content:
+
+Context: {service_details or 'User requested premium information'}
+
+- For insider_info: Share confidential/privileged information they wouldn't normally get
+- For strategy_advice: Provide 3-5 specific, actionable tactical steps
+
+Deliver high-value content that justifies the premium payment."""
+        
+        else:
+            # Generic service
+            return f"""✅ PAYMENT VERIFIED!
+
+Transaction: {transaction_hash}
+From: {details['from'][:8]}...{details['from'][-8:]}
+To: {details['to'][:8]}...{details['to'][-8:]}
+Amount: {details['amount']} {details['currency']}
+Service: {service_type}
+
+🔍 View transaction:
+- x402scan: {result.get('x402ScanUrl', 'N/A')}
+- Solana Explorer: {result.get('solanaExplorer', 'N/A')}
+
+✅ Payment verified! Deliver the service: {service_type}
+
+Context: {service_details or 'Service requested'}
+
+Deliver the service now in character."""
         
     except httpx.TimeoutException:
         return f"""❌ VERIFICATION TIMEOUT

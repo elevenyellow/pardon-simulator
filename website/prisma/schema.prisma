@@ -38,6 +38,9 @@ model Session {
   messageCount    Int       @default(0)
   lastActivityAt  DateTime  @default(now())
   walletAddress   String?   // Denormalized for faster queries
+  walletVerified    Boolean   @default(false)
+  walletVerifiedAt  DateTime?
+  walletSignature   String?   // Store signature for audit trail
   
   user            User      @relation(fields: [userId], references: [id])
   threads         Thread[]

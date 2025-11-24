@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from'next/server';
 import { USER_SENDER_ID } from'@/lib/constants';
 import { prisma } from'@/lib/prisma';
 import { withRetry } from'@/lib/db-retry';
+import { verifyWalletSignature } from'@/lib/wallet-verification';
 
 //  Backend-only Coral Server URL (never exposed to browser)
 const CORAL_SERVER_URL = process.env.CORAL_SERVER_URL ||'http://localhost:5555';
@@ -12,13 +13,30 @@ const CORAL_SERVER_URL = process.env.CORAL_SERVER_URL ||'http://localhost:5555';
  */
 export async function POST(request: NextRequest) {
   try {
-    const { sessionId, agentId, userWallet } = await request.json();
+    const { sessionId, agentId, userWallet, walletSignature, walletMessage } = await request.json();
 
     if (!sessionId || !agentId) {
       return NextResponse.json(
         { error:'Missing required fields: sessionId, agentId'},
         { status: 400 }
       );
+    }
+
+    // Verify wallet ownership if signature provided
+    let walletVerified = false;
+    if (userWallet && walletSignature && walletMessage) {
+      walletVerified = verifyWalletSignature({
+        walletAddress: userWallet,
+        signature: walletSignature,
+        message: walletMessage
+      });
+      
+      if (!walletVerified) {
+        console.warn('[Security] Invalid wallet signature for:', userWallet);
+        // For now, allow but log. Future: return 401
+      } else {
+        console.log('[Security] Wallet signature verified for:', userWallet);
+      }
     }
 
     console.log(`Creating thread for session ${sessionId} with agent ${agentId}`);
@@ -91,13 +109,19 @@ export async function POST(request: NextRequest) {
                 }
               },
               update: {
-                coralSessionId: sessionId
+                coralSessionId: sessionId,
+                walletVerified: walletVerified || undefined,
+                walletVerifiedAt: walletVerified ? new Date() : undefined,
+                walletSignature: walletSignature || undefined
               },
               create: {
                 userId: user.id,
                 weekId,
                 coralSessionId: sessionId,
-                currentScore: 0
+                currentScore: 0,
+                walletVerified,
+                walletVerifiedAt: walletVerified ? new Date() : undefined,
+                walletSignature
               }
             });
           }

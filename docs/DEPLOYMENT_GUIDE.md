@@ -225,7 +225,7 @@ cat > .env << EOF
 SOLANA_RPC_URL=https://mainnet.helius-rpc.com/?api-key=<YOUR_HELIUS_API_KEY>
 SOLANA_PRIVATE_KEY=<AGENT_PRIVATE_KEY_BASE58>
 MODEL_API_KEY=<YOUR_OPENAI_API_KEY>
-MODEL_NAME=gpt-4o
+MODEL_NAME=gpt-5.1
 CORAL_SSE_URL=http://localhost:5555/sse
 CORAL_AGENT_ID=donald-trump
 BACKEND_URL=https://your-vercel-app.vercel.app
