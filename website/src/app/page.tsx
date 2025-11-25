@@ -227,6 +227,27 @@ export default function Home() {
     }
   }, [connected, publicKey]);
 
+  // Auto-trigger signature request when wallet connects (if not cached)
+  // This eliminates the need for a second click on the START button
+  useEffect(() => {
+    if (connected && publicKey && !walletVerified && !verifyingWallet && currentScreen === 'initial') {
+      // Wallet just connected and no cached signature exists
+      // Automatically request signature (don't wait for second click)
+      console.log('[Wallet] Wallet connected, auto-requesting signature...');
+      
+      // Small delay to let wallet adapter stabilize
+      const timer = setTimeout(async () => {
+        const verified = await verifyWalletOwnership();
+        if (verified) {
+          console.log('[Wallet] Auto-verification successful, starting game...');
+          startGameFlow(); // Go straight to game
+        }
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [connected, publicKey, walletVerified, verifyingWallet, currentScreen, verifyWalletOwnership, startGameFlow]);
+
   // Handle logout - disconnect wallet and return to initial screen
   const handleLogout = async () => {
     try {

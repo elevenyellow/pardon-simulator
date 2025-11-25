@@ -4,6 +4,7 @@ Payment-related scoring logic
 Handles score updates and bonus calculations for premium service payments.
 """
 
+import os
 import aiohttp
 from typing import Optional
 
@@ -53,10 +54,23 @@ async def award_points_async(
         if premium_service_amount > 0:
             payload["premiumServicePayment"] = premium_service_amount
         
+        # Get agent API key for authentication
+        agent_api_key = os.getenv("AGENT_API_KEY") or os.getenv("CORAL_AGENT_API_KEY")
+        if not agent_api_key:
+            print(f"⚠️  Warning: AGENT_API_KEY not set in environment - scoring request may fail")
+        
+        # Include API key header for agent authentication
+        headers = {
+            "Content-Type": "application/json"
+        }
+        if agent_api_key:
+            headers["X-Agent-API-Key"] = agent_api_key
+        
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 f"{backend_url}/api/scoring/update",
                 json=payload,
+                headers=headers,
                 timeout=aiohttp.ClientTimeout(total=10)
             ) as resp:
                 if resp.status == 200:
