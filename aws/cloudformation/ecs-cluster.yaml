@@ -156,6 +156,8 @@ Resources:
         - Name: coral-server
           Image: !Ref CoralServerImage
           Essential: true
+          Memory: 2048
+          MemoryReservation: 1024
           PortMappings:
             - ContainerPort: 5555
               Protocol: tcp
@@ -177,6 +179,8 @@ Resources:
         - Name: agent-cz
           Image: !Ref PardonAgentImage
           Essential: false
+          Memory: 800
+          MemoryReservation: 512
           Command:
             - /app/fetch-and-start.sh
             - cz
@@ -210,6 +214,8 @@ Resources:
         - Name: agent-sbf
           Image: !Ref PardonAgentImage
           Essential: false
+          Memory: 800
+          MemoryReservation: 512
           Command:
             - /app/fetch-and-start.sh
             - sbf
@@ -243,6 +249,8 @@ Resources:
         - Name: agent-donald
           Image: !Ref PardonAgentImage
           Essential: false
+          Memory: 800
+          MemoryReservation: 512
           Command:
             - /app/fetch-and-start.sh
             - donald
@@ -276,6 +284,8 @@ Resources:
         - Name: agent-melania
           Image: !Ref PardonAgentImage
           Essential: false
+          Memory: 800
+          MemoryReservation: 512
           Command:
             - /app/fetch-and-start.sh
             - melania
@@ -309,6 +319,8 @@ Resources:
         - Name: agent-eric
           Image: !Ref PardonAgentImage
           Essential: false
+          Memory: 800
+          MemoryReservation: 512
           Command:
             - /app/fetch-and-start.sh
             - eric
@@ -342,6 +354,8 @@ Resources:
         - Name: agent-donjr
           Image: !Ref PardonAgentImage
           Essential: false
+          Memory: 800
+          MemoryReservation: 512
           Command:
             - /app/fetch-and-start.sh
             - donjr
@@ -375,6 +389,8 @@ Resources:
         - Name: agent-barron
           Image: !Ref PardonAgentImage
           Essential: false
+          Memory: 800
+          MemoryReservation: 512
           Command:
             - /app/fetch-and-start.sh
             - barron

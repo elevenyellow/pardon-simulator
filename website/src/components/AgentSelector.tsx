@@ -10,7 +10,7 @@ interface Agent {
 }
 
 const agents: Agent[] = [
-  { id:'trump-donald', name:'DONALD TRUMP', image:'/assets/trump-donald.png'},
+  { id:'trump-donald', name:'DONALD TRUMP', image:'/assets/trump-donald.jpg'},
   { id:'trump-barron', name:'BARRON TRUMP', image:'/assets/trump-barron.jpg'},
   { id:'cz', name:'CZ (CHANGPENG ZHAO)', image:'/assets/cz.jpg'},
   { id:'trump-donjr', name:'DONALD JR', image:'/assets/trump-donjr.jpg'},
