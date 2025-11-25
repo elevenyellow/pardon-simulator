@@ -43,17 +43,15 @@ COPY trump-eric/ /app/trump-eric/
 COPY trump-donjr/ /app/trump-donjr/
 COPY trump-barron/ /app/trump-barron/
 
-# Install dependencies for CZ and SBF (working agents)
+# Install dependencies for ALL agents (MUST succeed - build will fail if any agent dependencies fail)
 # Remove any existing .venv directories and set poetry config in each directory
 RUN cd /app/cz && rm -rf .venv && poetry config virtualenvs.create false && poetry install --only main --no-root && \
-    cd /app/sbf && rm -rf .venv && poetry config virtualenvs.create false && poetry install --only main --no-root
-
-# Install Trump agents - skip if they fail (dependency conflicts)
-RUN cd /app/trump-donald && rm -rf .venv && poetry config virtualenvs.create false && (poetry install --only main --no-root || echo "Trump Donald skipped") && \
-    cd /app/trump-melania && rm -rf .venv && poetry config virtualenvs.create false && (poetry install --only main --no-root || echo "Trump Melania skipped") && \
-    cd /app/trump-eric && rm -rf .venv && poetry config virtualenvs.create false && (poetry install --only main --no-root || echo "Trump Eric skipped") && \
-    cd /app/trump-donjr && rm -rf .venv && poetry config virtualenvs.create false && (poetry install --only main --no-root || echo "Trump Donjr skipped") && \
-    cd /app/trump-barron && rm -rf .venv && poetry config virtualenvs.create false && (poetry install --only main --no-root || echo "Trump Barron skipped")
+    cd /app/sbf && rm -rf .venv && poetry config virtualenvs.create false && poetry install --only main --no-root && \
+    cd /app/trump-donald && rm -rf .venv && poetry config virtualenvs.create false && poetry install --only main --no-root && \
+    cd /app/trump-melania && rm -rf .venv && poetry config virtualenvs.create false && poetry install --only main --no-root && \
+    cd /app/trump-eric && rm -rf .venv && poetry config virtualenvs.create false && poetry install --only main --no-root && \
+    cd /app/trump-donjr && rm -rf .venv && poetry config virtualenvs.create false && poetry install --only main --no-root && \
+    cd /app/trump-barron && rm -rf .venv && poetry config virtualenvs.create false && poetry install --only main --no-root
 
 # Copy startup script
 COPY fetch-and-start.sh /app/
