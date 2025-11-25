@@ -86,6 +86,19 @@ fun Routing.debugApiRoutes(localSessionManager: LocalSessionManager) {
 
         try {
             val request = call.receive<CreateThreadInput>()
+            
+            // 🔧 FIX: Validate that all required agents are registered before creating thread
+            // This prevents creating broken threads with missing participants
+            val requiredAgents = request.participantIds + debugRequest.debugAgentId
+            val missingAgents = requiredAgents.filter { !session.agents.containsKey(it) }
+            
+            if (missingAgents.isNotEmpty()) {
+                val errorMsg = "Cannot create thread: required agents not registered in session ${debugRequest.coralSessionId}: ${missingAgents.joinToString(", ")}"
+                logger.warn { errorMsg }
+                call.respond(HttpStatusCode.ServiceUnavailable, errorMsg)
+                return@post
+            }
+            
             val thread = session.createThread(
                 name = request.threadName,
                 creatorId = debugRequest.debugAgentId,

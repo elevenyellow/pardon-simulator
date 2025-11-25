@@ -924,23 +924,17 @@ Only after payment verified should you call contact_agent()!
     async def run_agent_loop(self, wait_tool: BaseTool) -> None:
         """
         Main agent loop - wait for mentions and process them.
-        Automatically reconnects on SSE connection failures.
         
         Args:
             wait_tool: Coral wait_for_mentions tool
         """
         wait_start_time = None
         dynamic_content = self.load_dynamic_content()
-        reconnect_attempts = 0
-        max_reconnect_attempts = 5
         
         while True:
             try:
                 wait_start_time = time.time()
                 mentions_result = await wait_tool.ainvoke({"timeoutMs": 120000})
-                
-                # Reset reconnect counter on successful call
-                reconnect_attempts = 0
                 
                 if mentions_result and "No new mentions" not in str(mentions_result):
                     try:
@@ -949,43 +943,11 @@ Only after payment verified should you call contact_agent()!
                         # Check for timeout or error
                         if mentions_data.get("result") == "error_timeout":
                             if wait_start_time and (time.time() - wait_start_time) < 5.0:
-                                # SSE connection broken - attempt reconnection instead of exiting
-                                reconnect_attempts += 1
+                                # SSE connection broken
                                 print("=" * 80)
-                                print(f"[ERROR] SSE CONNECTION BROKEN (attempt {reconnect_attempts}/{max_reconnect_attempts})")
-                                print(f"[RECONNECT] Attempting to reconnect in 5 seconds...")
+                                print(f"[FATAL] SSE CONNECTION BROKEN")
                                 print("=" * 80)
-                                
-                                if reconnect_attempts >= max_reconnect_attempts:
-                                    print(f"[FATAL] Failed to reconnect after {max_reconnect_attempts} attempts")
-                                    sys.exit(1)
-                                
-                                await asyncio.sleep(5)
-                                
-                                # Try to reconnect
-                                try:
-                                    print(f"[RECONNECT] Reconnecting to Coral server...")
-                                    client, coral_tools, all_pool_tools = await self.connect_to_coral_server()
-                                    
-                                    if all_pool_tools:
-                                        # Multi-pool mode - restart all listeners
-                                        print(f"[RECONNECT] Restarting multi-pool listeners...")
-                                        await self.run_multi_pool_loops(client, all_pool_tools)
-                                        return  # This won't return until next failure
-                                    else:
-                                        # Single pool - get new wait_tool
-                                        new_wait_tool = next((t for t in coral_tools if hasattr(t, 'name') and 'wait_for_mentions' in t.name), None)
-                                        if not new_wait_tool:
-                                            raise ValueError("wait_for_mentions tool not found after reconnect")
-                                        wait_tool = new_wait_tool
-                                        self.agent_executor, self.my_wallet_address = await self.create_agent_executor(coral_tools)
-                                        print(f"[RECONNECT] ✓ Successfully reconnected to Coral")
-                                        reconnect_attempts = 0  # Reset counter after successful reconnect
-                                        
-                                except Exception as reconnect_error:
-                                    print(f"[RECONNECT] Failed: {reconnect_error}")
-                                    traceback.print_exc()
-                                    continue
+                                sys.exit(1)
                             continue
                         
                         if mentions_data.get("result") != "wait_for_mentions_success":
@@ -1094,24 +1056,16 @@ Only after payment verified should you call contact_agent()!
         await asyncio.gather(*tasks, return_exceptions=True)
     
     async def _run_pool_listener(self, pool_name: str, wait_tool: BaseTool, agent_executor, wallet_address: str, dynamic_content: Dict[str, str]):
-        """
-        Listen for mentions in a specific pool.
-        Automatically reconnects on SSE connection failures.
-        """
+        """Listen for mentions in a specific pool."""
         print(f"[{pool_name}] 🎧 Listener active")
         
         # Pool-specific state
         wait_start_time = None
-        reconnect_attempts = 0
-        max_reconnect_attempts = 5
         
         while True:
             try:
                 wait_start_time = time.time()
                 mentions_result = await wait_tool.ainvoke({"timeoutMs": 120000})
-                
-                # Reset reconnect counter on successful call
-                reconnect_attempts = 0
                 
                 if mentions_result and "No new mentions" not in str(mentions_result):
                     try:
@@ -1120,42 +1074,9 @@ Only after payment verified should you call contact_agent()!
                         # Check for timeout or error
                         if mentions_data.get("result") == "error_timeout":
                             if wait_start_time and (time.time() - wait_start_time) < 5.0:
-                                # SSE connection broken - attempt reconnection
-                                reconnect_attempts += 1
-                                print(f"[{pool_name}] ⚠️  SSE connection broken (attempt {reconnect_attempts}/{max_reconnect_attempts})")
-                                
-                                if reconnect_attempts >= max_reconnect_attempts:
-                                    print(f"[{pool_name}] ❌ Failed to reconnect after {max_reconnect_attempts} attempts")
-                                    print(f"[{pool_name}] ⚠️  This pool listener will stop, but other pools continue")
-                                    return  # Exit this pool listener, others continue
-                                
-                                print(f"[{pool_name}] 🔄 Attempting to reconnect in 5 seconds...")
+                                print(f"[{pool_name}] ⚠️  SSE connection broken")
+                                # Don't exit - continue with other pools
                                 await asyncio.sleep(5)
-                                
-                                # Try to reconnect to this specific pool
-                                try:
-                                    print(f"[{pool_name}] 🔄 Reconnecting...")
-                                    # Extract pool ID from pool_name (e.g., "coral-pool-2" -> "pool-2")
-                                    pool_id = pool_name.replace('coral-', '')
-                                    
-                                    # Reconnect to this specific pool
-                                    client, coral_tools, _ = await self.connect_to_single_session(pool_id)
-                                    
-                                    # Get new wait_tool for this pool
-                                    new_wait_tool = next((t for t in coral_tools if hasattr(t, 'name') and 'wait_for_mentions' in t.name), None)
-                                    if not new_wait_tool:
-                                        raise ValueError(f"wait_for_mentions tool not found for {pool_name}")
-                                    
-                                    wait_tool = new_wait_tool
-                                    agent_executor, wallet_address = await self.create_agent_executor(coral_tools)
-                                    
-                                    print(f"[{pool_name}] ✓ Successfully reconnected")
-                                    reconnect_attempts = 0
-                                    
-                                except Exception as reconnect_error:
-                                    print(f"[{pool_name}] ❌ Reconnection failed: {reconnect_error}")
-                                    traceback.print_exc()
-                                    continue
                             continue
                         
                         if mentions_data.get("result") != "wait_for_mentions_success":
