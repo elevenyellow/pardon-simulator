@@ -94,6 +94,18 @@ Resources:
         - Type: forward
           TargetGroupArn: !Ref CoralServerTargetGroup
 
+  # Coral Server Direct Access Listener (Port 5555)
+  # Required for agent connectivity and API access
+  CoralServerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 5555
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref CoralServerTargetGroup
+
 Outputs:
   LoadBalancerArn:
     Description: ARN of the Application Load Balancer

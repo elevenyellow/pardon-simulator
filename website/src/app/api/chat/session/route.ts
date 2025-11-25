@@ -44,135 +44,128 @@ export async function POST(request: Request) {
       // Production ECS: Agents auto-create pool sessions when they connect
       // via the /sse/v1/devmode/ endpoint. We assign users to pools for load distribution.
       console.log('[Session API] PRODUCTION MODE: Using multi-pool architecture');
-      
-      // 🔧 CRITICAL FIX: Only assign users to pools with ALL required agents connected
-      // Users should NEVER see infrastructure issues - zero downtime
-      const REQUIRED_AGENTS = ['sbf', 'trump-donald', 'trump-melania', 'trump-eric', 'trump-donjr', 'trump-barron', 'cz'];
+      console.log('[Session API] Coral Server:', CORAL_SERVER_URL);
       
       try {
-        // Wait for at least one fully-ready pool - retry with longer timeout
-        const maxRetries = 10; // Increased from 3
-        const retryDelay = 2000; // 2 seconds
+        // Check which pool sessions exist - with longer retry for cold starts
+        const maxRetries = 5;  // Increased from 3
+        const retryDelay = 3000; // Increased to 3 seconds
         const expectedPools = getAllPools(); // ['pool-0', 'pool-1', 'pool-2', 'pool-3', 'pool-4']
         
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
-          console.log(`[Session API] Checking pool readiness (attempt ${attempt}/${maxRetries})...`);
-          
-          // Get all sessions
-          const sessionsResponse = await fetch(`${CORAL_SERVER_URL}/api/v1/sessions`, {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json' },
-          });
+          try {
+            const sessionsResponse = await fetch(`${CORAL_SERVER_URL}/api/v1/sessions`, {
+              method: 'GET',
+              headers: { 'Content-Type': 'application/json' },
+              signal: AbortSignal.timeout(5000), // 5 second timeout per request
+            });
 
-          if (!sessionsResponse.ok) {
-            console.error('[Session API] Failed to fetch sessions:', sessionsResponse.status);
-            if (attempt < maxRetries) {
-              await new Promise(resolve => setTimeout(resolve, retryDelay));
-              continue;
-            }
-            throw new Error(`Failed to check sessions: ${sessionsResponse.statusText}`);
-          }
-
-          const activeSessions: string[] = await sessionsResponse.json();
-          const poolSessions = activeSessions.filter(s => expectedPools.includes(s));
-          
-          if (poolSessions.length === 0) {
-            console.warn(`[Session API] No pool sessions exist yet (attempt ${attempt}/${maxRetries})`);
-            if (attempt < maxRetries) {
-              await new Promise(resolve => setTimeout(resolve, retryDelay));
-              continue;
-            }
-            break; // Exit loop, will return error
-          }
-          
-          // 🔧 CRITICAL: Check which pools have ALL required agents connected
-          const readyPools: string[] = [];
-          
-          for (const poolId of poolSessions) {
-            try {
-              const agentsResponse = await fetch(
-                `${CORAL_SERVER_URL}/api/v1/sessions/${poolId}/agents`,
-                {
-                  method: 'GET',
-                  headers: { 'Content-Type': 'application/json' },
-                }
-              );
+            if (!sessionsResponse.ok) {
+              console.error('[Session API] Failed to fetch sessions:', sessionsResponse.status, sessionsResponse.statusText);
               
-              if (!agentsResponse.ok) {
-                console.warn(`[Session API] Could not check agents for ${poolId}: ${agentsResponse.status}`);
+              if (attempt < maxRetries) {
+                console.log(`[Session API] Retrying in ${retryDelay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, retryDelay));
                 continue;
               }
               
-              const agentsData = await agentsResponse.json();
-              const connectedAgents = agentsData.agents?.map((a: any) => a.id) || [];
-              const missingAgents = REQUIRED_AGENTS.filter(id => !connectedAgents.includes(id));
-              
-              if (missingAgents.length === 0) {
-                readyPools.push(poolId);
-                console.log(`[Session API] ✓ ${poolId} is READY (all ${REQUIRED_AGENTS.length} agents connected)`);
-              } else {
-                console.warn(`[Session API] ${poolId} NOT READY - missing agents: ${missingAgents.join(', ')}`);
-              }
-            } catch (error) {
-              console.error(`[Session API] Error checking ${poolId}:`, error);
-              continue;
+              throw new Error(`Failed to check sessions: ${sessionsResponse.status} ${sessionsResponse.statusText}`);
             }
-          }
-          
-          // If we have at least one ready pool, assign user to it
-          if (readyPools.length > 0) {
-            console.log(`[Session API] ✓ ${readyPools.length} ready pool(s):`, readyPools);
+
+            const activeSessions: string[] = await sessionsResponse.json();
+            console.log(`[Session API] Active sessions (attempt ${attempt}/${maxRetries}):`, activeSessions);
+
+            // Filter to only pool sessions (pool-0, pool-1, etc.)
+            const availablePools = activeSessions.filter(s => expectedPools.includes(s));
             
-            // Assign user to a ready pool
+          if (availablePools.length > 0) {
+            console.log(`[Session API] ✓ Found ${availablePools.length} active pool(s):`, availablePools);
+            
+            // Assign user to a pool
             let assignedPool: string;
             
             if (userWallet) {
-              // Use consistent hashing, but only from ready pools
+              // Use consistent hashing based on wallet for returning users
               assignedPool = getUserSessionPool(userWallet);
-              if (!readyPools.includes(assignedPool)) {
-                assignedPool = readyPools[0]; // Fallback to first ready pool
-                console.log(`[Session API] Preferred pool not ready, using: ${assignedPool}`);
+              console.log(`[Session API] Wallet-based assignment: ${assignedPool}`);
+              
+              // Verify assigned pool is available, otherwise use first available
+              if (!availablePools.includes(assignedPool)) {
+                console.warn(`[Session API] Assigned pool ${assignedPool} not available, using first available...`);
+                assignedPool = availablePools[0];
+                console.log(`[Session API] Fallback to available pool: ${assignedPool}`);
               }
             } else {
-              // No wallet - use first ready pool (could enhance with load balancing)
-              assignedPool = readyPools[0];
+              // No wallet yet - use random available pool for load distribution
+              const randomIndex = Math.floor(Math.random() * availablePools.length);
+              assignedPool = availablePools[randomIndex];
+              console.log(`[Session API] Random assignment (no wallet): ${assignedPool}`);
             }
             
-            console.log(`[Session API] ✓ User assigned to READY session: ${assignedPool}`);
+            console.log(`[Session API] ✓ User assigned to session: ${assignedPool}`);
             return NextResponse.json({ 
               sessionId: assignedPool,
               poolingEnabled: true,
-              availablePools: readyPools.length
+              availablePools: availablePools.length,
+              totalExpected: expectedPools.length
             });
           }
-          
-          // No ready pools yet - retry
-          console.warn(`[Session API] No pools are ready yet (${poolSessions.length} pools exist, 0 ready). Retrying in ${retryDelay}ms...`);
-          if (attempt < maxRetries) {
-            await new Promise(resolve => setTimeout(resolve, retryDelay));
+
+            // No pool sessions found yet
+            if (attempt < maxRetries) {
+              console.log(`[Session API] No pool sessions found yet (expected: ${expectedPools.join(', ')}). Agents may still be connecting. Retrying in ${retryDelay}ms...`);
+              await new Promise(resolve => setTimeout(resolve, retryDelay));
+            }
+          } catch (fetchError: any) {
+            console.error(`[Session API] Fetch error on attempt ${attempt}:`, fetchError.message);
+            if (attempt < maxRetries) {
+              await new Promise(resolve => setTimeout(resolve, retryDelay));
+              continue;
+            }
+            throw fetchError;
           }
         }
 
-        // After all retries, no ready pools
-        console.error(`[Session API] ❌ CRITICAL: No ready pools after ${maxRetries} attempts (${maxRetries * retryDelay / 1000}s)`);
-        console.error(`[Session API] This indicates agents are not connecting properly`);
+        // After all retries, no pool sessions exist
+        console.error(`[Session API] ❌ No pool sessions found after ${maxRetries} attempts (${maxRetries * retryDelay / 1000} seconds)`);
+        console.error(`[Session API] Expected pools: ${expectedPools.join(', ')}`);
+        console.error(`[Session API] This indicates agents are not connecting properly in production`);
+        console.error(`[Session API] Diagnostic steps:`);
+        console.error(`[Session API]   1. Check ECS tasks are running: aws ecs list-tasks --cluster pardon-production-cluster`);
+        console.error(`[Session API]   2. Check agent logs: aws logs tail /ecs/pardon-production --follow --filter-pattern "agent-cz"`);
+        console.error(`[Session API]   3. Verify CORAL_SESSIONS environment variable is set in task definition`);
+        console.error(`[Session API]   4. Run diagnostics: ./scripts/diagnose-production.sh`);
+        
         return NextResponse.json(
           { 
-            error: 'service_unavailable',
-            message: `Service is starting up. Please wait a moment and refresh the page.`,
+            error: 'session_not_ready',
+            message: `AI agents are not currently available. The system may still be starting up.`,
+            details: 'This usually resolves within a few minutes. If this error persists, the system administrator has been notified.',
+            technicalDetails: {
+              reason: 'No agent pool sessions detected',
+              expectedPools: expectedPools,
+              coralServerUrl: CORAL_SERVER_URL,
+              retriedFor: `${maxRetries * retryDelay / 1000} seconds`,
+            },
             sessionId: null,
+            expectedPools
           },
-          { status: 503 }
+          { status: 503 } // Service Unavailable - temporary condition
         );
 
       } catch (error: any) {
-        console.error('[Session API] CRITICAL ERROR:', error);
+        console.error('[Session API] Session check error:', error);
         return NextResponse.json(
           { 
-            error: 'service_error', 
-            message: 'Service temporarily unavailable. Please try again in a moment.',
+            error: 'session_error', 
+            message: 'Cannot connect to AI agent backend system.',
+            details: 'Please try again in a few moments. If the problem persists, the system administrator has been notified.',
+            technicalDetails: {
+              reason: error.message,
+              coralServerUrl: CORAL_SERVER_URL,
+            }
           },
-          { status: 503 }
+          { status: 500 }
         );
       }
     }

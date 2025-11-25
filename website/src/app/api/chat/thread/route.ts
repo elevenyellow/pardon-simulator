@@ -21,7 +21,10 @@ export async function POST(request: NextRequest) {
 
     console.log(`Creating thread for session ${sessionId} with agent ${agentId}`);
 
-    // 🔧 FIXED: No retry needed - session API ensures pools are ready before assignment
+    // NOTE: Coral Server doesn't have a REST API endpoint to check agent registration
+    // Agents auto-register when they connect via SSE, so we proceed with thread creation
+    // If the agent isn't registered yet, thread creation will fail with appropriate error
+
     // Create thread via Coral Server debug API
     // NOTE: User always plays as SBF - this is the fixed player identity in the game
     const response = await fetch(
@@ -38,14 +41,7 @@ export async function POST(request: NextRequest) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[Thread API] Coral Server error:', errorText);
-      
-      // If we get 503, this is a critical infrastructure failure
-      // (should never happen since session API validates readiness)
-      if (response.status === 503) {
-        console.error('[Thread API] CRITICAL: Agents not ready despite session validation!');
-      }
-      
+      console.error('Coral Server error:', errorText);
       throw new Error(`Failed to create thread: ${response.statusText}`);
     }
 
