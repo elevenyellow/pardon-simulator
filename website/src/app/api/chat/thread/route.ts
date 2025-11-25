@@ -21,9 +21,42 @@ export async function POST(request: NextRequest) {
 
     console.log(`Creating thread for session ${sessionId} with agent ${agentId}`);
 
-    // NOTE: Coral Server doesn't have a REST API endpoint to check agent registration
-    // Agents auto-register when they connect via SSE, so we proceed with thread creation
-    // If the agent isn't registered yet, thread creation will fail with appropriate error
+    // CRITICAL: Check if the agent is actually registered in this session
+    // This prevents "Thread not found" errors when agent hasn't connected yet
+    try {
+      const agentsCheck = await fetch(
+        `${CORAL_SERVER_URL}/api/v1/sessions/${sessionId}/agents`,
+        { 
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+      
+      if (agentsCheck.ok) {
+        const agentsData = await agentsCheck.json();
+        const availableAgents = agentsData.agents || [];
+        
+        if (!availableAgents.includes(agentId)) {
+          console.error(`Agent ${agentId} not available in session ${sessionId}. Available: ${availableAgents.join(', ')}`);
+          return NextResponse.json(
+            { 
+              error: 'agent_not_available', 
+              message: `Agent ${agentId} is not connected to this session. Please try again in a moment.`,
+              availableAgents 
+            },
+            { status: 503 }
+          );
+        }
+        
+        console.log(`✓ Agent ${agentId} is available in session ${sessionId}`);
+      } else {
+        console.warn(`Could not verify agent availability: ${agentsCheck.status}`);
+        // Proceed anyway - if it fails, thread creation will fail with appropriate error
+      }
+    } catch (checkError) {
+      console.warn('Agent availability check failed, proceeding anyway:', checkError);
+      // Non-blocking - proceed with thread creation
+    }
 
     // Create thread via Coral Server debug API
     // NOTE: User always plays as SBF - this is the fixed player identity in the game

@@ -135,18 +135,20 @@ fun Routing.sessionApiRoutes(
             throw RouteException(HttpStatusCode.NotFound, "Session not found: ${request.sessionId}")
         }
         
-        val agentsList = session.agents.values.map { agent ->
-            mapOf(
-                "id" to agent.id,
-                "state" to agent.state.toString(),
-                "description" to agent.description
-            )
-        }
+        // Create a simple list of agent IDs for easy serialization
+        val agentIds = session.agents.values.map { it.id }
         
-        call.respond(HttpStatusCode.OK, mapOf(
-            "sessionId" to session.id,
-            "agentCount" to session.agents.size,
-            "agents" to agentsList
+        // Use a properly typed response structure
+        data class SessionAgentsResponse(
+            val sessionId: String,
+            val agentCount: Int,
+            val agents: List<String>
+        )
+        
+        call.respond(HttpStatusCode.OK, SessionAgentsResponse(
+            sessionId = session.id,
+            agentCount = session.agents.size,
+            agents = agentIds
         ))
     }
 }

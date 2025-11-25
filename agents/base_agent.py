@@ -671,12 +671,14 @@ class BaseAgent(ABC):
             if coral_params:
                 url = f"{url}?{urllib.parse.urlencode(coral_params)}"
             
-            # Create unique connection name for each pool
+            # Create unique connection name for each pool with retry configuration
             connections[f"coral-{session_id}"] = {
                 "transport": "sse",
                 "url": url,
                 "timeout": 700.0,
-                "sse_read_timeout": 700.0
+                "sse_read_timeout": 700.0,
+                "retry_attempts": 5,  # Retry 5 times if connection fails
+                "retry_delay": 2.0,   # Wait 2 seconds between retries
             }
             print(f"[CORAL]   → {session_id} @ {url}")
         

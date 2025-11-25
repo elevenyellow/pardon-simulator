@@ -1,189 +1,114 @@
-import { NextResponse } from 'next/server';
-import { getAllPools } from '@/lib/sessionPooling';
+import { NextRequest, NextResponse } from 'next/server';
 
 const CORAL_SERVER_URL = process.env.CORAL_SERVER_URL || 'http://localhost:5555';
 
 /**
  * GET /api/health
- * 
- * Comprehensive health check endpoint for monitoring agent availability.
- * Returns detailed status of all critical components.
- * 
- * Status Codes:
- * - 200: All systems operational
- * - 503: Service degraded or unavailable
+ * Comprehensive health check endpoint
+ * Returns status of Coral Server and all agent pools
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   const startTime = Date.now();
-  const health: any = {
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    checks: {},
-  };
-
-  // Check 1: Database connectivity
+  
   try {
-    const { prisma } = await import('@/lib/prisma');
-    await prisma.$queryRaw`SELECT 1`;
-    health.checks.database = {
+    const healthStatus: any = {
       status: 'healthy',
-      message: 'Database connection successful',
-    };
-  } catch (error: any) {
-    health.status = 'unhealthy';
-    health.checks.database = {
-      status: 'unhealthy',
-      message: `Database error: ${error.message}`,
-    };
-  }
-
-  // Check 2: Coral Server connectivity
-  try {
-    const response = await fetch(`${CORAL_SERVER_URL}/health`, {
-      method: 'GET',
-      signal: AbortSignal.timeout(3000),
-    });
-
-    if (response.ok) {
-      health.checks.coralServer = {
-        status: 'healthy',
-        message: 'Coral Server responding',
+      timestamp: new Date().toISOString(),
+      coralServer: {
         url: CORAL_SERVER_URL,
-      };
-    } else {
-      health.status = 'degraded';
-      health.checks.coralServer = {
-        status: 'unhealthy',
-        message: `Coral Server returned ${response.status}`,
-        url: CORAL_SERVER_URL,
-      };
-    }
-  } catch (error: any) {
-    health.status = 'degraded';
-    health.checks.coralServer = {
-      status: 'unhealthy',
-      message: `Cannot reach Coral Server: ${error.message}`,
-      url: CORAL_SERVER_URL,
-    };
-  }
-
-  // Check 3: Agent pool availability (CRITICAL)
-  try {
-    const expectedPools = getAllPools();
-    const response = await fetch(`${CORAL_SERVER_URL}/api/v1/sessions`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(3000),
-    });
-
-    if (response.ok) {
-      const activeSessions: string[] = await response.json();
-      const availablePools = activeSessions.filter(s => expectedPools.includes(s));
-      
-      const poolStatus = {
-        expected: expectedPools.length,
-        available: availablePools.length,
-        pools: availablePools,
-        percentage: Math.round((availablePools.length / expectedPools.length) * 100),
-      };
-
-      if (availablePools.length === expectedPools.length) {
-        health.checks.agentPools = {
-          status: 'healthy',
-          message: 'All agent pools available',
-          ...poolStatus,
-        };
-      } else if (availablePools.length > 0) {
-        health.status = 'degraded';
-        health.checks.agentPools = {
-          status: 'degraded',
-          message: `Only ${availablePools.length}/${expectedPools.length} pools available`,
-          ...poolStatus,
-        };
-      } else {
-        health.status = 'unhealthy';
-        health.checks.agentPools = {
-          status: 'unhealthy',
-          message: 'No agent pools available - agents cannot respond to users',
-          ...poolStatus,
-          action: 'Check agent containers: aws logs tail /ecs/pardon-production --follow',
-        };
+        reachable: false,
+        responseTime: 0
+      },
+      pools: [],
+      summary: {
+        totalPools: 0,
+        healthyPools: 0,
+        totalAgents: 0,
+        expectedAgentsPerPool: 7
       }
-    } else {
-      health.status = 'degraded';
-      health.checks.agentPools = {
-        status: 'unknown',
-        message: `Cannot check pools: Coral Server returned ${response.status}`,
-      };
+    };
+
+    // Check Coral Server health
+    try {
+      const coralStart = Date.now();
+      const healthResponse = await fetch(`${CORAL_SERVER_URL}/health`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(5000)
+      });
+      healthStatus.coralServer.responseTime = Date.now() - coralStart;
+      healthStatus.coralServer.reachable = healthResponse.ok;
+    } catch (error: any) {
+      healthStatus.coralServer.reachable = false;
+      healthStatus.coralServer.error = error.message;
+      healthStatus.status = 'degraded';
     }
+
+    // Check all pools
+    const expectedPools = ['pool-0', 'pool-1', 'pool-2', 'pool-3', 'pool-4'];
+    const poolChecks = expectedPools.map(async (poolId) => {
+      const poolStatus: any = {
+        poolId,
+        exists: false,
+        agentCount: 0,
+        agents: [],
+        healthy: false,
+        responseTime: 0
+      };
+
+      try {
+        const poolStart = Date.now();
+        const agentsResponse = await fetch(
+          `${CORAL_SERVER_URL}/api/v1/sessions/${poolId}/agents`,
+          {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+            signal: AbortSignal.timeout(3000)
+          }
+        );
+
+        poolStatus.responseTime = Date.now() - poolStart;
+        poolStatus.exists = agentsResponse.ok;
+
+        if (agentsResponse.ok) {
+          const data = await agentsResponse.json();
+          poolStatus.agentCount = data.agentCount || 0;
+          poolStatus.agents = data.agents || [];
+          poolStatus.healthy = poolStatus.agentCount >= 7; // Expected: donald, melania, eric, donjr, barron, cz, sbf
+        }
+      } catch (error: any) {
+        poolStatus.error = error.message;
+      }
+
+      return poolStatus;
+    });
+
+    healthStatus.pools = await Promise.all(poolChecks);
+    healthStatus.summary.totalPools = healthStatus.pools.filter((p: any) => p.exists).length;
+    healthStatus.summary.healthyPools = healthStatus.pools.filter((p: any) => p.healthy).length;
+    healthStatus.summary.totalAgents = healthStatus.pools.reduce((sum: number, p: any) => sum + p.agentCount, 0);
+
+    // Overall status determination
+    if (!healthStatus.coralServer.reachable) {
+      healthStatus.status = 'critical';
+    } else if (healthStatus.summary.healthyPools === 0) {
+      healthStatus.status = 'critical';
+    } else if (healthStatus.summary.healthyPools < expectedPools.length) {
+      healthStatus.status = 'degraded';
+    }
+
+    healthStatus.totalResponseTime = Date.now() - startTime;
+
+    // Return appropriate HTTP status
+    const httpStatus = healthStatus.status === 'healthy' ? 200 : 
+                       healthStatus.status === 'degraded' ? 200 : 503;
+
+    return NextResponse.json(healthStatus, { status: httpStatus });
+
   } catch (error: any) {
-    health.status = 'degraded';
-    health.checks.agentPools = {
-      status: 'unknown',
-      message: `Cannot check pools: ${error.message}`,
-    };
-  }
-
-  // Check 4: Environment configuration
-  const configChecks = {
-    coralServerUrl: !!CORAL_SERVER_URL,
-    databaseUrl: !!process.env.DATABASE_URL,
-    heliusApiKey: !!process.env.HELIUS_API_KEY,
-  };
-
-  const missingConfigs = Object.entries(configChecks)
-    .filter(([_, exists]) => !exists)
-    .map(([key]) => key);
-
-  if (missingConfigs.length === 0) {
-    health.checks.configuration = {
-      status: 'healthy',
-      message: 'All required environment variables configured',
-    };
-  } else {
-    health.status = 'unhealthy';
-    health.checks.configuration = {
-      status: 'unhealthy',
-      message: `Missing environment variables: ${missingConfigs.join(', ')}`,
-    };
-  }
-
-  // Overall system assessment
-  const responseTime = Date.now() - startTime;
-  health.responseTime = `${responseTime}ms`;
-
-  if (health.status === 'healthy') {
-    health.message = '✓ All systems operational';
-  } else if (health.status === 'degraded') {
-    health.message = '⚠ Service degraded - some features may not work correctly';
-  } else {
-    health.message = '✗ Service unavailable - critical issues detected';
-  }
-
-  // Add helpful links for unhealthy status
-  if (health.status !== 'healthy') {
-    health.troubleshooting = {
-      diagnosticScript: './scripts/diagnose-production.sh',
-      fixScript: './scripts/fix-agent-availability.sh',
-      documentation: 'AGENT_AVAILABILITY_ANALYSIS.md',
-    };
-  }
-
-  const statusCode = health.status === 'healthy' ? 200 : 503;
-
-  return NextResponse.json(health, { status: statusCode });
-}
-
-/**
- * Simple health check for load balancers (minimal overhead)
- */
-export async function HEAD() {
-  try {
-    const { prisma } = await import('@/lib/prisma');
-    await prisma.$queryRaw`SELECT 1`;
-    return new Response(null, { status: 200 });
-  } catch {
-    return new Response(null, { status: 503 });
+    return NextResponse.json({
+      status: 'critical',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    }, { status: 503 });
   }
 }
-

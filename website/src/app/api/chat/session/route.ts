@@ -81,6 +81,41 @@ export async function POST(request: Request) {
           if (availablePools.length > 0) {
             console.log(`[Session API] ✓ Found ${availablePools.length} active pool(s):`, availablePools);
             
+            // CRITICAL: Check which pools have all agents ready (7 agents)
+            const expectedAgentCount = 7; // donald, melania, eric, donjr, barron, cz, sbf
+            const readyPools: string[] = [];
+            
+            for (const pool of availablePools) {
+              try {
+                const agentsResponse = await fetch(`${CORAL_SERVER_URL}/api/v1/sessions/${pool}/agents`, {
+                  method: 'GET',
+                  headers: { 'Content-Type': 'application/json' },
+                  signal: AbortSignal.timeout(3000)
+                });
+                
+                if (agentsResponse.ok) {
+                  const agentsData = await agentsResponse.json();
+                  const agentCount = agentsData.agentCount || 0;
+                  const agentList = agentsData.agents || [];
+                  
+                  if (agentCount >= expectedAgentCount) {
+                    console.log(`[Session API] ✓ Pool ${pool} is ready with ${agentCount} agents: ${agentList.join(', ')}`);
+                    readyPools.push(pool);
+                  } else {
+                    console.log(`[Session API] Pool ${pool} has only ${agentCount}/${expectedAgentCount} agents: ${agentList.join(', ')}`);
+                  }
+                }
+              } catch (error: any) {
+                console.error(`[Session API] Could not check agents for pool ${pool}:`, error.message);
+              }
+            }
+            
+            // Use ready pools if any, otherwise fall back to available pools
+            const usablePools = readyPools.length > 0 ? readyPools : availablePools;
+            if (readyPools.length === 0) {
+              console.warn('[Session API] No pools have all agents ready, using available pools anyway');
+            }
+            
             // Assign user to a pool
             let assignedPool: string;
             
@@ -89,16 +124,16 @@ export async function POST(request: Request) {
               assignedPool = getUserSessionPool(userWallet);
               console.log(`[Session API] Wallet-based assignment: ${assignedPool}`);
               
-              // Verify assigned pool is available, otherwise use first available
-              if (!availablePools.includes(assignedPool)) {
-                console.warn(`[Session API] Assigned pool ${assignedPool} not available, using first available...`);
-                assignedPool = availablePools[0];
-                console.log(`[Session API] Fallback to available pool: ${assignedPool}`);
+              // Verify assigned pool is usable, otherwise use first usable
+              if (!usablePools.includes(assignedPool)) {
+                console.warn(`[Session API] Assigned pool ${assignedPool} not in usable pools, using first usable...`);
+                assignedPool = usablePools[0];
+                console.log(`[Session API] Fallback to usable pool: ${assignedPool}`);
               }
             } else {
-              // No wallet yet - use random available pool for load distribution
-              const randomIndex = Math.floor(Math.random() * availablePools.length);
-              assignedPool = availablePools[randomIndex];
+              // No wallet yet - use random usable pool for load distribution
+              const randomIndex = Math.floor(Math.random() * usablePools.length);
+              assignedPool = usablePools[randomIndex];
               console.log(`[Session API] Random assignment (no wallet): ${assignedPool}`);
             }
             
