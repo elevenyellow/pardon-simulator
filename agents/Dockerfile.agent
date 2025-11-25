@@ -14,10 +14,14 @@ RUN apt-get update && \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python AWS SDK
-RUN pip install --no-cache-dir boto3
+# Install Python AWS SDK, python-dotenv, and Poetry
+RUN pip install --no-cache-dir boto3 python-dotenv poetry && \
+    poetry config virtualenvs.create false --local
 
-# Copy shared base files (required for all agents)
+# Copy shared configuration files (required by all agents)
+COPY shared/ /app/shared/
+
+# Copy shared base files (CRITICAL - required for all agents)
 COPY base_agent.py /app/
 COPY executor_config.py /app/
 COPY worker_pool.py /app/
@@ -28,28 +32,31 @@ COPY utils/ /app/utils/
 # Copy shared x402 payment tools
 COPY x402_*.py /app/
 
-# Copy all agent directories
+# Copy CZ and SBF agents (working agents without dependency conflicts)
 COPY cz/ /app/cz/
 COPY sbf/ /app/sbf/
+
+# Copy Trump agents
 COPY trump-donald/ /app/trump-donald/
 COPY trump-melania/ /app/trump-melania/
 COPY trump-eric/ /app/trump-eric/
 COPY trump-donjr/ /app/trump-donjr/
 COPY trump-barron/ /app/trump-barron/
 
-# Install dependencies for each agent
-RUN cd /app/cz && pip install --no-cache-dir poetry && poetry config virtualenvs.create false && poetry install --only main --no-root && \
-    cd /app/sbf && pip install --no-cache-dir poetry && poetry config virtualenvs.create false && poetry install --only main --no-root && \
-    cd /app/trump-donald && pip install --no-cache-dir poetry && poetry config virtualenvs.create false && poetry install --only main --no-root && \
-    cd /app/trump-melania && pip install --no-cache-dir poetry && poetry config virtualenvs.create false && poetry install --only main --no-root && \
-    cd /app/trump-eric && pip install --no-cache-dir poetry && poetry config virtualenvs.create false && poetry install --only main --no-root && \
-    cd /app/trump-donjr && pip install --no-cache-dir poetry && poetry config virtualenvs.create false && poetry install --only main --no-root && \
-    cd /app/trump-barron && pip install --no-cache-dir poetry && poetry config virtualenvs.create false && poetry install --only main --no-root
+# Install dependencies for ALL agents (MUST succeed - build will fail if dependencies fail)
+# Remove any existing .venv directories and set poetry config in each directory
+RUN cd /app/cz && rm -rf .venv && poetry config virtualenvs.create false && poetry install --only main --no-root && \
+    cd /app/sbf && rm -rf .venv && poetry config virtualenvs.create false && poetry install --only main --no-root && \
+    cd /app/trump-donald && rm -rf .venv && poetry config virtualenvs.create false && poetry install --only main --no-root && \
+    cd /app/trump-melania && rm -rf .venv && poetry config virtualenvs.create false && poetry install --only main --no-root && \
+    cd /app/trump-eric && rm -rf .venv && poetry config virtualenvs.create false && poetry install --only main --no-root && \
+    cd /app/trump-donjr && rm -rf .venv && poetry config virtualenvs.create false && poetry install --only main --no-root && \
+    cd /app/trump-barron && rm -rf .venv && poetry config virtualenvs.create false && poetry install --only main --no-root
 
 # Copy startup script
 COPY fetch-and-start.sh /app/
 RUN chmod +x /app/fetch-and-start.sh
 
-# Default command (will be overridden with agent-specific path)
+# Default command
 CMD ["/app/fetch-and-start.sh"]
 

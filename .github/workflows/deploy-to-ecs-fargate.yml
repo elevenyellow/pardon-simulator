@@ -68,7 +68,7 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: ./agents
-          file: ./agents/Dockerfile.agent.minimal
+          file: ./agents/Dockerfile.agent
           platforms: linux/amd64
           push: true
           no-cache: true
