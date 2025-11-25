@@ -503,7 +503,7 @@ export default function Home() {
       
       {/* Background */}
       <div 
-        className="fixed inset-0 bg-cover bg-center"        style={{ backgroundImage:"url('/assets/jail_bg.png')"}}
+        className="fixed inset-0 bg-cover bg-center"        style={{ backgroundImage:"url('/assets/jail_bg.jpg')"}}
       />
 
       {/* Scanlines */}
@@ -627,7 +627,7 @@ function LeaderboardOverlay({ onClose }: { onClose: () => void }) {
   return (
     <div 
       className="fixed inset-0 flex items-center justify-center p-5 z-[10002]"      style={{ 
-        backgroundImage:"url('/assets/jail_bg.png')",
+        backgroundImage:"url('/assets/jail_bg.jpg')",
         backgroundSize:'cover',
         backgroundPosition:'center'      }}
     >

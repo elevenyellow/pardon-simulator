@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     description: 'You are SBF - Negotiate with the Trump family using crypto to secure your presidential pardon!',
     images: [
       {
-        url: '/assets/cover.png',
+        url: '/assets/cover.jpg',
         width: 1200,
         height: 630,
         alt: 'Pardon Simulator',
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Pardon Simulator',
     description: 'You are SBF - Negotiate with the Trump family using crypto to secure your presidential pardon!',
-    images: ['/assets/cover.png'],
+    images: ['/assets/cover.jpg'],
   },
 };
 

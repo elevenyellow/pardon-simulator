@@ -950,11 +950,15 @@ Only after payment verified should you call contact_agent()!
                         # Check for timeout or error
                         if mentions_data.get("result") == "error_timeout":
                             if wait_start_time and (time.time() - wait_start_time) < 5.0:
-                                # SSE connection broken
+                                # SSE connection broken - attempt reconnect instead of crashing
                                 print("=" * 80)
-                                print(f"[FATAL] SSE CONNECTION BROKEN")
+                                print(f"[ERROR] SSE CONNECTION BROKEN - ATTEMPTING RECONNECT")
                                 print("=" * 80)
-                                sys.exit(1)
+                                print(f"   Waiting 10 seconds before reconnecting...")
+                                await asyncio.sleep(10)
+                                print(f"   Continuing loop - will attempt to reconnect")
+                                print("=" * 80)
+                                # Continue loop and let Coral client reconnect automatically
                             continue
                         
                         if mentions_data.get("result") != "wait_for_mentions_success":
@@ -987,37 +991,62 @@ Only after payment verified should you call contact_agent()!
     async def run(self) -> None:
         """
         Main entry point - initialize and run the agent.
+        
+        CRITICAL: This method now has comprehensive exception handling to prevent
+        silent crashes that cause Docker restarts and "already registered" warnings.
         """
-        # Load environment
-        self.load_environment()
-        
-        # Initialize wallet
-        balance = await self.initialize_wallet()
-        print(f"🤖 {self.agent_name.upper()} Agent")
-        print(f"   Wallet: {self.my_wallet_address}")
-        print(f"   Balance: {balance:.4f} SOL")
-        
-        # Connect to Coral server
-        client, coral_tools, all_pool_tools = await self.connect_to_coral_server()
-        
-        # Check if multi-pool mode
-        if all_pool_tools:
-            # Multi-pool mode: spawn a listener for each pool
-            print(f"[CORAL] 🔀 Multi-pool mode: listening to {len(all_pool_tools)} pools")
-            await self.run_multi_pool_loops(client, all_pool_tools)
-        else:
-            # Single-pool mode: run a single listener
-            # Create agent executor
-            self.agent_executor, self.my_wallet_address = await self.create_agent_executor(coral_tools)
-            print(f"[READY] {self.agent_name} ready for interactions")
+        try:
+            # Load environment
+            print(f"[STARTUP] Loading environment for {self.agent_id}...")
+            self.load_environment()
             
-            # Find wait_for_mentions tool
-            wait_tool = next((t for t in coral_tools if hasattr(t, 'name') and 'wait_for_mentions' in t.name), None)
-            if not wait_tool:
-                raise ValueError("coral_wait_for_mentions tool not found!")
+            # Initialize wallet
+            print(f"[STARTUP] Initializing wallet...")
+            balance = await self.initialize_wallet()
+            print(f"🤖 {self.agent_name.upper()} Agent")
+            print(f"   Wallet: {self.my_wallet_address}")
+            print(f"   Balance: {balance:.4f} SOL")
             
-            # Run agent loop
-            await self.run_agent_loop(wait_tool)
+            # Connect to Coral server
+            print(f"[STARTUP] Connecting to Coral server...")
+            client, coral_tools, all_pool_tools = await self.connect_to_coral_server()
+            
+            # Check if multi-pool mode
+            if all_pool_tools:
+                # Multi-pool mode: spawn a listener for each pool
+                print(f"[CORAL] 🔀 Multi-pool mode: listening to {len(all_pool_tools)} pools")
+                await self.run_multi_pool_loops(client, all_pool_tools)
+            else:
+                # Single-pool mode: run a single listener
+                # Create agent executor
+                print(f"[STARTUP] Creating agent executor...")
+                self.agent_executor, self.my_wallet_address = await self.create_agent_executor(coral_tools)
+                print(f"[READY] {self.agent_name} ready for interactions")
+                
+                # Find wait_for_mentions tool
+                wait_tool = next((t for t in coral_tools if hasattr(t, 'name') and 'wait_for_mentions' in t.name), None)
+                if not wait_tool:
+                    raise ValueError("coral_wait_for_mentions tool not found!")
+                
+                # Run agent loop
+                await self.run_agent_loop(wait_tool)
+                
+        except KeyboardInterrupt:
+            print(f"\n[SHUTDOWN] {self.agent_name} ({self.agent_id}) shutting down gracefully...")
+            raise
+            
+        except Exception as e:
+            print("\n" + "=" * 80)
+            print(f"[FATAL] UNHANDLED EXCEPTION IN AGENT")
+            print("=" * 80)
+            print(f"Agent: {self.agent_name} ({self.agent_id})")
+            print(f"Error: {type(e).__name__}: {e}")
+            print(f"")
+            traceback.print_exc()
+            print("=" * 80)
+            print(f"⚠️  Agent process will exit. Docker will restart the container.")
+            print("=" * 80)
+            sys.exit(1)
     
     async def run_multi_pool_loops(self, client: MultiServerMCPClient, all_pool_tools: Dict[str, List[BaseTool]]):
         """Run concurrent listeners for multiple Coral session pools."""

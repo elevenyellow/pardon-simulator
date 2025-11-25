@@ -10,12 +10,12 @@ interface Agent {
 }
 
 const agents: Agent[] = [
-  { id:'trump-donald', name:'DONALD TRUMP', image:'/assets/img1.png'},
-  { id:'trump-barron', name:'BARRON TRUMP', image:'/assets/img2.jpg'},
-  { id:'cz', name:'CZ (CHANGPENG ZHAO)', image:'/assets/img3.jpg'},
-  { id:'trump-donjr', name:'DONALD JR', image:'/assets/img4.jpg'},
-  { id:'trump-eric', name:'ERIC TRUMP', image:'/assets/img5.jpg'},
-  { id:'trump-melania', name:'MELANIA TRUMP', image:'/assets/img6.jpg'},
+  { id:'trump-donald', name:'DONALD TRUMP', image:'/assets/trump-donald.png'},
+  { id:'trump-barron', name:'BARRON TRUMP', image:'/assets/trump-barron.jpg'},
+  { id:'cz', name:'CZ (CHANGPENG ZHAO)', image:'/assets/cz.jpg'},
+  { id:'trump-donjr', name:'DONALD JR', image:'/assets/trump-donjr.jpg'},
+  { id:'trump-eric', name:'ERIC TRUMP', image:'/assets/trump-eric.jpg'},
+  { id:'trump-melania', name:'MELANIA TRUMP', image:'/assets/trump-melania.jpg'},
 ];
 
 export default function AgentSelector({ 
@@ -113,12 +113,12 @@ export default function AgentSelector({
         <div className="relative w-[700px] h-[500px] flex items-center justify-center">
           {/* TV Frame Background */}
           <div 
-            className="absolute inset-0 bg-contain bg-center bg-no-repeat pointer-events-none pixel-art"            style={{ backgroundImage:"url('/assets/tv_1.png')"}}
+            className="absolute inset-0 bg-contain bg-center bg-no-repeat pointer-events-none pixel-art"            style={{ backgroundImage:"url('/assets/tv-inside.jpg')"}}
           />
           
           {/* SBF Image Inside TV */}
           <img
-            src="/assets/main_img.png"            alt="SBF"            className="w-full h-full object-cover relative z-[1] pixel-art"          />
+            src="/assets/tv.png"            alt="SBF"            className="w-full h-full object-cover relative z-[1] pixel-art"          />
         </div>
 
         {/* Right Column */}
@@ -134,10 +134,10 @@ export default function AgentSelector({
         {/* TV Container */}
         <div className="relative w-[500px] h-[360px] flex items-center justify-center">
           <div 
-            className="absolute inset-0 bg-contain bg-center bg-no-repeat pointer-events-none pixel-art"            style={{ backgroundImage:"url('/assets/tv_1.png')"}}
+            className="absolute inset-0 bg-contain bg-center bg-no-repeat pointer-events-none pixel-art"            style={{ backgroundImage:"url('/assets/tv-inside.jpg')"}}
           />
           <img
-            src="/assets/main_img.png"            alt="SBF"            className="w-full h-full object-cover relative z-[1] pixel-art"          />
+            src="/assets/tv.png"            alt="SBF"            className="w-full h-full object-cover relative z-[1] pixel-art"          />
         </div>
 
         {/* Agents in horizontal row */}
@@ -153,10 +153,10 @@ export default function AgentSelector({
         {/* TV Container - smaller on mobile */}
         <div className="relative w-full h-[250px] flex items-center justify-center">
           <div 
-            className="absolute inset-0 bg-contain bg-center bg-no-repeat pointer-events-none pixel-art"            style={{ backgroundImage:"url('/assets/tv_1.png')"}}
+            className="absolute inset-0 bg-contain bg-center bg-no-repeat pointer-events-none pixel-art"            style={{ backgroundImage:"url('/assets/tv-inside.jpg')"}}
           />
           <img
-            src="/assets/main_img.png"            alt="SBF"            className="w-full h-full object-cover relative z-[1] pixel-art"          />
+            src="/assets/tv.png"            alt="SBF"            className="w-full h-full object-cover relative z-[1] pixel-art"          />
         </div>
 
         {/* Agents in 6 columns horizontal row - same width as TV */}
