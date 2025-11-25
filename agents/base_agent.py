@@ -449,21 +449,26 @@ class BaseAgent(ABC):
         private_key = os.getenv(agent_key_var) or os.getenv("SOLANA_PRIVATE_KEY", "")
         
         if not private_key:
-            print(f"⚠️  Warning: No private key found for {agent_key_var} or SOLANA_PRIVATE_KEY")
+            print(f"⚠️  Warning: No private key found for {agent_key_var} or SOLANA_PRIVATE_KEY", flush=True)
         
+        print(f"[DEBUG] Creating AgentWallet...", flush=True)
         self.wallet = AgentWallet(
             private_key,
             rpc_url,
             self.agent_name
         )
+        print(f"[DEBUG] AgentWallet created", flush=True)
         
         try:
+            print(f"[DEBUG] Getting balance with 5s timeout...", flush=True)
             balance = await asyncio.wait_for(self.wallet.get_balance(), timeout=5.0)
+            print(f"[DEBUG] Balance retrieved: {balance}", flush=True)
         except (asyncio.TimeoutError, Exception) as e:
-            print(f"⚠️  Balance check failed: {e} - continuing anyway")
+            print(f"⚠️  Balance check failed: {e} - continuing anyway", flush=True)
             balance = 0.0
         
         self.my_wallet_address = str(self.wallet.keypair.pubkey())
+        print(f"[DEBUG] Wallet address set: {self.my_wallet_address}", flush=True)
         return balance
     
     async def create_agent_executor(self, coral_tools: List[BaseTool]) -> Tuple[AgentExecutor, str]:
@@ -997,18 +1002,18 @@ Only after payment verified should you call contact_agent()!
         """
         try:
             # Load environment
-            print(f"[STARTUP] Loading environment for {self.agent_id}...")
+            print(f"[STARTUP] Loading environment for {self.agent_id}...", flush=True)
             self.load_environment()
             
             # Initialize wallet
-            print(f"[STARTUP] Initializing wallet...")
+            print(f"[STARTUP] Initializing wallet...", flush=True)
             balance = await self.initialize_wallet()
-            print(f"🤖 {self.agent_name.upper()} Agent")
-            print(f"   Wallet: {self.my_wallet_address}")
-            print(f"   Balance: {balance:.4f} SOL")
+            print(f"🤖 {self.agent_name.upper()} Agent", flush=True)
+            print(f"   Wallet: {self.my_wallet_address}", flush=True)
+            print(f"   Balance: {balance:.4f} SOL", flush=True)
             
             # Connect to Coral server
-            print(f"[STARTUP] Connecting to Coral server...")
+            print(f"[STARTUP] Connecting to Coral server...", flush=True)
             client, coral_tools, all_pool_tools = await self.connect_to_coral_server()
             
             # Check if multi-pool mode
