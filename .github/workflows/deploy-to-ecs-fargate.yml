@@ -378,15 +378,17 @@ jobs:
       
       - name: 🔄 Update ECS service (rolling deployment)
         run: |
-          echo "🔄 Updating ECS service..."
+          echo "🔄 Updating ECS service with new task definition..."
+          echo "Task Definition ARN: ${{ steps.task-def.outputs.task_arn }}"
+          
           aws ecs update-service \
             --cluster ${{ env.ECS_CLUSTER }} \
             --service ${{ env.ECS_SERVICE }} \
-            --task-definition ${{ env.TASK_FAMILY }} \
+            --task-definition ${{ steps.task-def.outputs.task_arn }} \
             --force-new-deployment \
             --region ${{ env.AWS_REGION }} > /dev/null
           
-          echo "✅ Deployment initiated"
+          echo "✅ Deployment initiated with new task definition"
       
       - name: ⏳ Wait for deployment to stabilize
         run: |
