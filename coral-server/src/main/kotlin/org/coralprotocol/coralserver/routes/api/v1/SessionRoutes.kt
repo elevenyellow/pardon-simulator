@@ -8,6 +8,7 @@ import io.ktor.resources.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import kotlinx.serialization.Serializable
 import org.coralprotocol.coralserver.agent.registry.AgentRegistry
 import org.coralprotocol.coralserver.server.RouteException
 import org.coralprotocol.coralserver.session.LocalSessionManager
@@ -15,6 +16,13 @@ import org.coralprotocol.coralserver.session.models.SessionIdentifier
 import org.coralprotocol.coralserver.session.models.SessionRequest
 
 private val logger = KotlinLogging.logger {}
+
+@Serializable
+data class SessionAgentsResponse(
+    val sessionId: String,
+    val agentCount: Int,
+    val agents: List<String>
+)
 
 @Suppress("UNCHECKED_CAST")
 fun <K, V> Map<K, V?>.filterNotNullValues(): Map<K, V> =
@@ -137,13 +145,6 @@ fun Routing.sessionApiRoutes(
         
         // Create a simple list of agent IDs for easy serialization
         val agentIds = session.agents.values.map { it.id }
-        
-        // Use a properly typed response structure
-        data class SessionAgentsResponse(
-            val sessionId: String,
-            val agentCount: Int,
-            val agents: List<String>
-        )
         
         call.respond(HttpStatusCode.OK, SessionAgentsResponse(
             sessionId = session.id,

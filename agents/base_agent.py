@@ -676,7 +676,7 @@ class BaseAgent(ABC):
                 "transport": "sse",
                 "url": url,
                 "timeout": 700.0,
-                "sse_read_timeout": 700.0,
+                "sse_read_timeout": 700.0
             }
             print(f"[CORAL]   → {session_id} @ {url}")
         
@@ -809,6 +809,13 @@ DO NOT just acknowledge payment - DELIVER THE SERVICE NOW!
         message_payload = mentions_data["messages"][0]
         sender_id = message_payload["senderId"]
         message_content = message_payload["content"]
+        
+        # CRITICAL SAFETY: SBF agent never generates responses
+        # This prevents SBF from responding even if override fails
+        if self.agent_id == "sbf":
+            print(f"[SBF-PROXY] Blocking message processing - SBF is user proxy only")
+            print(f"[SBF-PROXY] Ignoring mention from '{sender_id}'")
+            return None
         
         is_user_message = sender_id == "sbf"
         
@@ -1109,6 +1116,13 @@ Only after payment verified should you call contact_agent()!
         message_payload = mentions_data["messages"][0]
         sender_id = message_payload["senderId"]
         message_content = message_payload["content"]
+        
+        # CRITICAL SAFETY: SBF agent never generates responses
+        # This prevents SBF from responding even if override fails
+        if self.agent_id == "sbf":
+            print(f"[{pool_name}] [SBF-PROXY] Blocking message processing - SBF is user proxy only")
+            print(f"[{pool_name}] [SBF-PROXY] Ignoring mention from '{sender_id}'")
+            return None
         
         is_user_message = sender_id == "sbf"
         
