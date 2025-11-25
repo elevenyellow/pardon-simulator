@@ -546,7 +546,7 @@ class BaseAgent(ABC):
         agent_executor = AgentExecutor(
             agent=agent,
             tools=combined_tools,
-            verbose=False,
+            verbose=True,  # TEMPORARY: Debug tool calling issues
             handle_parsing_errors=True,
             max_iterations=self.executor_limits["max_iterations"],
             max_execution_time=self.executor_limits["max_execution_time"],
@@ -915,7 +915,20 @@ Only after payment verified should you call contact_agent()!
                     timeout=invoke_timeout
                 )
                 
-                print(f"[OK] Response sent successfully on attempt {attempt + 1}")
+                # DEBUG: Check what the agent actually did
+                print(f"[DEBUG] Agent response type: {type(response)}", flush=True)
+                print(f"[DEBUG] Agent response keys: {response.keys() if isinstance(response, dict) else 'not a dict'}", flush=True)
+                if isinstance(response, dict):
+                    if 'output' in response:
+                        print(f"[DEBUG] Output: {response['output'][:200] if len(response['output']) > 200 else response['output']}", flush=True)
+                    if 'intermediate_steps' in response:
+                        steps = response['intermediate_steps']
+                        print(f"[DEBUG] Tool calls made: {len(steps)}", flush=True)
+                        for i, (action, result) in enumerate(steps):
+                            tool_name = getattr(action, 'tool', 'unknown')
+                            print(f"[DEBUG]   Step {i+1}: {tool_name}", flush=True)
+                
+                print(f"[OK] Response sent successfully on attempt {attempt + 1}", flush=True)
                 return response
                 
             except asyncio.TimeoutError:
@@ -1243,7 +1256,20 @@ Only after payment verified should you call contact_agent()!
                     timeout=invoke_timeout
                 )
                 
-                print(f"[{pool_name}] ✓ Response sent successfully")
+                # DEBUG: Check what the agent actually did
+                print(f"[{pool_name}] [DEBUG] Agent response type: {type(response)}", flush=True)
+                print(f"[{pool_name}] [DEBUG] Agent response keys: {response.keys() if isinstance(response, dict) else 'not a dict'}", flush=True)
+                if isinstance(response, dict):
+                    if 'output' in response:
+                        print(f"[{pool_name}] [DEBUG] Output: {response['output'][:200] if len(response['output']) > 200 else response['output']}", flush=True)
+                    if 'intermediate_steps' in response:
+                        steps = response['intermediate_steps']
+                        print(f"[{pool_name}] [DEBUG] Tool calls made: {len(steps)}", flush=True)
+                        for i, (action, result) in enumerate(steps):
+                            tool_name = getattr(action, 'tool', 'unknown')
+                            print(f"[{pool_name}] [DEBUG]   Step {i+1}: {tool_name}", flush=True)
+                
+                print(f"[{pool_name}] ✓ Response sent successfully", flush=True)
                 return response
                 
             except asyncio.TimeoutError:
