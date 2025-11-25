@@ -138,12 +138,26 @@ export async function POST(request: Request) {
             }
             
             console.log(`[Session API] ✓ User assigned to session: ${assignedPool}`);
-            return NextResponse.json({ 
+            
+            // CRITICAL: Set a session affinity cookie to ensure subsequent requests
+            // go to the same ECS task/Coral instance (which has the thread in memory)
+            const response = NextResponse.json({ 
               sessionId: assignedPool,
               poolingEnabled: true,
               availablePools: availablePools.length,
               totalExpected: expectedPools.length
             });
+            
+            // Add a hint cookie for client-side debugging
+            response.cookies.set('coral-session-id', assignedPool, {
+              httpOnly: false, // Allow JavaScript to read for debugging
+              secure: true,
+              sameSite: 'lax',
+              maxAge: 3600, // 1 hour
+              path: '/'
+            });
+            
+            return response;
           }
 
             // No pool sessions found yet

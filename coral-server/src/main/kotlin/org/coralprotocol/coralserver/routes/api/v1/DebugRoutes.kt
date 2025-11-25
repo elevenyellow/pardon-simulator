@@ -156,7 +156,12 @@ fun Routing.debugApiRoutes(localSessionManager: LocalSessionManager) {
 
             logger.info { "[Debug SendMessage] Message added to thread ${request.threadId.take(8)}..., messageId=${message.id}" }
             call.respond(message.resolve())
+        } catch (e: IllegalArgumentException) {
+            // IllegalArgumentException is thrown for "not found" errors - return 404
+            logger.error(e) { "Not found error while sending message" }
+            call.respond(HttpStatusCode.NotFound, "Error: ${e.message}")
         } catch (e: Exception) {
+            // Other exceptions are truly internal errors - return 500
             logger.error(e) { "Error while sending message" }
             call.respond(HttpStatusCode.InternalServerError, "Error: ${e.message}")
         }

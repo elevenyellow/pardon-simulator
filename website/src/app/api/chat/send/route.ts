@@ -871,14 +871,15 @@ async function handlePOST(request: NextRequest) {
     );
     console.log(`[Send API] Coral sendMessage response: ${sendResponse.status} ${sendResponse.statusText}`);
 
-    // If we get 404, try to restore the session and retry
-    if (!sendResponse.ok && sendResponse.status === 404) {
+    // If we get 404 or 500 with "not found" error, try to restore the session and retry
+    // Note: Coral server returns 500 for thread not found (should be 404, but we handle both)
+    if (!sendResponse.ok && (sendResponse.status === 404 || sendResponse.status === 500)) {
       const errorText = await sendResponse.text();
       
       // Flexible pattern matching to catch variations like "Thread with id xxx not found"
       if ((errorText.toLowerCase().includes('thread') && errorText.toLowerCase().includes('not found')) || 
           (errorText.toLowerCase().includes('session') && errorText.toLowerCase().includes('not found'))) {
-        console.log('[Send API] Thread/Session not found, attempting restoration...');
+        console.log(`[Send API] Thread/Session not found (status: ${sendResponse.status}), attempting restoration...`);
         
         const restored = await restoreCoralSession(threadId);
         
