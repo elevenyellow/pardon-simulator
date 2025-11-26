@@ -1172,6 +1172,14 @@ def create_contact_agent_tool(coral_send_message_tool, coral_add_participant_too
     Returns:
         A contact_agent tool function that agents can use
     """
+    # Import intermediary state management
+    import sys
+    import os
+    agents_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if agents_dir not in sys.path:
+        sys.path.insert(0, agents_dir)
+    from utils.intermediary_state import set_intermediary_state
+    
     # Global references to coral tools (set once when tool is created)
     global _coral_send_message_tool, _coral_add_participant_tool
     _coral_send_message_tool = coral_send_message_tool
@@ -1230,6 +1238,15 @@ def create_contact_agent_tool(coral_send_message_tool, coral_add_participant_too
             "mentions": ["sbf"]
         })
         print(f"✅ User confirmation sent")
+
+        # STEP 4: Store intermediary state (for Issue #2 fix)
+        # This tells the system: "I'm waiting for a response from agent_to_contact, don't invoke me"
+        await set_intermediary_state(
+            agent_id=agent_id,
+            thread_id=current_thread_id,
+            target_agent=agent_to_contact,
+            purpose="connection_intro"
+        )
 
         return f"✅ Successfully contacted {agent_to_contact}. User has been notified."
 

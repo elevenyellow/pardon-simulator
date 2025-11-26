@@ -811,9 +811,13 @@ DO NOT just acknowledge payment - DELIVER THE SERVICE NOW!
         Returns:
             Response dict or None if all retries failed
         """
+        # Import intermediary state utilities
+        from utils.intermediary_state import check_intermediary_state, clear_intermediary_state
+        
         message_payload = mentions_data["messages"][0]
         sender_id = message_payload["senderId"]
         message_content = message_payload["content"]
+        thread_id = message_payload.get("threadId", "unknown")
         
         # CRITICAL SAFETY: SBF agent never generates responses
         # This prevents SBF from responding even if override fails
@@ -821,6 +825,27 @@ DO NOT just acknowledge payment - DELIVER THE SERVICE NOW!
             print(f"[SBF-PROXY] Blocking message processing - SBF is user proxy only")
             print(f"[SBF-PROXY] Ignoring mention from '{sender_id}'")
             return None
+        
+        # FIX ISSUE #2: Check if this agent is in intermediary mode
+        # If we're waiting for a response from sender_id (after using contact_agent),
+        # we should stay silent - the user can already see the response
+        if sender_id != "sbf":
+            intermediary_state = await check_intermediary_state(
+                agent_id=self.agent_id,
+                thread_id=thread_id,
+                sender_id=sender_id
+            )
+            
+            if intermediary_state:
+                print(f"[IntermediaryMode] {self.agent_id} is waiting for {sender_id}'s response")
+                print(f"[IntermediaryMode] Staying silent - user can see the message directly")
+                print(f"[IntermediaryMode] Clearing intermediary state (job complete)")
+                
+                # Clear the state - the intermediary's job is done
+                await clear_intermediary_state(self.agent_id, thread_id)
+                
+                # Don't invoke the agent - stay silent
+                return None
         
         is_user_message = sender_id == "sbf"
         
@@ -918,6 +943,11 @@ Only after payment verified should you call contact_agent()!
                 # DEBUG: Check what the agent actually did
                 print(f"[DEBUG] Agent response type: {type(response)}", flush=True)
                 print(f"[DEBUG] Agent response keys: {response.keys() if isinstance(response, dict) else 'not a dict'}", flush=True)
+                
+                # FIX ISSUE #1: Check if contact_agent was called
+                # If yes, suppress the LLM's final output since contact_agent already sent confirmation
+                contact_agent_called = False
+                
                 if isinstance(response, dict):
                     if 'output' in response:
                         print(f"[DEBUG] Output: {response['output'][:200] if len(response['output']) > 200 else response['output']}", flush=True)
@@ -927,8 +957,23 @@ Only after payment verified should you call contact_agent()!
                         for i, (action, result) in enumerate(steps):
                             tool_name = getattr(action, 'tool', 'unknown')
                             print(f"[DEBUG]   Step {i+1}: {tool_name}", flush=True)
+                            
+                            # Check if contact_agent was called
+                            if 'contact_agent' in tool_name.lower():
+                                contact_agent_called = True
+                                print(f"[DEBUG] ✅ contact_agent was called - will suppress duplicate confirmation")
                 
-                print(f"[OK] Response sent successfully on attempt {attempt + 1}", flush=True)
+                # If contact_agent was called, suppress the LLM's output
+                # The tool already sent the confirmation to the user
+                if contact_agent_called and isinstance(response, dict):
+                    print(f"[OutputSuppression] contact_agent called - suppressing LLM's final output")
+                    print(f"[OutputSuppression] Original output: {response.get('output', '')[:100]}")
+                    
+                    # Replace output with empty string to prevent duplicate message
+                    response['output'] = ""
+                    print(f"[OutputSuppression] Output suppressed to prevent duplicate confirmation")
+                
+                print(f"[OK] Response processed successfully on attempt {attempt + 1}", flush=True)
                 return response
                 
             except asyncio.TimeoutError:

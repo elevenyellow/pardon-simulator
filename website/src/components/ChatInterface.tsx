@@ -336,16 +336,18 @@ export default function ChatInterface({
           //  Update score history if there's a change
           if (newScore !== oldScore && oldScore !== 0) {
             const delta = newScore - oldScore;
+            const reason = data.scoreHistory?.[0]?.reason || 'Score updated';
+            
             setScoreHistory(prev => [...prev, {
               delta: delta,
-              reason: data.scoreHistory?.[0]?.reason ||'Score updated',
+              reason: reason,
               timestamp: new Date(),
               currentScore: newScore
             }]);
             
-            // Show toast for score change
-            const deltaText = delta > 0 ?`+${delta}`: delta;
-            showToast(`${deltaText} points`, delta > 0 ?'success':'error');
+            // Show toast for score change with reason
+            const deltaText = delta > 0 ?`+${delta.toFixed(1)}`: delta.toFixed(1);
+            showToast(`${deltaText} points: ${reason}`, delta > 0 ?'success':'error');
           }
           
           // Force a small delay to ensure state has propagated
@@ -705,13 +707,18 @@ export default function ChatInterface({
         // DON'T mark payment request messages as processed here - they need to trigger payment flow first
         const hasPaymentRequest = lastMessage.content.includes('<x402_payment_request>');
         if (!hasPaymentRequest) {
-        // Mark as processed to prevent repeated API calls
-        processedMessageIdsRef.current.add(lastMessage.id);
+          // Mark as processed to prevent repeated API calls
+          processedMessageIdsRef.current.add(lastMessage.id);
+          
+          // Fetch score from API since agent didn't embed it in message
+          // (scoring-mandate.txt line 53 tells agents NOT to include score_update in messages)
+          if (publicKey && !isFetchingScoreRef.current) {
+            // Small delay to ensure backend has processed the score update
+            setTimeout(() => {
+              fetchCurrentScore();
+            }, 1500); // 1.5 second delay to ensure agent has updated score via award_points
+          }
         }
-        
-        // REMOVED: Redundant score fetch after every message
-        // The agent already updates score via award_points tool
-        // Score is fetched on wallet connect and explicit user request only
       }
     } else {
     }
