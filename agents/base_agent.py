@@ -1304,6 +1304,11 @@ Only after payment verified should you call contact_agent()!
                 # DEBUG: Check what the agent actually did
                 print(f"[{pool_name}] [DEBUG] Agent response type: {type(response)}", flush=True)
                 print(f"[{pool_name}] [DEBUG] Agent response keys: {response.keys() if isinstance(response, dict) else 'not a dict'}", flush=True)
+                
+                # Track which tools were called
+                contact_agent_called = False
+                send_message_called = False
+                
                 if isinstance(response, dict):
                     if 'output' in response:
                         print(f"[{pool_name}] [DEBUG] Output: {response['output'][:200] if len(response['output']) > 200 else response['output']}", flush=True)
@@ -1313,8 +1318,55 @@ Only after payment verified should you call contact_agent()!
                         for i, (action, result) in enumerate(steps):
                             tool_name = getattr(action, 'tool', 'unknown')
                             print(f"[{pool_name}] [DEBUG]   Step {i+1}: {tool_name}", flush=True)
+                            
+                            # Track important tool calls
+                            if 'contact_agent' in tool_name.lower():
+                                contact_agent_called = True
+                                print(f"[{pool_name}] ✅ contact_agent was called - will suppress duplicate confirmation")
+                            if 'send_message' in tool_name.lower() and 'coral' in tool_name.lower():
+                                send_message_called = True
                 
-                print(f"[{pool_name}] ✓ Response sent successfully", flush=True)
+                # FIX #1: Suppress LLM output if contact_agent was called
+                # contact_agent already sends its own confirmation message
+                if contact_agent_called and isinstance(response, dict):
+                    print(f"[{pool_name}] [OutputSuppression] contact_agent called - suppressing LLM's final output")
+                    print(f"[{pool_name}] [OutputSuppression] Original output: {response.get('output', '')[:100]}")
+                    response['output'] = ""
+                    print(f"[{pool_name}] [OutputSuppression] Output suppressed to prevent duplicate confirmation")
+                
+                # FIX #2: Fallback - if LLM generated output but didn't call coral_send_message, send it automatically
+                # This prevents silent failures where agent thinks but doesn't speak
+                if not send_message_called and isinstance(response, dict) and response.get('output'):
+                    output_text = response['output'].strip()
+                    if output_text:  # Only if there's actual content
+                        print(f"[{pool_name}] ⚠️  LLM generated output but didn't call coral_send_message - using fallback")
+                        thread_id = mentions_data.get("messages", [{}])[0].get("threadId")
+                        
+                        # Find the coral_send_message tool
+                        send_message_tool = None
+                        for tool in agent_executor.tools:
+                            if hasattr(tool, 'name') and 'coral_send_message' in tool.name:
+                                send_message_tool = tool
+                                break
+                        
+                        if thread_id and send_message_tool:
+                            try:
+                                await send_message_tool.ainvoke({
+                                    "threadId": thread_id,
+                                    "content": output_text,
+                                    "mentions": ["sbf"] if is_user_message else [sender_id]
+                                })
+                                print(f"[{pool_name}] ✅ Response auto-sent via fallback mechanism")
+                            except Exception as e:
+                                print(f"[{pool_name}] ❌ Failed to auto-send response: {e}")
+                                traceback.print_exc()
+                        else:
+                            if not thread_id:
+                                print(f"[{pool_name}] ⚠️  Cannot auto-send: no threadId in mentions_data")
+                            if not send_message_tool:
+                                print(f"[{pool_name}] ⚠️  Cannot auto-send: coral_send_message tool not found")
+                
+                print(f"[{pool_name}] ✓ Response processed successfully", flush=True)
                 return response
                 
             except asyncio.TimeoutError:
