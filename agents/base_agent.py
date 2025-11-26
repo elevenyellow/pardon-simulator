@@ -1308,12 +1308,14 @@ Only after payment verified should you call contact_agent()!
                 # Track which tools were called
                 contact_agent_called = False
                 send_message_called = False
+                has_intermediate_steps = False
                 
                 if isinstance(response, dict):
                     if 'output' in response:
                         print(f"[{pool_name}] [DEBUG] Output: {response['output'][:200] if len(response['output']) > 200 else response['output']}", flush=True)
                     if 'intermediate_steps' in response:
                         steps = response['intermediate_steps']
+                        has_intermediate_steps = len(steps) > 0
                         print(f"[{pool_name}] [DEBUG] Tool calls made: {len(steps)}", flush=True)
                         for i, (action, result) in enumerate(steps):
                             tool_name = getattr(action, 'tool', 'unknown')
@@ -1325,6 +1327,7 @@ Only after payment verified should you call contact_agent()!
                                 print(f"[{pool_name}] ✅ contact_agent was called - will suppress duplicate confirmation")
                             if 'send_message' in tool_name.lower() and 'coral' in tool_name.lower():
                                 send_message_called = True
+                                print(f"[{pool_name}] ✅ coral_send_message was detected in intermediate_steps")
                 
                 # FIX #1: Suppress LLM output if contact_agent was called
                 # contact_agent already sends its own confirmation message
@@ -1336,7 +1339,9 @@ Only after payment verified should you call contact_agent()!
                 
                 # FIX #2: Fallback - if LLM generated output but didn't call coral_send_message, send it automatically
                 # This prevents silent failures where agent thinks but doesn't speak
-                if not send_message_called and isinstance(response, dict) and response.get('output'):
+                # IMPORTANT: Only trigger if we have intermediate_steps and can confidently say send_message wasn't called
+                # If intermediate_steps is missing/empty, the execution might have failed - don't send duplicate
+                if not send_message_called and has_intermediate_steps and isinstance(response, dict) and response.get('output'):
                     output_text = response['output'].strip()
                     if output_text:  # Only if there's actual content
                         print(f"[{pool_name}] ⚠️  LLM generated output but didn't call coral_send_message - using fallback")
@@ -1365,6 +1370,9 @@ Only after payment verified should you call contact_agent()!
                                 print(f"[{pool_name}] ⚠️  Cannot auto-send: no threadId in mentions_data")
                             if not send_message_tool:
                                 print(f"[{pool_name}] ⚠️  Cannot auto-send: coral_send_message tool not found")
+                elif not send_message_called and not has_intermediate_steps and isinstance(response, dict) and response.get('output'):
+                    # Execution may have failed/restarted - don't use fallback to avoid duplicates
+                    print(f"[{pool_name}] ⚠️  Output exists but no intermediate_steps - possible execution error, skipping fallback to avoid duplicates")
                 
                 print(f"[{pool_name}] ✓ Response processed successfully", flush=True)
                 return response

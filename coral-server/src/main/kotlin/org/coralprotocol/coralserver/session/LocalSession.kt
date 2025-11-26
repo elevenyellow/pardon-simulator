@@ -261,6 +261,21 @@ class LocalSession(
         }
 
         message.mentions.forEach { mentionId ->
+            // CRITICAL FIX: Auto-add mentioned agent to thread if not already a participant
+            // This fixes the "Sender agent not a member of thread" error when agents are mentioned
+            // but weren't included in the original thread creation
+            val thread = message.thread
+            if (!thread.participants.contains(mentionId)) {
+                val agent = agents[mentionId]
+                if (agent != null) {
+                    thread.participants.add(mentionId)
+                    lastReadMessageIndex[Pair(mentionId, thread.id)] = thread.messages.size
+                    logger.info { "[LocalSession.notifyMentionedAgents] Auto-added ${mentionId} to thread ${thread.id.take(8)}... (mentioned but not participant)" }
+                } else {
+                    logger.warn { "[LocalSession.notifyMentionedAgents] Cannot add ${mentionId} to thread - agent not found in session" }
+                }
+            }
+            
             val deferred = agentNotifications[mentionId]
             if (deferred != null && !deferred.isCompleted) {
                 deferred.complete(listOf(message))
