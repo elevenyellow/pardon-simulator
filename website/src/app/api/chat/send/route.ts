@@ -431,58 +431,95 @@ async function handlePOST(request: NextRequest) {
             console.log(`CDP error details:`, errorData);
             
             try {
-              // For partially-signed transactions (CDP co-signing):
-              // - signatures[0] = Fee payer (CDP) - NOT YET SIGNED (placeholder)
-              // - signatures[1] = User's transfer authority - SIGNED BY USER
-              // We need to find the first valid (non-placeholder) signature
-              
-              const txBuffer = Buffer.from(transactionBase64, 'base64');
               let signature: string | null = null;
               
-              try {
-                const versionedTx = VersionedTransaction.deserialize(txBuffer);
+              // STEP 1: Check if CDP's error response includes the transaction signature
+              // Sometimes CDP returns 500 AFTER successfully submitting, and may include the signature
+              if (errorData.transaction || errorData.signature || errorData.txSignature) {
+                signature = errorData.transaction || errorData.signature || errorData.txSignature;
+                console.log('[CDP Fallback] Found transaction signature in CDP error response:', signature);
+              }
+              
+              // STEP 2: If no signature in error response, query recent transactions from user's wallet
+              // Even though CDP co-signs and changes the signature, the transaction still appears in the user's history
+              if (!signature) {
+                console.log('[CDP Fallback] No signature in error response - querying recent transactions from user wallet');
+                console.log(`[CDP Fallback] Looking for USDC transfer: ${amountUsdc} USDC from ${frontendPayload.from} to ${to}`);
                 
-                // Try all signatures until we find a valid one (not placeholder)
-                for (let i = 0; i < versionedTx.signatures.length; i++) {
-                  const sig = versionedTx.signatures[i];
-                  const isPlaceholder = sig.every(byte => byte === 0) || sig.every(byte => byte === 1);
-                  
-                  if (!isPlaceholder) {
-                    signature = bs58.encode(sig);
-                    console.log(`[CDP Fallback] Found valid signature at index ${i}:`, signature);
-                    break;
-                  }
-                }
-              } catch (e: any) {
-                // Try legacy transaction
+                const connection = new Connection(SOLANA_RPC_URL!, 'confirmed');
+                const { PublicKey } = require('@solana/web3.js');
+                
                 try {
-                  const legacyTx = Transaction.from(txBuffer);
+                  // Query the user's wallet - this is the most reliable and efficient approach
+                  const userPubkey = new PublicKey(frontendPayload.from);
                   
-                  // For legacy transactions with multiple signatures
-                  if (legacyTx.signatures && legacyTx.signatures.length > 0) {
-                    for (const sigObj of legacyTx.signatures) {
-                      if (sigObj.signature) {
-                        const sigBuffer = Buffer.from(sigObj.signature);
-                        const isPlaceholder = sigBuffer.every(byte => byte === 0) || sigBuffer.every(byte => byte === 1);
-                        
-                        if (!isPlaceholder) {
-                          signature = bs58.encode(sigObj.signature);
-                          console.log('[CDP Fallback] Found valid legacy signature:', signature);
-                          break;
+                  console.log(`[CDP Fallback] Querying user wallet: ${frontendPayload.from.substring(0, 8)}...`);
+                  
+                  // Get recent signatures for user's wallet (last 2 minutes worth)
+                  const signatures = await connection.getSignaturesForAddress(userPubkey, { limit: 20 });
+                  console.log(`[CDP Fallback] Found ${signatures.length} recent transactions from user wallet`);
+                  
+                  // Check each transaction to find the matching USDC transfer
+                  for (const sigInfo of signatures) {
+                    // Skip if too old (more than 2 minutes ago)
+                    const txTime = sigInfo.blockTime ? sigInfo.blockTime * 1000 : 0;
+                    if (Date.now() - txTime > 120000) {
+                      continue;
+                    }
+                    
+                    try {
+                      const txDetails = await connection.getTransaction(sigInfo.signature, {
+                        maxSupportedTransactionVersion: 0,
+                        commitment: 'confirmed'
+                      });
+                      
+                      if (!txDetails || !txDetails.meta || txDetails.meta.err) {
+                        continue; // Skip failed or incomplete transactions
+                      }
+                      
+                      // Check if this transaction has the expected USDC transfer
+                      const preBalances = txDetails.meta.preTokenBalances || [];
+                      const postBalances = txDetails.meta.postTokenBalances || [];
+                      
+                      let matchFound = false;
+                      for (const postBal of postBalances) {
+                        const preBal = preBalances.find(p => p.accountIndex === postBal.accountIndex);
+                        if (preBal && postBal.owner === to) {
+                          const delta = postBal.uiTokenAmount.uiAmount! - preBal.uiTokenAmount.uiAmount!;
+                          // Check if the transfer amount matches (within 0.000001 USDC tolerance)
+                          if (Math.abs(delta - amountUsdc) < 0.000001) {
+                            signature = sigInfo.signature;
+                            matchFound = true;
+                            console.log(`[CDP Fallback] ✅ Found matching transaction: ${signature}`);
+                            console.log(`[CDP Fallback]    Amount: ${delta} USDC, Recipient: ${postBal.owner.substring(0, 8)}...`);
+                            break;
+                          }
                         }
                       }
+                      
+                      if (matchFound) break;
+                      
+                    } catch (txError: any) {
+                      console.error(`[CDP Fallback] Error checking transaction ${sigInfo.signature}:`, txError.message);
+                      continue;
                     }
                   }
-                } catch (legacyError: any) {
-                  throw new Error(`Failed to parse transaction: ${e.message || legacyError.message}`);
+                  
+                  if (!signature) {
+                    console.error('[CDP Fallback] No matching transaction found in recent user transactions');
+                    console.error('[CDP Fallback] Expected:', amountUsdc, 'USDC transfer to', to);
+                  }
+                  
+                } catch (queryError: any) {
+                  console.error('[CDP Fallback] Error querying recent transactions:', queryError.message);
                 }
               }
               
               if (!signature) {
-                throw new Error('No valid signature found in transaction - all signatures are placeholders. Transaction may not be fully signed.');
+                throw new Error('CDP returned 500 error and transaction signature could not be determined. The transaction may or may not have been submitted. Please check your wallet history.');
               }
               
-              console.log('[CDP Fallback] Using signature for on-chain verification:', signature);
+              console.log('[CDP Fallback] Using transaction signature for verification:', signature);
               
               // CHECK IF THIS TRANSACTION WAS ALREADY PROCESSED (DUPLICATE DETECTION)
               // This prevents duplicate messages to agent when user retries after CDP errors

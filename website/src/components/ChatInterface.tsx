@@ -1071,13 +1071,19 @@ export default function ChatInterface({
         
         // Trigger wallet payment directly (no modal!)
         // Toast will be shown in handlePayment
-        await handlePayment(
-          response.paymentRequired,
-          messageContent,
-          sessionId,
-          threadId,
-          selectedAgent
-        );
+        try {
+          await handlePayment(
+            response.paymentRequired,
+            messageContent,
+            sessionId,
+            threadId,
+            selectedAgent
+          );
+        } catch (paymentError: any) {
+          console.error('Payment error in sendUserMessage:', paymentError);
+          showToast(paymentError.message || 'Payment failed', 'error');
+          setLoading(false);
+        }
         return;
       }
 
@@ -1125,6 +1131,7 @@ export default function ChatInterface({
   ) => {
     if (!connected || !publicKey) {
       showToast('Please connect your Solana wallet to make payments.','error');
+      setLoading(false);
       return;
     }
 
@@ -1156,13 +1163,24 @@ export default function ChatInterface({
         const { createUSDCTransaction } = await import('@/lib/x402-payload-client');
         const { PublicKey } = await import('@solana/web3.js');
 
-        const signedTx = await createUSDCTransaction(
-          `payment-${Date.now()}`,
-          publicKey,
-          new PublicKey(paymentReq.recipient_address),
-          amount,
-          signTransaction
-        );
+        let signedTx;
+        try {
+          signedTx = await createUSDCTransaction(
+            `payment-${Date.now()}`,
+            publicKey,
+            new PublicKey(paymentReq.recipient_address),
+            amount,
+            signTransaction
+          );
+        } catch (signError: any) {
+          // Handle specific wallet extension errors
+          if (signError.message?.includes('Extension context invalidated') || 
+              signError.message?.includes('context invalidated')) {
+            throw new Error('Wallet extension needs to be refreshed. Please reload the page and try again.');
+          }
+          // Re-throw other errors to be handled by outer catch
+          throw signError;
+        }
 
         console.log('[Payment] Transaction signed by user');
         
@@ -1365,18 +1383,29 @@ export default function ChatInterface({
         lastUserMessageRef.current = null;
       }
       
-      // Remove loading message on error
+      // Remove ALL system/loading messages and optimistic payment messages on error
       if (loadingMessageIdRef.current) {
-        setMessages(prev => prev.filter(m => m.id !== loadingMessageIdRef.current));
+        setMessages(prev => prev.filter(m => 
+          m.id !== loadingMessageIdRef.current && 
+          m.senderId !== 'system' &&
+          !m.id.startsWith('optimistic-') ||
+          (m.id.startsWith('optimistic-') && !m.content.includes('Payment for premium service'))
+        ));
         loadingMessageIdRef.current = null;
       }
       
-      if (err.message?.includes('User rejected')) {
+      // CRITICAL: Always reset loading state to unblock the UI
+      setLoading(false);
+      
+      // Show user-friendly error message
+      if (err.message?.includes('User rejected') || err.message?.includes('rejected the request')) {
         showToast('Payment cancelled by user','error');
+      } else if (err.message?.includes('Extension context invalidated') || 
+                 err.message?.includes('context invalidated')) {
+        showToast('Wallet extension error. Please reload the page and try again.','error');
       } else {
         showToast(err.message ||'Payment failed. Please try again.','error');
       }
-      setLoading(false); // Only set loading false on error
     }
   };
 
