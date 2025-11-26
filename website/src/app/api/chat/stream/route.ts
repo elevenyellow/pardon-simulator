@@ -1,5 +1,7 @@
 import { NextRequest } from 'next/server';
 import { USER_SENDER_ID } from '@/lib/constants';
+import { prisma } from '@/lib/prisma';
+import { withRetry } from '@/lib/db-retry';
 
 const CORAL_SERVER_URL = process.env.CORAL_SERVER_URL || 'http://localhost:5555';
 
@@ -42,6 +44,27 @@ export async function GET(request: NextRequest) {
             if (messages.length > lastMessageCount) {
               const newMessages = messages.slice(lastMessageCount);
               console.log(`[SSE Poll] Detected ${newMessages.length} NEW messages, sending to client`);
+              
+              // Save agent messages to database
+              for (const msg of newMessages) {
+                // Only save agent messages (user messages already saved in send route)
+                if (msg.senderId !== USER_SENDER_ID) {
+                  try {
+                    await saveAgentMessageToDatabase({
+                      threadId,
+                      sessionId,
+                      senderId: msg.senderId,
+                      content: msg.content,
+                      mentions: msg.mentions || [],
+                      isIntermediary: msg.isIntermediary || false,
+                      timestamp: msg.timestamp
+                    });
+                  } catch (err) {
+                    console.error('[SSE Poll] Failed to save agent message to DB:', err);
+                    // Don't fail the stream if DB save fails
+                  }
+                }
+              }
               
               // Filter out premium service payment confirmation echoes from user
               // These are needed in the DB for agent-to-agent forwarding, but shouldn't show to user
@@ -138,5 +161,57 @@ export async function GET(request: NextRequest) {
       'X-Accel-Buffering': 'no',
     },
   });
+}
+
+async function saveAgentMessageToDatabase(params: {
+  threadId: string;
+  sessionId: string;
+  senderId: string;
+  content: string;
+  mentions: string[];
+  isIntermediary: boolean;
+  timestamp: number;
+}): Promise<void> {
+  await withRetry(async () => {
+    // Find the Thread record by coralThreadId
+    const thread = await prisma.thread.findFirst({
+      where: { coralThreadId: params.threadId }
+    });
+    
+    if (!thread) {
+      console.warn(`[SSE Poll] Thread ${params.threadId} not found in DB, skipping agent message save`);
+      return;
+    }
+    
+    // Check if message already exists (prevent duplicates on reconnects)
+    const existing = await prisma.message.findFirst({
+      where: {
+        threadId: thread.id,
+        senderId: params.senderId,
+        content: params.content,
+        createdAt: {
+          gte: new Date(Date.now() - 10000) // Within last 10 seconds
+        }
+      }
+    });
+    
+    if (existing) {
+      // Message already saved, skip
+      return;
+    }
+    
+    // Save agent message
+    await prisma.message.create({
+      data: {
+        threadId: thread.id,
+        senderId: params.senderId,
+        content: params.content,
+        mentions: params.mentions,
+        isIntermediary: params.isIntermediary
+      }
+    });
+    
+    console.log(`[SSE Poll] ✅ Saved agent message from ${params.senderId} to database`);
+  }, { maxRetries: 3, initialDelay: 500 });
 }
 
