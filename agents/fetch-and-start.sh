@@ -34,9 +34,9 @@ for file in "${FILES[@]}"; do
   fi
 done
 
-# Fetch shared premium services config
+# Fetch shared premium services config (MUST go in /app/ not agent dir)
 echo -n "  Fetching premium_services.json... "
-if aws s3 cp "s3://${BUCKET_NAME}/current/premium_services.json" "./premium_services.json" --region ${REGION} --quiet 2>/dev/null; then
+if aws s3 cp "s3://${BUCKET_NAME}/current/premium_services.json" "/app/premium_services.json" --region ${REGION} --quiet 2>/dev/null; then
   echo "✓"
 else
   echo "⚠ not found, skipping"
