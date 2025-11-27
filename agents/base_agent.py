@@ -550,6 +550,7 @@ class BaseAgent(ABC):
             handle_parsing_errors=True,
             max_iterations=self.executor_limits["max_iterations"],
             max_execution_time=self.executor_limits["max_execution_time"],
+            return_intermediate_steps=True,  # CRITICAL: Required for fallback logic to detect if coral_send_message was called
         )
         
         set_executor_invoke_timeout(agent_executor, self.executor_limits["invoke_timeout"])
