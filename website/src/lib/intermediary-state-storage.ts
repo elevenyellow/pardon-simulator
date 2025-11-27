@@ -1,92 +1,110 @@
-/**
- * Shared in-memory storage for intermediary state
- * 
- * Uses a singleton pattern to ensure all API routes access the same Map instance.
- * In production with multiple instances, this should be replaced with Redis.
- */
+import { prisma } from './prisma';
 
-interface IntermediaryState {
+export interface IntermediaryState {
   agent_id: string;
   thread_id: string;
   target_agent: string;
   purpose: string;
-  timestamp: number;
-  expires_at: number;
+  timestamp: number;      // Unix timestamp (for agent compatibility)
+  expires_at: number;     // Unix timestamp (for agent compatibility)
 }
 
-class IntermediaryStateStorage {
-  private static instance: IntermediaryStateStorage;
-  private states: Map<string, IntermediaryState>;
-  private cleanupInterval: NodeJS.Timeout | null = null;
-
-  private constructor() {
-    this.states = new Map();
-    this.startCleanup();
-  }
-
-  public static getInstance(): IntermediaryStateStorage {
-    if (!IntermediaryStateStorage.instance) {
-      IntermediaryStateStorage.instance = new IntermediaryStateStorage();
+export const intermediaryStateStorage = {
+  /**
+   * Store intermediary state in database
+   */
+  async set(agentId: string, threadId: string, state: IntermediaryState): Promise<void> {
+    try {
+      // Convert Unix timestamps to Date objects
+      const expiresAt = new Date(state.expires_at * 1000);
+      
+      await prisma.intermediaryState.upsert({
+        where: {
+          agentId_threadId: {
+            agentId,
+            threadId
+          }
+        },
+        update: {
+          targetAgent: state.target_agent,
+          purpose: state.purpose,
+          expiresAt
+        },
+        create: {
+          agentId,
+          threadId,
+          targetAgent: state.target_agent,
+          purpose: state.purpose,
+          expiresAt
+        }
+      });
+      
+      console.log(`[IntermediaryState] Stored: ${agentId} waiting for ${state.target_agent}`);
+    } catch (error) {
+      console.error('[IntermediaryState] Database error during set:', error);
+      throw error;
     }
-    return IntermediaryStateStorage.instance;
-  }
+  },
 
-  private startCleanup() {
-    // Cleanup expired states every 5 minutes
-    if (!this.cleanupInterval) {
-      this.cleanupInterval = setInterval(() => {
-        const now = Date.now() / 1000;
-        let cleaned = 0;
-        
-        for (const [key, state] of this.states.entries()) {
-          if (state.expires_at < now) {
-            this.states.delete(key);
-            cleaned++;
+  /**
+   * Retrieve intermediary state from database
+   */
+  async get(agentId: string, threadId: string): Promise<IntermediaryState | undefined> {
+    try {
+      const state = await prisma.intermediaryState.findUnique({
+        where: {
+          agentId_threadId: {
+            agentId,
+            threadId
           }
         }
-        
-        if (cleaned > 0) {
-          console.log(`[IntermediaryState] Cleaned up ${cleaned} expired state(s)`);
+      });
+
+      if (!state) {
+        return undefined;
+      }
+
+      // Check if expired
+      const now = new Date();
+      if (state.expiresAt < now) {
+        // Delete expired state
+        await this.delete(agentId, threadId);
+        return undefined;
+      }
+
+      // Convert to Unix timestamps for agent compatibility
+      return {
+        agent_id: state.agentId,
+        thread_id: state.threadId,
+        target_agent: state.targetAgent,
+        purpose: state.purpose,
+        timestamp: Math.floor(state.timestamp.getTime() / 1000),
+        expires_at: Math.floor(state.expiresAt.getTime() / 1000)
+      };
+    } catch (error) {
+      console.error('[IntermediaryState] Database error during get:', error);
+      return undefined;
+    }
+  },
+
+  /**
+   * Delete intermediary state from database
+   */
+  async delete(agentId: string, threadId: string): Promise<boolean> {
+    try {
+      await prisma.intermediaryState.delete({
+        where: {
+          agentId_threadId: {
+            agentId,
+            threadId
+          }
         }
-      }, 5 * 60 * 1000);
+      });
+      console.log(`[IntermediaryState] Deleted: ${agentId}:${threadId}`);
+      return true;
+    } catch (error) {
+      // Record might not exist - this is not an error
+      return false;
     }
   }
-
-  public set(agentId: string, threadId: string, state: IntermediaryState): void {
-    const key = `${agentId}:${threadId}`;
-    this.states.set(key, state);
-  }
-
-  public get(agentId: string, threadId: string): IntermediaryState | undefined {
-    const key = `${agentId}:${threadId}`;
-    const state = this.states.get(key);
-    
-    if (!state) {
-      return undefined;
-    }
-    
-    // Check if expired
-    const now = Date.now() / 1000;
-    if (state.expires_at < now) {
-      this.states.delete(key);
-      return undefined;
-    }
-    
-    return state;
-  }
-
-  public delete(agentId: string, threadId: string): boolean {
-    const key = `${agentId}:${threadId}`;
-    return this.states.delete(key);
-  }
-
-  public size(): number {
-    return this.states.size;
-  }
-}
-
-// Export singleton instance
-export const intermediaryStateStorage = IntermediaryStateStorage.getInstance();
-export type { IntermediaryState };
-
-
+};

@@ -234,3 +234,18 @@ model AdminAuditLog {
   @@index([action, timestamp])
 }
 
+model IntermediaryState {
+  id          String   @id @default(cuid())
+  agentId     String
+  threadId    String
+  targetAgent String
+  purpose     String
+  timestamp   DateTime @default(now())
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@unique([agentId, threadId])
+  @@index([expiresAt])
+  @@map("intermediary_states")
+}
+

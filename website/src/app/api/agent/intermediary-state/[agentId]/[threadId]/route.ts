@@ -26,7 +26,7 @@ export async function GET(
       );
     }
     
-    const state = intermediaryStateStorage.get(agentId, threadId);
+    const state = await intermediaryStateStorage.get(agentId, threadId);
     
     if (!state) {
       return NextResponse.json(
@@ -63,7 +63,7 @@ export async function DELETE(
       );
     }
     
-    const existed = intermediaryStateStorage.delete(agentId, threadId);
+    const existed = await intermediaryStateStorage.delete(agentId, threadId);
     
     console.log(`[IntermediaryState API] Deleted: ${agentId}:${threadId} (existed: ${existed})`);
     

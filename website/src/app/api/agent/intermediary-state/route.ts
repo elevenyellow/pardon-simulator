@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    intermediaryStateStorage.set(state.agent_id, state.thread_id, state);
+    await intermediaryStateStorage.set(state.agent_id, state.thread_id, state);
     
     console.log(`[IntermediaryState API] Stored: ${state.agent_id} waiting for ${state.target_agent}`);
     
