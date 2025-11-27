@@ -83,7 +83,46 @@ export async function POST(request: Request) {
             const activeSessions: string[] = await sessionsResponse.json();
             console.log(`[Session API] Active sessions (attempt ${attempt}/${maxRetries}):`, activeSessions);
 
-            // Filter to only pool sessions (pool-0, pool-1, etc.)
+            // NEW: Check for single-session architecture first (production-main)
+            if (activeSessions.includes('production-main')) {
+              console.log('[Session API] ✓ Detected single-session architecture (production-main)');
+              
+              // Verify agents are connected
+              try {
+                const agentsResponse = await fetch(`${CORAL_SERVER_URL}/api/v1/sessions/production-main/agents`, {
+                  method: 'GET',
+                  headers: { 'Content-Type': 'application/json' },
+                  signal: AbortSignal.timeout(3000),
+                });
+                
+                if (agentsResponse.ok) {
+                  const agentsData = await agentsResponse.json();
+                  const agentCount = agentsData.agentCount || agentsData.agents?.length || 0;
+                  const agentList = agentsData.agents || [];
+                  
+                  console.log(`[Session API] production-main has ${agentCount} agents: ${agentList.join(', ')}`);
+                  
+                  if (agentCount >= 7) {
+                    console.log('[Session API] ✓ All agents ready in production-main session');
+                    return NextResponse.json({ 
+                      sessionId: 'production-main',
+                      architecture: 'single-session',
+                      poolingEnabled: false
+                    });
+                  } else {
+                    console.log(`[Session API] Waiting for all agents (${agentCount}/7)...`);
+                    if (attempt < maxRetries) {
+                      await new Promise(resolve => setTimeout(resolve, retryDelay));
+                      continue;
+                    }
+                  }
+                }
+              } catch (error: any) {
+                console.error('[Session API] Could not verify agents in production-main:', error.message);
+              }
+            }
+
+            // LEGACY: Filter to only pool sessions (pool-0, pool-1, etc.) for backwards compatibility
             const availablePools = activeSessions.filter(s => expectedPools.includes(s));
             
           if (availablePools.length > 0) {
@@ -168,9 +207,9 @@ export async function POST(request: Request) {
             return response;
           }
 
-            // No pool sessions found yet
+            // No sessions found yet (neither production-main nor legacy pools)
             if (attempt < maxRetries) {
-              console.log(`[Session API] No pool sessions found yet (expected: ${expectedPools.join(', ')}). Agents may still be connecting. Retrying in ${retryDelay}ms...`);
+              console.log(`[Session API] No sessions found yet (expected: production-main or ${expectedPools.join(', ')}). Agents may still be connecting. Retrying in ${retryDelay}ms...`);
               await new Promise(resolve => setTimeout(resolve, retryDelay));
             }
           } catch (fetchError: any) {
@@ -183,14 +222,14 @@ export async function POST(request: Request) {
           }
         }
 
-        // After all retries, no pool sessions exist
-        console.error(`[Session API] ❌ No pool sessions found after ${maxRetries} attempts (${maxRetries * retryDelay / 1000} seconds)`);
-        console.error(`[Session API] Expected pools: ${expectedPools.join(', ')}`);
+        // After all retries, no sessions exist
+        console.error(`[Session API] ❌ No sessions found after ${maxRetries} attempts (${maxRetries * retryDelay / 1000} seconds)`);
+        console.error(`[Session API] Expected: production-main (single-session) OR ${expectedPools.join(', ')} (legacy multi-pool)`);
         console.error(`[Session API] This indicates agents are not connecting properly in production`);
         console.error(`[Session API] Diagnostic steps:`);
         console.error(`[Session API]   1. Check ECS tasks are running: aws ecs list-tasks --cluster pardon-production-cluster`);
         console.error(`[Session API]   2. Check agent logs: aws logs tail /ecs/pardon-production --follow --filter-pattern "agent-cz"`);
-        console.error(`[Session API]   3. Verify CORAL_SESSIONS environment variable is set in task definition`);
+        console.error(`[Session API]   3. Verify CORAL_SSE_URL ends with session ID in task definition`);
         console.error(`[Session API]   4. Run diagnostics: ./scripts/diagnose-production.sh`);
         
         return NextResponse.json(

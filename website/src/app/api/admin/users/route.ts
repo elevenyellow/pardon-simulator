@@ -3,6 +3,18 @@ import { requireAdminAuth } from '@/lib/admin/middleware';
 import { prisma } from '@/lib/prisma';
 import { validatePagination, validateDateRange, validateSearchQuery, validateSort } from '@/lib/admin/validation';
 
+// Agent wallet addresses to filter out from user list
+// These are system agents, not real users
+const AGENT_WALLETS = [
+  process.env.WALLET_DONALD_TRUMP,
+  process.env.WALLET_MELANIA_TRUMP,
+  process.env.WALLET_ERIC_TRUMP,
+  process.env.WALLET_DONJR_TRUMP,
+  process.env.WALLET_BARRON_TRUMP,
+  process.env.WALLET_CZ,
+  process.env.WALLET_WHITE_HOUSE,
+].filter(Boolean); // Remove any undefined values
+
 export async function GET(request: NextRequest) {
   const { admin, error } = await requireAdminAuth(request);
   if (error) return error;
@@ -48,7 +60,12 @@ export async function GET(request: NextRequest) {
 
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: any = {
+      // Filter out agent wallets - they're not real users
+      walletAddress: {
+        notIn: AGENT_WALLETS
+      }
+    };
     
     if (search) {
       where.OR = [
