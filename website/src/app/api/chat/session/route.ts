@@ -17,6 +17,14 @@ const CORAL_SERVER_URL = process.env.CORAL_SERVER_URL ||'http://localhost:5555';
  * Request body (optional):
  * - userWallet: string - For consistent pool assignment based on wallet hash
  */
+/**
+ * Session creation with Coral Server affinity tracking
+ * 
+ * IMPORTANT: With multiple Coral Server instances behind ALB:
+ * - ALB sticky sessions (24h) keep user pinned to same Coral instance
+ * - We track which Coral instance created the session for debugging
+ * - If sticky session expires, restoration logic handles migration
+ */
 export async function POST(request: Request) {
   try {
     console.log('[Session API] Creating Coral session...');

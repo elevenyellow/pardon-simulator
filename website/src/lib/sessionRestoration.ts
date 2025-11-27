@@ -134,7 +134,25 @@ async function restoreThreadInternal(
   try {
     console.log(`[Restoration] Restoring thread: ${coralThreadId} in session ${coralSessionId}`);
     
-    // Create thread via Coral Server debug API
+    // CRITICAL FIX: Check if thread already exists in Coral before recreating it
+    // This prevents wiping out existing thread messages
+    try {
+      const checkResponse = await fetch(
+        `${CORAL_SERVER_URL}/api/v1/debug/thread/messages/app/priv/${coralSessionId}/${coralThreadId}`,
+        { method: 'GET', headers: { 'Content-Type': 'application/json' } }
+      );
+      
+      if (checkResponse.ok) {
+        const existingMessages = await checkResponse.json();
+        console.log(`[Restoration] Thread already exists in Coral with ${existingMessages?.messages?.length || 0} messages - skipping recreation`);
+        return true; // Thread exists, no need to recreate
+      }
+    } catch (checkError) {
+      console.log('[Restoration] Thread check failed, proceeding with creation:', checkError);
+    }
+    
+    // Thread doesn't exist - create it via Coral Server debug API
+    console.log('[Restoration] Thread not found in Coral, creating new thread...');
     const response = await fetch(
       `${CORAL_SERVER_URL}/api/v1/debug/thread/app/priv/${coralSessionId}/sbf`,
       {

@@ -57,7 +57,7 @@ Resources:
         - Key: stickiness.type
           Value: 'lb_cookie'
         - Key: stickiness.lb_cookie.duration_seconds
-          Value: '3600'
+          Value: '86400'  # 24 hours - ensures conversation stability
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName}-coral-tg
