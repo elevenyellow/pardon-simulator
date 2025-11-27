@@ -1180,10 +1180,12 @@ def create_contact_agent_tool(coral_send_message_tool, coral_add_participant_too
         sys.path.insert(0, agents_dir)
     from utils.intermediary_state import set_intermediary_state
     
-    # Global references to coral tools (set once when tool is created)
-    global _coral_send_message_tool, _coral_add_participant_tool
-    _coral_send_message_tool = coral_send_message_tool
-    _coral_add_participant_tool = coral_add_participant_tool
+    # CRITICAL FIX: Use closure variables instead of globals to ensure pool-specific tools
+    # In multi-pool mode, each pool creates its own contact_agent tool with pool-specific tools.
+    # Previously, global variables would get overwritten by the last pool to initialize,
+    # causing "Thread not found" errors when trying to use tools from the wrong pool.
+    _send_message_tool = coral_send_message_tool
+    _add_participant_tool = coral_add_participant_tool
 
     @tool
     async def contact_agent(agent_to_contact: str, message: str, current_thread_id: str) -> str:
@@ -1207,7 +1209,7 @@ def create_contact_agent_tool(coral_send_message_tool, coral_add_participant_too
 
         # STEP 1: Add the agent to the thread first!
         print(f"➕ Adding {agent_to_contact} to thread {current_thread_id}...")
-        add_result = await _coral_add_participant_tool.ainvoke({
+        add_result = await _add_participant_tool.ainvoke({
             "threadId": current_thread_id,
             "participantId": agent_to_contact
         })
@@ -1215,7 +1217,7 @@ def create_contact_agent_tool(coral_send_message_tool, coral_add_participant_too
 
         # STEP 2: Send message to target agent
         print(f"📤 Sending message to {agent_to_contact}...")
-        await _coral_send_message_tool.ainvoke({
+        await _send_message_tool.ainvoke({
             "threadId": current_thread_id,
             "content": message,
             "mentions": [agent_to_contact]
@@ -1232,7 +1234,7 @@ def create_contact_agent_tool(coral_send_message_tool, coral_add_participant_too
         confirmation_message = f"I've reached out to {agent_display_name}. Let's see what they say."
         print(f"📨 Sending confirmation to user (sbf)...")
         
-        await _coral_send_message_tool.ainvoke({
+        await _send_message_tool.ainvoke({
             "threadId": current_thread_id,
             "content": confirmation_message,
             "mentions": ["sbf"]
