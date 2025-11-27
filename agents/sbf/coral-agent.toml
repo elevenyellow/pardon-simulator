@@ -1,15 +1,16 @@
 [agent]
 name = "sbf"
 version = "1.0.0"
-description = "Sam Bankman-Fried (SBF) - Former crypto mogul, now broke after FTX collapse. Desperate to rebuild fortune, willing to take risks and make questionable deals. Strategic but financially constrained."
+description = "Sam Bankman-Fried (SBF) - User identity proxy for Coral Protocol. Player uses browser wallet for all transactions. This agent does not process messages or take autonomous actions."
 
 [options.MODEL_API_KEY]
 type = "string"
-description = "API key for the LLM provider"
+description = "API key for the LLM provider (not used - SBF is a proxy only)"
+default = ""
 
 [options.SOLANA_PRIVATE_KEY]
 type = "string"
-description = "Base58 encoded Solana private key for SBF's wallet (optional - player uses browser wallet)"
+description = "NOT REQUIRED - Player uses browser wallet for all transactions"
 default = ""
 
 [options.MODEL_NAME]

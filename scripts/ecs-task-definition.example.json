@@ -67,18 +67,12 @@
       "essential": false,
       "command": ["/app/fetch-and-start.sh", "sbf"],
       "workingDirectory": "/app/sbf",
+      "comment": "SBF is a user proxy - no wallet keys needed, player uses browser wallet",
       "environment": [
         {"name": "AGENT_NAME", "value": "sbf"},
         {"name": "CORAL_AGENT_ID", "value": "sbf"},
         {"name": "CORAL_SSE_URL", "value": "http://localhost:5555/sse/v1/devmode/app/priv/production-main"},
-        {"name": "MODEL_API_KEY", "value": "YOUR_OPENAI_API_KEY_HERE"},
-        {"name": "MODEL_NAME", "value": "gpt-5.1"},
-        {"name": "MODEL_PROVIDER", "value": "openai"},
-        {"name": "MODEL_TEMPERATURE", "value": "0.7"},
-        {"name": "MODEL_MAX_TOKENS", "value": "8000"},
-        {"name": "TIMEOUT_MS", "value": "300"},
         {"name": "SOLANA_RPC_URL", "value": "https://mainnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY"},
-        {"name": "SOLANA_PRIVATE_KEY", "value": "YOUR_SBF_SOLANA_PRIVATE_KEY_BASE58"},
         {"name": "AWS_REGION", "value": "us-east-1"}
       ],
       "dependsOn": [

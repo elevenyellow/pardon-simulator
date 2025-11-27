@@ -25,6 +25,12 @@ class SBFAgent(BaseAgent):
     - Coral requires all thread participants to be registered agents
     - Users send messages with senderId="sbf" 
     - Without this agent, Coral would reject user messages
+    
+    Implementation:
+    - Does NOT require SOLANA_PRIVATE_KEY (player uses browser wallet)
+    - Does NOT require SOLANA_PUBLIC_ADDRESS (no wallet needed)
+    - Overrides wallet/executor initialization to skip them
+    - Base agent's safety checks prevent any message processing
     """
     
     def __init__(self):
@@ -35,11 +41,30 @@ class SBFAgent(BaseAgent):
         )
     
     def get_agent_specific_tools(self):
-        """
-        SBF has no tools - it doesn't take actions.
-        Returns empty list to prevent tool usage.
-        """
+        """SBF has no tools - returns empty list."""
         return []
+    
+    async def initialize_wallet(self) -> float:
+        """
+        Skip wallet initialization - player uses browser wallet.
+        
+        Returns:
+            0.0 (no wallet balance)
+        """
+        print(f"[SBF-PROXY] Skipping wallet initialization - user controls wallet via browser", flush=True)
+        self.wallet = None
+        self.my_wallet_address = ""
+        return 0.0
+    
+    async def create_agent_executor(self, coral_tools):
+        """
+        Skip executor creation - SBF doesn't process messages.
+        
+        Returns:
+            Tuple of (None, "") - no executor, no wallet address
+        """
+        print(f"[SBF-PROXY] Skipping executor creation - no message processing", flush=True)
+        return None, ""
     
     async def process_message(self, mentions_data, dynamic_content):
         """

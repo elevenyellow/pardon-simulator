@@ -197,6 +197,8 @@ Resources:
               Value: !Ref S3BucketName
             - Name: AGENT_NAME
               Value: cz
+            - Name: SOLANA_PUBLIC_ADDRESS
+              Value: BSX3YtWVhYGP9DFq8AK4t8TCzNPZdvYisYc6enb9DkA9
           Secrets:
             - Name: MODEL_API_KEY
               ValueFrom: !ImportValue pardon-production-OpenAIAPIKeySecretArn
@@ -229,6 +231,7 @@ Resources:
             - /app/fetch-and-start.sh
             - sbf
           WorkingDirectory: /app/sbf
+          # SBF is user proxy only - no wallet keys needed, player uses browser wallet
           Environment:
             - Name: CORAL_SESSIONS
               Value: pool-0,pool-1,pool-2,pool-3,pool-4
@@ -239,12 +242,8 @@ Resources:
             - Name: AGENT_NAME
               Value: sbf
           Secrets:
-            - Name: MODEL_API_KEY
-              ValueFrom: !ImportValue pardon-production-OpenAIAPIKeySecretArn
             - Name: HELIUS_API_KEY
               ValueFrom: !ImportValue pardon-production-HeliusAPIKeySecretArn
-            - Name: SOLANA_PRIVATE_KEY
-              ValueFrom: !ImportValue pardon-production-SolanaPrivateKeySBFArn
             - Name: AGENT_API_KEY
               ValueFrom: !ImportValue pardon-production-AgentAPIKeySecretArn
             - Name: BACKEND_URL
@@ -278,7 +277,9 @@ Resources:
             - Name: S3_BUCKET_NAME
               Value: !Ref S3BucketName
             - Name: AGENT_NAME
-              Value: donald
+              Value: trump-donald
+            - Name: SOLANA_PUBLIC_ADDRESS
+              Value: 8JpMyaZRzkezYr1nzkTqJWhmnygEmAMaAh92UHnii8Z
           Secrets:
             - Name: MODEL_API_KEY
               ValueFrom: !ImportValue pardon-production-OpenAIAPIKeySecretArn
@@ -319,7 +320,9 @@ Resources:
             - Name: S3_BUCKET_NAME
               Value: !Ref S3BucketName
             - Name: AGENT_NAME
-              Value: melania
+              Value: trump-melania
+            - Name: SOLANA_PUBLIC_ADDRESS
+              Value: 4Vf8jhKxKePeHEuGQPzAZv4uEVSLZ6sRxAm27EVHw1hy
           Secrets:
             - Name: MODEL_API_KEY
               ValueFrom: !ImportValue pardon-production-OpenAIAPIKeySecretArn
@@ -360,7 +363,9 @@ Resources:
             - Name: S3_BUCKET_NAME
               Value: !Ref S3BucketName
             - Name: AGENT_NAME
-              Value: eric
+              Value: trump-eric
+            - Name: SOLANA_PUBLIC_ADDRESS
+              Value: Dqii9r1PYaHm8PQvGSt9d37HmrCQPhVAWBe4dGCcq2h5
           Secrets:
             - Name: MODEL_API_KEY
               ValueFrom: !ImportValue pardon-production-OpenAIAPIKeySecretArn
@@ -401,7 +406,9 @@ Resources:
             - Name: S3_BUCKET_NAME
               Value: !Ref S3BucketName
             - Name: AGENT_NAME
-              Value: donjr
+              Value: trump-donjr
+            - Name: SOLANA_PUBLIC_ADDRESS
+              Value: 3KxtMPLqgd64QsTwrGX1Hafn4qFYSAqK8sSLYTjDioo6
           Secrets:
             - Name: MODEL_API_KEY
               ValueFrom: !ImportValue pardon-production-OpenAIAPIKeySecretArn
@@ -442,7 +449,9 @@ Resources:
             - Name: S3_BUCKET_NAME
               Value: !Ref S3BucketName
             - Name: AGENT_NAME
-              Value: barron
+              Value: trump-barron
+            - Name: SOLANA_PUBLIC_ADDRESS
+              Value: 5mEGcmBKfVH6ei3gb4FhE8tkC6D9BW8ZkaFteYSeQpnE
           Secrets:
             - Name: MODEL_API_KEY
               ValueFrom: !ImportValue pardon-production-OpenAIAPIKeySecretArn

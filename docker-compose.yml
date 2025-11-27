@@ -76,7 +76,8 @@ services:
       <<: *agent-env-common
       AGENT_NAME: sbf
       CORAL_AGENT_ID: sbf
-      SOLANA_PRIVATE_KEY: ${SOLANA_PRIVATE_KEY_SBF}
+      # SBF agent doesn't need wallet keys - player uses browser wallet
+      # SOLANA_PRIVATE_KEY not required
 
   agent-trump-donald:
     <<: *agent-common

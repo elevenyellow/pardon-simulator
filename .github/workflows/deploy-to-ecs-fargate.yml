@@ -97,8 +97,7 @@ jobs:
           HELIUS_API_KEY: ${{ secrets.HELIUS_API_KEY }}
           SOLANA_PRIVATE_KEY_CZ: ${{ secrets.SOLANA_PRIVATE_KEY_CZ }}
           SOLANA_PUBLIC_ADDRESS_CZ: ${{ secrets.SOLANA_PUBLIC_ADDRESS_CZ }}
-          SOLANA_PRIVATE_KEY_SBF: ${{ secrets.SOLANA_PRIVATE_KEY_SBF }}
-          SOLANA_PUBLIC_ADDRESS_SBF: ${{ secrets.SOLANA_PUBLIC_ADDRESS_SBF }}
+          # SBF wallet keys removed - SBF is user proxy only, player uses browser wallet
           SOLANA_PRIVATE_KEY_TRUMP_DONALD: ${{ secrets.SOLANA_PRIVATE_KEY_TRUMP_DONALD }}
           SOLANA_PUBLIC_ADDRESS_TRUMP_DONALD: ${{ secrets.SOLANA_PUBLIC_ADDRESS_TRUMP_DONALD }}
           SOLANA_PRIVATE_KEY_TRUMP_MELANIA: ${{ secrets.SOLANA_PRIVATE_KEY_TRUMP_MELANIA }}
@@ -121,8 +120,8 @@ jobs:
             --output json)
           
           # Use public addresses from secrets (no derivation needed)
+          # Note: SBF doesn't need wallet - it's a user proxy
           ADDR_CZ="$SOLANA_PUBLIC_ADDRESS_CZ"
-          ADDR_SBF="$SOLANA_PUBLIC_ADDRESS_SBF"
           ADDR_DONALD="$SOLANA_PUBLIC_ADDRESS_TRUMP_DONALD"
           ADDR_MELANIA="$SOLANA_PUBLIC_ADDRESS_TRUMP_MELANIA"
           ADDR_ERIC="$SOLANA_PUBLIC_ADDRESS_TRUMP_ERIC"
@@ -142,8 +141,6 @@ jobs:
             --arg RPC_URL "$SOLANA_RPC_URL" \
             --arg CZ_PRIV "$SOLANA_PRIVATE_KEY_CZ" \
             --arg CZ_PUB "$ADDR_CZ" \
-            --arg SBF_PRIV "$SOLANA_PRIVATE_KEY_SBF" \
-            --arg SBF_PUB "$ADDR_SBF" \
             --arg DONALD_PRIV "$SOLANA_PRIVATE_KEY_TRUMP_DONALD" \
             --arg DONALD_PUB "$ADDR_DONALD" \
             --arg MELANIA_PRIV "$SOLANA_PRIVATE_KEY_TRUMP_MELANIA" \
@@ -178,7 +175,6 @@ jobs:
                   {name: "CORAL_SESSIONS", value: "pool-0,pool-1,pool-2,pool-3,pool-4"},
                   {name: "WALLET_WHITE_HOUSE", value: $WHITE_HOUSE},
                   {name: "WALLET_CZ", value: $CZ_PUB},
-                  {name: "WALLET_SBF", value: $SBF_PUB},
                   {name: "WALLET_DONALD_TRUMP", value: $DONALD_PUB},
                   {name: "WALLET_MELANIA_TRUMP", value: $MELANIA_PUB},
                   {name: "WALLET_ERIC_TRUMP", value: $ERIC_PUB},
@@ -194,19 +190,11 @@ jobs:
                 .environment = [
                   {name: "AGENT_NAME", value: "sbf"},
                   {name: "CORAL_AGENT_ID", value: "sbf"},
-                  {name: "MODEL_API_KEY", value: $MODEL_KEY},
-                  {name: "MODEL_NAME", value: "gpt-4o"},
-                  {name: "MODEL_PROVIDER", value: "openai"},
-                  {name: "MODEL_TEMPERATURE", value: "0.7"},
-                  {name: "MODEL_MAX_TOKENS", value: "8000"},
                   {name: "SOLANA_RPC_URL", value: $RPC_URL},
-                  {name: "SOLANA_PRIVATE_KEY", value: $SBF_PRIV},
-                  {name: "SOLANA_PUBLIC_ADDRESS", value: $SBF_PUB},
                   {name: "CORAL_SSE_URL", value: "http://localhost:5555/sse/v1/devmode/app/priv"},
                   {name: "CORAL_SESSIONS", value: "pool-0,pool-1,pool-2,pool-3,pool-4"},
                   {name: "WALLET_WHITE_HOUSE", value: $WHITE_HOUSE},
                   {name: "WALLET_CZ", value: $CZ_PUB},
-                  {name: "WALLET_SBF", value: $SBF_PUB},
                   {name: "WALLET_DONALD_TRUMP", value: $DONALD_PUB},
                   {name: "WALLET_MELANIA_TRUMP", value: $MELANIA_PUB},
                   {name: "WALLET_ERIC_TRUMP", value: $ERIC_PUB},
@@ -234,7 +222,6 @@ jobs:
                   {name: "CORAL_SESSIONS", value: "pool-0,pool-1,pool-2,pool-3,pool-4"},
                   {name: "WALLET_WHITE_HOUSE", value: $WHITE_HOUSE},
                   {name: "WALLET_CZ", value: $CZ_PUB},
-                  {name: "WALLET_SBF", value: $SBF_PUB},
                   {name: "WALLET_DONALD_TRUMP", value: $DONALD_PUB},
                   {name: "WALLET_MELANIA_TRUMP", value: $MELANIA_PUB},
                   {name: "WALLET_ERIC_TRUMP", value: $ERIC_PUB},
@@ -262,7 +249,6 @@ jobs:
                   {name: "CORAL_SESSIONS", value: "pool-0,pool-1,pool-2,pool-3,pool-4"},
                   {name: "WALLET_WHITE_HOUSE", value: $WHITE_HOUSE},
                   {name: "WALLET_CZ", value: $CZ_PUB},
-                  {name: "WALLET_SBF", value: $SBF_PUB},
                   {name: "WALLET_DONALD_TRUMP", value: $DONALD_PUB},
                   {name: "WALLET_MELANIA_TRUMP", value: $MELANIA_PUB},
                   {name: "WALLET_ERIC_TRUMP", value: $ERIC_PUB},
@@ -290,7 +276,6 @@ jobs:
                   {name: "CORAL_SESSIONS", value: "pool-0,pool-1,pool-2,pool-3,pool-4"},
                   {name: "WALLET_WHITE_HOUSE", value: $WHITE_HOUSE},
                   {name: "WALLET_CZ", value: $CZ_PUB},
-                  {name: "WALLET_SBF", value: $SBF_PUB},
                   {name: "WALLET_DONALD_TRUMP", value: $DONALD_PUB},
                   {name: "WALLET_MELANIA_TRUMP", value: $MELANIA_PUB},
                   {name: "WALLET_ERIC_TRUMP", value: $ERIC_PUB},
@@ -318,7 +303,6 @@ jobs:
                   {name: "CORAL_SESSIONS", value: "pool-0,pool-1,pool-2,pool-3,pool-4"},
                   {name: "WALLET_WHITE_HOUSE", value: $WHITE_HOUSE},
                   {name: "WALLET_CZ", value: $CZ_PUB},
-                  {name: "WALLET_SBF", value: $SBF_PUB},
                   {name: "WALLET_DONALD_TRUMP", value: $DONALD_PUB},
                   {name: "WALLET_MELANIA_TRUMP", value: $MELANIA_PUB},
                   {name: "WALLET_ERIC_TRUMP", value: $ERIC_PUB},
@@ -346,7 +330,6 @@ jobs:
                   {name: "CORAL_SESSIONS", value: "pool-0,pool-1,pool-2,pool-3,pool-4"},
                   {name: "WALLET_WHITE_HOUSE", value: $WHITE_HOUSE},
                   {name: "WALLET_CZ", value: $CZ_PUB},
-                  {name: "WALLET_SBF", value: $SBF_PUB},
                   {name: "WALLET_DONALD_TRUMP", value: $DONALD_PUB},
                   {name: "WALLET_MELANIA_TRUMP", value: $MELANIA_PUB},
                   {name: "WALLET_ERIC_TRUMP", value: $ERIC_PUB},
