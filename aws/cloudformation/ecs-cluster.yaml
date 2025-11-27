@@ -90,6 +90,9 @@ Resources:
                   - !ImportValue pardon-production-SolanaPrivateKeyDonjrArn
                   - !ImportValue pardon-production-SolanaPrivateKeyBarronArn
                   - !ImportValue pardon-production-DatabaseURLSecretArn
+                  - !ImportValue pardon-production-AgentAPIKeySecretArn
+                  - !ImportValue pardon-production-BackendURLSecretArn
+                  - arn:aws:secretsmanager:us-east-1:640080112933:secret:pardon-production/solana-rpc-url-0wfbgQ
         - PolicyName: S3ConfigAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -201,6 +204,12 @@ Resources:
               ValueFrom: !ImportValue pardon-production-HeliusAPIKeySecretArn
             - Name: SOLANA_PRIVATE_KEY
               ValueFrom: !ImportValue pardon-production-SolanaPrivateKeyCZArn
+            - Name: AGENT_API_KEY
+              ValueFrom: !ImportValue pardon-production-AgentAPIKeySecretArn
+            - Name: BACKEND_URL
+              ValueFrom: !ImportValue pardon-production-BackendURLSecretArn
+            - Name: SOLANA_RPC_URL
+              ValueFrom: arn:aws:secretsmanager:us-east-1:640080112933:secret:pardon-production/solana-rpc-url-0wfbgQ
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -236,6 +245,12 @@ Resources:
               ValueFrom: !ImportValue pardon-production-HeliusAPIKeySecretArn
             - Name: SOLANA_PRIVATE_KEY
               ValueFrom: !ImportValue pardon-production-SolanaPrivateKeySBFArn
+            - Name: AGENT_API_KEY
+              ValueFrom: !ImportValue pardon-production-AgentAPIKeySecretArn
+            - Name: BACKEND_URL
+              ValueFrom: !ImportValue pardon-production-BackendURLSecretArn
+            - Name: SOLANA_RPC_URL
+              ValueFrom: arn:aws:secretsmanager:us-east-1:640080112933:secret:pardon-production/solana-rpc-url-0wfbgQ
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -253,8 +268,8 @@ Resources:
           MemoryReservation: 512
           Command:
             - /app/fetch-and-start.sh
-            - donald
-          WorkingDirectory: /app/donald
+            - trump-donald
+          WorkingDirectory: /app/trump-donald
           Environment:
             - Name: CORAL_SESSIONS
               Value: pool-0,pool-1,pool-2,pool-3,pool-4
@@ -271,6 +286,12 @@ Resources:
               ValueFrom: !ImportValue pardon-production-HeliusAPIKeySecretArn
             - Name: SOLANA_PRIVATE_KEY
               ValueFrom: !ImportValue pardon-production-SolanaPrivateKeyDonaldArn
+            - Name: AGENT_API_KEY
+              ValueFrom: !ImportValue pardon-production-AgentAPIKeySecretArn
+            - Name: BACKEND_URL
+              ValueFrom: !ImportValue pardon-production-BackendURLSecretArn
+            - Name: SOLANA_RPC_URL
+              ValueFrom: arn:aws:secretsmanager:us-east-1:640080112933:secret:pardon-production/solana-rpc-url-0wfbgQ
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -288,8 +309,8 @@ Resources:
           MemoryReservation: 512
           Command:
             - /app/fetch-and-start.sh
-            - melania
-          WorkingDirectory: /app/melania
+            - trump-melania
+          WorkingDirectory: /app/trump-melania
           Environment:
             - Name: CORAL_SESSIONS
               Value: pool-0,pool-1,pool-2,pool-3,pool-4
@@ -306,6 +327,12 @@ Resources:
               ValueFrom: !ImportValue pardon-production-HeliusAPIKeySecretArn
             - Name: SOLANA_PRIVATE_KEY
               ValueFrom: !ImportValue pardon-production-SolanaPrivateKeyMelaniaArn
+            - Name: AGENT_API_KEY
+              ValueFrom: !ImportValue pardon-production-AgentAPIKeySecretArn
+            - Name: BACKEND_URL
+              ValueFrom: !ImportValue pardon-production-BackendURLSecretArn
+            - Name: SOLANA_RPC_URL
+              ValueFrom: arn:aws:secretsmanager:us-east-1:640080112933:secret:pardon-production/solana-rpc-url-0wfbgQ
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -323,8 +350,8 @@ Resources:
           MemoryReservation: 512
           Command:
             - /app/fetch-and-start.sh
-            - eric
-          WorkingDirectory: /app/eric
+            - trump-eric
+          WorkingDirectory: /app/trump-eric
           Environment:
             - Name: CORAL_SESSIONS
               Value: pool-0,pool-1,pool-2,pool-3,pool-4
@@ -341,6 +368,12 @@ Resources:
               ValueFrom: !ImportValue pardon-production-HeliusAPIKeySecretArn
             - Name: SOLANA_PRIVATE_KEY
               ValueFrom: !ImportValue pardon-production-SolanaPrivateKeyEricArn
+            - Name: AGENT_API_KEY
+              ValueFrom: !ImportValue pardon-production-AgentAPIKeySecretArn
+            - Name: BACKEND_URL
+              ValueFrom: !ImportValue pardon-production-BackendURLSecretArn
+            - Name: SOLANA_RPC_URL
+              ValueFrom: arn:aws:secretsmanager:us-east-1:640080112933:secret:pardon-production/solana-rpc-url-0wfbgQ
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -358,8 +391,8 @@ Resources:
           MemoryReservation: 512
           Command:
             - /app/fetch-and-start.sh
-            - donjr
-          WorkingDirectory: /app/donjr
+            - trump-donjr
+          WorkingDirectory: /app/trump-donjr
           Environment:
             - Name: CORAL_SESSIONS
               Value: pool-0,pool-1,pool-2,pool-3,pool-4
@@ -376,6 +409,12 @@ Resources:
               ValueFrom: !ImportValue pardon-production-HeliusAPIKeySecretArn
             - Name: SOLANA_PRIVATE_KEY
               ValueFrom: !ImportValue pardon-production-SolanaPrivateKeyDonjrArn
+            - Name: AGENT_API_KEY
+              ValueFrom: !ImportValue pardon-production-AgentAPIKeySecretArn
+            - Name: BACKEND_URL
+              ValueFrom: !ImportValue pardon-production-BackendURLSecretArn
+            - Name: SOLANA_RPC_URL
+              ValueFrom: arn:aws:secretsmanager:us-east-1:640080112933:secret:pardon-production/solana-rpc-url-0wfbgQ
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -393,8 +432,8 @@ Resources:
           MemoryReservation: 512
           Command:
             - /app/fetch-and-start.sh
-            - barron
-          WorkingDirectory: /app/barron
+            - trump-barron
+          WorkingDirectory: /app/trump-barron
           Environment:
             - Name: CORAL_SESSIONS
               Value: pool-0,pool-1,pool-2,pool-3,pool-4
@@ -411,6 +450,12 @@ Resources:
               ValueFrom: !ImportValue pardon-production-HeliusAPIKeySecretArn
             - Name: SOLANA_PRIVATE_KEY
               ValueFrom: !ImportValue pardon-production-SolanaPrivateKeyBarronArn
+            - Name: AGENT_API_KEY
+              ValueFrom: !ImportValue pardon-production-AgentAPIKeySecretArn
+            - Name: BACKEND_URL
+              ValueFrom: !ImportValue pardon-production-BackendURLSecretArn
+            - Name: SOLANA_RPC_URL
+              ValueFrom: arn:aws:secretsmanager:us-east-1:640080112933:secret:pardon-production/solana-rpc-url-0wfbgQ
           LogConfiguration:
             LogDriver: awslogs
             Options:

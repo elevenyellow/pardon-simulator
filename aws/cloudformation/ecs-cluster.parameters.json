@@ -2,6 +2,10 @@
   {
     "ParameterKey": "EnvironmentName",
     "ParameterValue": "pardon-production"
+  },
+  {
+    "ParameterKey": "S3BucketName",
+    "ParameterValue": "pardon-simulator-configs"
   }
 ]
 
