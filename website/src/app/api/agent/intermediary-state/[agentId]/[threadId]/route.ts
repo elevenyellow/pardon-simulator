@@ -14,10 +14,10 @@ import { intermediaryStateStorage } from '@/lib/intermediary-state-storage';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { agentId: string; threadId: string } }
+  { params }: { params: Promise<{ agentId: string; threadId: string }> }
 ) {
   try {
-    const { agentId, threadId } = params;
+    const { agentId, threadId } = await params;
     
     if (!agentId || !threadId) {
       return NextResponse.json(
@@ -51,10 +51,10 @@ export async function GET(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { agentId: string; threadId: string } }
+  { params }: { params: Promise<{ agentId: string; threadId: string }> }
 ) {
   try {
-    const { agentId, threadId } = params;
+    const { agentId, threadId } = await params;
     
     if (!agentId || !threadId) {
       return NextResponse.json(
