@@ -1540,7 +1540,7 @@ export default function ChatInterface({
             id={toast.id}
             message={toast.message}
             type={toast.type}
-            onClose={() => removeToast(toast.id)}
+            onClose={removeToast}
             duration={5000}
           />
         ))}

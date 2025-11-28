@@ -10,7 +10,7 @@ export interface ToastProps {
   id: string;
   message: string;
   type: ToastType;
-  onClose: () => void;
+  onClose: (id: string) => void;
   duration?: number; // milliseconds, 0 = don't auto-close
 }
 
@@ -18,7 +18,7 @@ export function Toast({ id, message, type, onClose, duration = 5000 }: ToastProp
   useEffect(() => {
     if (duration > 0) {
       const timer = setTimeout(() => {
-        onClose();
+        onClose(id);
       }, duration);
       
       return () => clearTimeout(timer);
@@ -71,7 +71,7 @@ export function Toast({ id, message, type, onClose, duration = 5000 }: ToastProp
         </div>
         
         <button
-          onClick={onClose}
+          onClick={() => onClose(id)}
           className="flex-shrink-0 text-gray-400 hover:text-white transition-colors"          aria-label="Close notification"        >
           <X className="w-4 h-4"/>
         </button>
