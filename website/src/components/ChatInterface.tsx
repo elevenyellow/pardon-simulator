@@ -160,9 +160,11 @@ export default function ChatInterface({
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [polling, setPolling] = useState(false);
+  const [shouldPoll, setShouldPoll] = useState(false); // Control whether to actively poll for messages
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const autoStopTimerRef = useRef<NodeJS.Timeout | null>(null); // Timer to auto-stop polling
   const sessionInitializedRef = useRef(false);
   const previousWalletRef = useRef<string | null>(null); // Track wallet changes for cache clearing
   const previousMessageCountRef = useRef<number>(0); // Track message count to detect new messages
@@ -186,6 +188,19 @@ export default function ChatInterface({
 
   const removeToast = (id: string) => {
     setToasts(prev => prev.filter(toast => toast.id !== id));
+  };
+
+  // Helper to check if conversation has recent activity
+  const hasRecentActivity = (msgs: Message[]): boolean => {
+    if (msgs.length === 0) return false;
+    const lastMessage = msgs[msgs.length - 1];
+    const timeSinceLastMessage = Date.now() - lastMessage.timestamp.getTime();
+    // Consider "recent" as last 2 minutes (120 seconds)
+    const isRecent = timeSinceLastMessage < 120000;
+    if (isRecent) {
+      console.log(`[Polling] Recent activity detected: last message ${Math.floor(timeSinceLastMessage / 1000)}s ago`);
+    }
+    return isRecent;
   };
 
   // Extract score update from agent message
@@ -432,6 +447,15 @@ export default function ChatInterface({
   // Replace polling with SSE
   useEffect(() => {
     if (threadId && sessionId && !eventSourceRef.current) {
+      // Smart polling: Only connect if we should be polling
+      const shouldStartPolling = shouldPoll || hasRecentActivity(messages);
+      
+      if (!shouldStartPolling) {
+        console.log('[SSE] Skipping polling - no recent activity (conversation is idle)');
+        return;
+      }
+      
+      console.log('[SSE] Starting polling - conversation is active or polling requested');
       const eventSource = new EventSource(
         `/api/chat/stream?sessionId=${sessionId}&threadId=${threadId}`
       );
@@ -592,6 +616,36 @@ export default function ChatInterface({
               });
               // Note: loading stays true until agent response arrives via SSE
             }
+            
+            // Auto-stop polling after receiving final agent responses
+            // Check for truly new agent messages (from the outer scope)
+            const newMessages: Message[] = data.messages;
+            const newAgentMessages = newMessages.filter((m: any) => {
+              const isFromUser = m.senderId === USER_SENDER_ID;
+              const mentionsUser = m.mentions?.includes(USER_SENDER_ID);
+              const isIntermediary = !isFromUser && !mentionsUser;
+              return !isFromUser && !isIntermediary && m.senderId !== 'system';
+            });
+            
+            if (newAgentMessages.length > 0) {
+              console.log(`[SSE] Received ${newAgentMessages.length} final agent message(s), scheduling auto-stop`);
+              
+              // Clear any existing timer
+              if (autoStopTimerRef.current) {
+                clearTimeout(autoStopTimerRef.current);
+              }
+              
+              // Set timer to stop polling after 3 minutes (covers 105s agent timeout + multi-agent chains)
+              autoStopTimerRef.current = setTimeout(() => {
+                console.log('[SSE] Auto-stopping polling - 3 minutes elapsed since last agent response');
+                setShouldPoll(false);
+                if (eventSourceRef.current) {
+                  eventSourceRef.current.close();
+                  eventSourceRef.current = null;
+                  setPolling(false);
+                }
+              }, 180000); // 3 minutes = 180000ms
+            }
           }
         } catch (e) {
           console.error('[SSE] Failed to parse message:', e);
@@ -618,8 +672,11 @@ export default function ChatInterface({
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
       }
+      if (autoStopTimerRef.current) {
+        clearTimeout(autoStopTimerRef.current);
+      }
     };
-  }, [threadId, sessionId, publicKey, selectedAgent]);
+  }, [threadId, sessionId, publicKey, selectedAgent, shouldPoll, messages]);
 
   // Auto-scroll only when new messages are added
   useEffect(() => {
@@ -1053,6 +1110,10 @@ export default function ChatInterface({
     // Clear input immediately but DON'T show message yet - wait to see if payment is required
     setInput('');
     setLoading(true);
+    
+    // Start polling to receive agent responses
+    setShouldPoll(true);
+    console.log('[Polling] User sent message, enabling polling for responses');
 
     // Stop polling while waiting for response
     if (pollIntervalRef.current) {

@@ -589,11 +589,16 @@ class BaseAgent(ABC):
         """
         Connect to a single Coral session.
         
+        CRITICAL: This returns a MultiServerMCPClient, but the agent MUST use
+        client.session() to create a persistent session for all tool calls.
+        Otherwise, each tool call creates a new SSE connection which causes
+        agents to stop responding in production.
+        
         Args:
             session_id: Optional session ID (None for production auto-session)
         
         Returns:
-            Tuple of (MCP client, coral tools list, None for single-pool)
+            Tuple of (MCP client, empty list (tools loaded in run()), None)
         """
         base_url = os.getenv('CORAL_SSE_URL')
         
@@ -632,13 +637,14 @@ class BaseAgent(ABC):
             "coral": {
                 "transport": "sse",
                 "url": url,
-                "timeout": 700.0,
-                "sse_read_timeout": 700.0
+                "timeout": 30.0,  # Connection establishment timeout
+                "sse_read_timeout": 700.0  # Must be longer than wait_for_mentions max (600s)
             }
         })
         
-        coral_tools = await client.get_tools(server_name="coral")
-        return client, coral_tools, None
+        # Return client WITHOUT loading tools yet
+        # Tools will be loaded in a persistent session context
+        return client, [], None
     
     async def connect_to_multiple_sessions(self, session_ids: List[str]) -> Tuple[MultiServerMCPClient, List[BaseTool], Dict[str, List[BaseTool]]]:
         """
@@ -681,8 +687,8 @@ class BaseAgent(ABC):
             connections[f"coral-{session_id}"] = {
                 "transport": "sse",
                 "url": url,
-                "timeout": 700.0,
-                "sse_read_timeout": 700.0
+                "timeout": 30.0,  # Connection establishment timeout
+                "sse_read_timeout": 700.0  # Must be longer than wait_for_mentions max (600s)
             }
             print(f"[CORAL]   → {session_id} @ {url}")
         
@@ -1115,7 +1121,7 @@ Only after payment verified should you call contact_agent()!
             
             # Connect to Coral server
             print(f"[STARTUP] Connecting to Coral server...", flush=True)
-            client, coral_tools, all_pool_tools = await self.connect_to_coral_server()
+            client, _, all_pool_tools = await self.connect_to_coral_server()
             
             # Check if multi-pool mode
             if all_pool_tools:
@@ -1123,19 +1129,36 @@ Only after payment verified should you call contact_agent()!
                 print(f"[CORAL] 🔀 Multi-pool mode: listening to {len(all_pool_tools)} pools")
                 await self.run_multi_pool_loops(client, all_pool_tools)
             else:
-                # Single-pool mode: run a single listener
-                # Create agent executor
-                print(f"[STARTUP] Creating agent executor...")
-                self.agent_executor, self.my_wallet_address = await self.create_agent_executor(coral_tools)
-                print(f"[READY] {self.agent_name} ready for interactions")
+                # Single-pool mode with PERSISTENT SESSION
+                # This is critical for production stability - each tool call must
+                # reuse the same SSE connection rather than creating new ones
+                print(f"[STARTUP] Opening persistent Coral session...", flush=True)
                 
-                # Find wait_for_mentions tool
-                wait_tool = next((t for t in coral_tools if hasattr(t, 'name') and 'wait_for_mentions' in t.name), None)
-                if not wait_tool:
-                    raise ValueError("coral_wait_for_mentions tool not found!")
+                # Import load_mcp_tools
+                from langchain_mcp_adapters.tools import load_mcp_tools
                 
-                # Run agent loop
-                await self.run_agent_loop(wait_tool)
+                # Open persistent session - this must stay alive for agent's entire lifetime
+                async with client.session("coral") as session:
+                    print(f"[STARTUP] ✅ Persistent session established")
+                    
+                    # Load tools from persistent session
+                    print(f"[STARTUP] Loading Coral tools from persistent session...")
+                    coral_tools = await load_mcp_tools(session)
+                    print(f"[STARTUP] ✅ Loaded {len(coral_tools)} Coral tools")
+                    
+                    # Create agent executor
+                    print(f"[STARTUP] Creating agent executor...")
+                    self.agent_executor, self.my_wallet_address = await self.create_agent_executor(coral_tools)
+                    print(f"[READY] {self.agent_name} ready for interactions")
+                    
+                    # Find wait_for_mentions tool
+                    wait_tool = next((t for t in coral_tools if hasattr(t, 'name') and 'wait_for_mentions' in t.name), None)
+                    if not wait_tool:
+                        raise ValueError("coral_wait_for_mentions tool not found!")
+                    
+                    # Run agent loop (session stays alive throughout)
+                    print(f"[STARTUP] Starting agent loop with persistent session...")
+                    await self.run_agent_loop(wait_tool)
                 
         except KeyboardInterrupt:
             print(f"\n[SHUTDOWN] {self.agent_name} ({self.agent_id}) shutting down gracefully...")

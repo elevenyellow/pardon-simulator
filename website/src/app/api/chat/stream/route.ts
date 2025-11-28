@@ -114,9 +114,16 @@ export async function GET(request: NextRequest) {
               } else if (consecutiveEmptyPolls < 30) {
                 // Next 20 seconds: poll every 1000ms
                 pollInterval = 1000;
-              } else {
-                // After 30 seconds: poll every 2000ms
+              } else if (consecutiveEmptyPolls < 90) {
+                // Up to 3 minutes: poll every 2000ms
                 pollInterval = 2000;
+              } else {
+                // After 3 minutes of no messages (90 polls * ~2s = 180s), close stream
+                console.log(`[SSE Poll] Closing stream - no activity for 3 minutes (${consecutiveEmptyPolls} empty polls)`);
+                clearTimeout(timeoutId);
+                clearInterval(heartbeatId);
+                controller.close();
+                return; // Stop polling
               }
             }
           } else {
