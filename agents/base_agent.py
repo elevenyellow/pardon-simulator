@@ -1046,8 +1046,8 @@ Only after payment verified should you call contact_agent()!
         while True:
             try:
                 wait_start_time = time.time()
-                # Use 24-hour timeout to prevent constant reconnections that destabilize threads
-                mentions_result = await wait_tool.ainvoke({"timeoutMs": 86400000})
+                # Use 10-minute timeout (server's maximum is 600000ms = 10 minutes)
+                mentions_result = await wait_tool.ainvoke({"timeoutMs": 600000})
                 
                 if mentions_result and "No new mentions" not in str(mentions_result):
                     try:
@@ -1207,8 +1207,8 @@ Only after payment verified should you call contact_agent()!
         while True:
             try:
                 wait_start_time = time.time()
-                # Use 24-hour timeout to prevent constant reconnections that destabilize threads
-                mentions_result = await wait_tool.ainvoke({"timeoutMs": 86400000})
+                # Use 10-minute timeout (server's maximum is 600000ms = 10 minutes)
+                mentions_result = await wait_tool.ainvoke({"timeoutMs": 600000})
                 
                 if mentions_result and "No new mentions" not in str(mentions_result):
                     try:
