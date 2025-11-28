@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, memo } from'react';
+import { useState, useEffect, useRef, memo, useCallback } from'react';
 import { useWallet, useConnection } from'@solana/wallet-adapter-react';
 import { Send, Loader2 } from'lucide-react';
 import { PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } from'@solana/web3.js';
@@ -181,14 +181,14 @@ export default function ChatInterface({
   const processedMessageIdsRef = useRef<Set<string>>(new Set()); // Track processed messages to prevent duplicate toasts
 
   // Toast helper function
-  const showToast = (message: string, type: ToastType ='info') => {
+  const showToast = useCallback((message: string, type: ToastType ='info') => {
     const id = Date.now().toString();
     setToasts(prev => [...prev, { id, message, type }]);
-  };
+  }, []);
 
-  const removeToast = (id: string) => {
+  const removeToast = useCallback((id: string) => {
     setToasts(prev => prev.filter(toast => toast.id !== id));
-  };
+  }, []);
 
   // Helper to check if conversation has recent activity
   const hasRecentActivity = (msgs: Message[]): boolean => {
