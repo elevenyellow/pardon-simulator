@@ -174,10 +174,108 @@ async function restoreThreadInternal(
 
     const data = await response.json();
     console.log(`[Restoration] Thread restored: ${data.threadId || data.id}`);
+    
+    // CRITICAL: Restore message history from PostgreSQL to Coral memory
+    // This ensures agents see full conversation context after reconnections
+    await restoreMessagesToCoral(coralSessionId, coralThreadId);
+    
     return true;
   } catch (error) {
     console.error('[Restoration] Error restoring thread:', error);
     return false;
+  }
+}
+
+/**
+ * Restore message history from PostgreSQL to Coral memory
+ * Limits to last 100 messages for performance
+ */
+async function restoreMessagesToCoral(
+  coralSessionId: string,
+  coralThreadId: string
+): Promise<void> {
+  try {
+    console.log(`[Restoration] Fetching message history for thread ${coralThreadId}`);
+    
+    // Check if messages already exist in Coral (avoid duplicates)
+    try {
+      const checkMessages = await fetch(
+        `${CORAL_SERVER_URL}/api/v1/debug/thread/app/priv/${coralSessionId}/${coralThreadId}/messages`
+      );
+      if (checkMessages.ok) {
+        const existingData = await checkMessages.json();
+        const existingCount = (existingData.messages || []).length;
+        if (existingCount > 0) {
+          console.log(`[Restoration] Thread already has ${existingCount} messages in Coral - skipping restoration`);
+          return;
+        }
+      }
+    } catch (checkError) {
+      console.log('[Restoration] Could not check existing messages, proceeding with restoration');
+    }
+    
+    // Fetch last 100 messages from database (ordered oldest first)
+    const messages = await prisma.message.findMany({
+      where: { 
+        thread: {
+          coralThreadId: coralThreadId
+        }
+      },
+      orderBy: { timestamp: 'asc' },
+      take: 100,
+      select: {
+        senderId: true,
+        content: true,
+        mentions: true,
+        timestamp: true,
+      }
+    });
+    
+    if (messages.length === 0) {
+      console.log(`[Restoration] No messages to restore for thread ${coralThreadId}`);
+      return;
+    }
+    
+    console.log(`[Restoration] Restoring ${messages.length} messages to Coral memory...`);
+    
+    let successCount = 0;
+    let failCount = 0;
+    
+    // Replay messages into Coral in order
+    for (const msg of messages) {
+      try {
+        // Use Coral's sendMessage API to replay each message
+        const replayResponse = await fetch(
+          `${CORAL_SERVER_URL}/api/v1/debug/thread/sendMessage/app/priv/${coralSessionId}/${msg.senderId}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              threadId: coralThreadId,
+              content: msg.content,
+              mentions: msg.mentions || [],
+            }),
+          }
+        );
+        
+        if (replayResponse.ok) {
+          successCount++;
+        } else {
+          failCount++;
+          console.warn(`[Restoration] Failed to restore message from ${msg.senderId}: ${replayResponse.status}`);
+        }
+      } catch (msgError) {
+        failCount++;
+        console.warn(`[Restoration] Error restoring message:`, msgError);
+        // Continue with next message even if one fails
+      }
+    }
+    
+    console.log(`[Restoration] Message restoration complete: ${successCount} succeeded, ${failCount} failed`);
+    
+  } catch (error) {
+    console.error('[Restoration] Error restoring messages:', error);
+    // Don't throw - thread is created, just missing history
   }
 }
 
