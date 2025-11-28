@@ -189,10 +189,8 @@ Resources:
             - cz
           WorkingDirectory: /app/cz
           Environment:
-            - Name: CORAL_SESSIONS
-              Value: pool-0,pool-1,pool-2,pool-3,pool-4
             - Name: CORAL_SSE_URL
-              Value: http://localhost:5555/sse/v1/devmode/app/priv
+              Value: http://localhost:5555/sse/v1/devmode/app/priv/production-main
             - Name: S3_BUCKET_NAME
               Value: !Ref S3BucketName
             - Name: AGENT_NAME
@@ -233,10 +231,8 @@ Resources:
           WorkingDirectory: /app/sbf
           # SBF is user proxy only - no wallet keys needed, player uses browser wallet
           Environment:
-            - Name: CORAL_SESSIONS
-              Value: pool-0,pool-1,pool-2,pool-3,pool-4
             - Name: CORAL_SSE_URL
-              Value: http://localhost:5555/sse/v1/devmode/app/priv
+              Value: http://localhost:5555/sse/v1/devmode/app/priv/production-main
             - Name: S3_BUCKET_NAME
               Value: !Ref S3BucketName
             - Name: AGENT_NAME
@@ -270,10 +266,8 @@ Resources:
             - trump-donald
           WorkingDirectory: /app/trump-donald
           Environment:
-            - Name: CORAL_SESSIONS
-              Value: pool-0,pool-1,pool-2,pool-3,pool-4
             - Name: CORAL_SSE_URL
-              Value: http://localhost:5555/sse/v1/devmode/app/priv
+              Value: http://localhost:5555/sse/v1/devmode/app/priv/production-main
             - Name: S3_BUCKET_NAME
               Value: !Ref S3BucketName
             - Name: AGENT_NAME
@@ -313,10 +307,8 @@ Resources:
             - trump-melania
           WorkingDirectory: /app/trump-melania
           Environment:
-            - Name: CORAL_SESSIONS
-              Value: pool-0,pool-1,pool-2,pool-3,pool-4
             - Name: CORAL_SSE_URL
-              Value: http://localhost:5555/sse/v1/devmode/app/priv
+              Value: http://localhost:5555/sse/v1/devmode/app/priv/production-main
             - Name: S3_BUCKET_NAME
               Value: !Ref S3BucketName
             - Name: AGENT_NAME
@@ -356,10 +348,8 @@ Resources:
             - trump-eric
           WorkingDirectory: /app/trump-eric
           Environment:
-            - Name: CORAL_SESSIONS
-              Value: pool-0,pool-1,pool-2,pool-3,pool-4
             - Name: CORAL_SSE_URL
-              Value: http://localhost:5555/sse/v1/devmode/app/priv
+              Value: http://localhost:5555/sse/v1/devmode/app/priv/production-main
             - Name: S3_BUCKET_NAME
               Value: !Ref S3BucketName
             - Name: AGENT_NAME
@@ -399,10 +389,8 @@ Resources:
             - trump-donjr
           WorkingDirectory: /app/trump-donjr
           Environment:
-            - Name: CORAL_SESSIONS
-              Value: pool-0,pool-1,pool-2,pool-3,pool-4
             - Name: CORAL_SSE_URL
-              Value: http://localhost:5555/sse/v1/devmode/app/priv
+              Value: http://localhost:5555/sse/v1/devmode/app/priv/production-main
             - Name: S3_BUCKET_NAME
               Value: !Ref S3BucketName
             - Name: AGENT_NAME
@@ -442,10 +430,8 @@ Resources:
             - trump-barron
           WorkingDirectory: /app/trump-barron
           Environment:
-            - Name: CORAL_SESSIONS
-              Value: pool-0,pool-1,pool-2,pool-3,pool-4
             - Name: CORAL_SSE_URL
-              Value: http://localhost:5555/sse/v1/devmode/app/priv
+              Value: http://localhost:5555/sse/v1/devmode/app/priv/production-main
             - Name: S3_BUCKET_NAME
               Value: !Ref S3BucketName
             - Name: AGENT_NAME

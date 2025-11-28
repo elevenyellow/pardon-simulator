@@ -1,8 +1,12 @@
 /**
  * Session Pooling for Coral Server Load Distribution
  * 
- * Distributes users across multiple Coral sessions to prevent resource exhaustion.
- * Each pool can handle ~30-40 concurrent threads, 5 pools = ~150-200 user capacity.
+ * ARCHITECTURE:
+ * - Production: Single session (production-main) for stability
+ * - Development: Multi-pool (pool-0 through pool-4) for testing
+ * 
+ * Single-session provides rock-solid conversation stability by eliminating
+ * pool routing issues. Can handle ~50-100 concurrent users per ECS task.
  */
 
 import { prisma } from './prisma';
@@ -12,6 +16,7 @@ import crypto from 'crypto';
 const POOL_COUNT = 5;
 const POOL_PREFIX = 'pool';
 const MAX_THREADS_PER_POOL = 40; // Soft limit before considering pool unhealthy
+const PRODUCTION_SESSION_ID = 'production-main';
 
 export interface PoolHealth {
   poolId: string;
@@ -22,10 +27,27 @@ export interface PoolHealth {
 }
 
 /**
+ * Check if we're using single-session architecture (production)
+ */
+export function isSingleSessionMode(): boolean {
+  // In production, we use single session for stability
+  // Can override with CORAL_USE_POOLS=true for testing
+  const usePools = process.env.CORAL_USE_POOLS === 'true';
+  return !usePools;
+}
+
+/**
  * Get session pool ID for a user based on wallet hash
  * Uses consistent hashing to ensure same user always gets same pool
+ * 
+ * In single-session mode, always returns production-main
  */
 export function getUserSessionPool(walletAddress: string): string {
+  if (isSingleSessionMode()) {
+    return PRODUCTION_SESSION_ID;
+  }
+  
+  // Legacy multi-pool mode
   // Hash the wallet address
   const hash = crypto.createHash('sha256').update(walletAddress).digest();
   
@@ -36,9 +58,15 @@ export function getUserSessionPool(walletAddress: string): string {
 }
 
 /**
- * Get all available pool IDs
+ * Get all available pool/session IDs
+ * Returns production-main for single-session mode, or pool-0...pool-4 for multi-pool
  */
 export function getAllPools(): string[] {
+  if (isSingleSessionMode()) {
+    return [PRODUCTION_SESSION_ID];
+  }
+  
+  // Legacy multi-pool mode
   return Array.from({ length: POOL_COUNT }, (_, i) => `${POOL_PREFIX}-${i}`);
 }
 
