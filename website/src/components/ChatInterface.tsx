@@ -618,17 +618,16 @@ export default function ChatInterface({
             }
             
             // Auto-stop polling after receiving final agent responses
-            // Check for truly new agent messages (from the outer scope)
-            const newMessages: Message[] = data.messages;
-            const newAgentMessages = newMessages.filter((m: any) => {
+            // Check for final agent messages (not intermediary, not system)
+            const finalAgentMessages = data.messages.filter((m: any) => {
               const isFromUser = m.senderId === USER_SENDER_ID;
               const mentionsUser = m.mentions?.includes(USER_SENDER_ID);
               const isIntermediary = !isFromUser && !mentionsUser;
               return !isFromUser && !isIntermediary && m.senderId !== 'system';
             });
             
-            if (newAgentMessages.length > 0) {
-              console.log(`[SSE] Received ${newAgentMessages.length} final agent message(s), scheduling auto-stop`);
+            if (finalAgentMessages.length > 0) {
+              console.log(`[SSE] Received ${finalAgentMessages.length} final agent message(s), scheduling auto-stop`);
               
               // Clear any existing timer
               if (autoStopTimerRef.current) {
