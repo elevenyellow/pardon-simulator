@@ -19,18 +19,18 @@ Parameters:
 
   DesiredCount:
     Type: Number
-    Default: 3
-    Description: Desired number of ECS tasks
+    Default: 1
+    Description: Desired number of ECS tasks (1 for stability, eliminates multi-instance routing issues)
 
   MinCapacity:
     Type: Number
-    Default: 3
+    Default: 1
     Description: Minimum number of ECS tasks
 
   MaxCapacity:
     Type: Number
-    Default: 10
-    Description: Maximum number of ECS tasks
+    Default: 1
+    Description: Maximum number of ECS tasks (1 for single-instance stability)
 
   S3BucketName:
     Type: String

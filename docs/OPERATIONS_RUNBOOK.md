@@ -76,7 +76,7 @@ aws ecs update-service \
 aws ecs update-service \
   --cluster pardon-production-cluster \
   --service pardon-production-service \
-  --desired-count 3
+  --desired-count 1
 ```
 
 ### Update Secrets

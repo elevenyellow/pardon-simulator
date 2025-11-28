@@ -948,31 +948,72 @@ Only after payment verified should you call contact_agent()!
                 # FIX ISSUE #1: Check if contact_agent was called
                 # If yes, suppress the LLM's final output since contact_agent already sent confirmation
                 contact_agent_called = False
+                send_message_called = False
+                has_intermediate_steps = False
                 
                 if isinstance(response, dict):
                     if 'output' in response:
                         print(f"[DEBUG] Output: {response['output'][:200] if len(response['output']) > 200 else response['output']}", flush=True)
                     if 'intermediate_steps' in response:
                         steps = response['intermediate_steps']
+                        has_intermediate_steps = len(steps) > 0
                         print(f"[DEBUG] Tool calls made: {len(steps)}", flush=True)
                         for i, (action, result) in enumerate(steps):
                             tool_name = getattr(action, 'tool', 'unknown')
                             print(f"[DEBUG]   Step {i+1}: {tool_name}", flush=True)
                             
-                            # Check if contact_agent was called
+                            # Track important tool calls
                             if 'contact_agent' in tool_name.lower():
                                 contact_agent_called = True
                                 print(f"[DEBUG] ✅ contact_agent was called - will suppress duplicate confirmation")
+                            if 'send_message' in tool_name.lower() and 'coral' in tool_name.lower():
+                                send_message_called = True
+                                print(f"[DEBUG] ✅ coral_send_message was detected in intermediate_steps")
                 
-                # If contact_agent was called, suppress the LLM's output
-                # The tool already sent the confirmation to the user
+                # FIX #1: Suppress LLM output if contact_agent was called
+                # contact_agent already sends its own confirmation message
                 if contact_agent_called and isinstance(response, dict):
                     print(f"[OutputSuppression] contact_agent called - suppressing LLM's final output")
                     print(f"[OutputSuppression] Original output: {response.get('output', '')[:100]}")
-                    
-                    # Replace output with empty string to prevent duplicate message
                     response['output'] = ""
                     print(f"[OutputSuppression] Output suppressed to prevent duplicate confirmation")
+                
+                # FIX #2: Fallback - if LLM generated output but didn't call coral_send_message, send it automatically
+                # This prevents silent failures where agent thinks but doesn't speak
+                # IMPORTANT: Only trigger if we have intermediate_steps and can confidently say send_message wasn't called
+                # If intermediate_steps is missing/empty, the execution might have failed - don't send duplicate
+                if not send_message_called and has_intermediate_steps and isinstance(response, dict) and response.get('output'):
+                    output_text = response['output'].strip()
+                    if output_text:  # Only if there's actual content
+                        print(f"[Fallback] ⚠️  LLM generated output but didn't call coral_send_message - using fallback")
+                        thread_id = mentions_data.get("messages", [{}])[0].get("threadId")
+                        
+                        # Find the coral_send_message tool
+                        send_message_tool = None
+                        for tool in agent_executor.tools:
+                            if hasattr(tool, 'name') and 'coral_send_message' in tool.name:
+                                send_message_tool = tool
+                                break
+                        
+                        if thread_id and send_message_tool:
+                            try:
+                                await send_message_tool.ainvoke({
+                                    "threadId": thread_id,
+                                    "content": output_text,
+                                    "mentions": ["sbf"] if is_user_message else [sender_id]
+                                })
+                                print(f"[Fallback] ✅ Response auto-sent via fallback mechanism")
+                            except Exception as e:
+                                print(f"[Fallback] ❌ Failed to auto-send response: {e}")
+                                traceback.print_exc()
+                        else:
+                            if not thread_id:
+                                print(f"[Fallback] ⚠️  Cannot auto-send: no threadId in mentions_data")
+                            if not send_message_tool:
+                                print(f"[Fallback] ⚠️  Cannot auto-send: coral_send_message tool not found")
+                elif not send_message_called and not has_intermediate_steps and isinstance(response, dict) and response.get('output'):
+                    # Execution may have failed/restarted - don't use fallback to avoid duplicates
+                    print(f"[Fallback] ⚠️  Output exists but no intermediate_steps - possible execution error, skipping fallback to avoid duplicates")
                 
                 print(f"[OK] Response processed successfully on attempt {attempt + 1}", flush=True)
                 return response
