@@ -1203,7 +1203,7 @@ export default function ChatInterface({
     }
 
     try {
-      const amount = paymentReq.amount_usdc || paymentReq.amount_sol || 0.01;
+      const amount = paymentReq.amount_usdc || paymentReq.amount_sol || 0.05;
       const currency = paymentReq.amount_usdc ? 'USDC' : 'SOL';
       const isPremiumService = paymentReq.service_type && paymentReq.service_type !== 'message_fee';
       

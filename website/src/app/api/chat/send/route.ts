@@ -194,12 +194,12 @@ async function handlePOST(request: NextRequest) {
     if (paymentData) {
       try {
         const paymentPayload = JSON.parse(paymentData);
-        // Premium services have a service_type field (EXCLUDING message_fee) or custom amount != 0.01
+        // Premium services have a service_type field that is NOT 'message_fee'
         // message_fee is infrastructure-level gatekeeping and should never reach agents
-        isPremiumServicePayment = (paymentPayload.service_type && paymentPayload.service_type !== 'message_fee') || 
-                                  (paymentPayload.amount_usdc && paymentPayload.amount_usdc !== 0.01);
+        // We ONLY check service_type, not amount, since message_fee amount can vary
+        isPremiumServicePayment = paymentPayload.service_type && paymentPayload.service_type !== 'message_fee';
         if (isPremiumServicePayment) {
-          console.log('[x402] Detected premium service payment:', paymentPayload.service_type || 'custom amount');
+          console.log('[x402] Detected premium service payment:', paymentPayload.service_type);
         }
       } catch (e) {
         // Not valid JSON or no service_type - treat as regular message fee
@@ -251,7 +251,7 @@ async function handlePOST(request: NextRequest) {
         };
         
         // Extract the actual payment amount from the frontend payload
-        const amountUsdc = frontendPayload.amount_usdc || 0.01; // Default to message fee if not specified
+        const amountUsdc = frontendPayload.amount_usdc || 0.05; // Default to message fee if not specified
         const amountMicroUsdc = Math.round(amountUsdc * 1_000_000).toString();
         
         console.log(`[CDP] Payment amount: ${amountUsdc} USDC (${amountMicroUsdc} micro-USDC)`);
@@ -1070,7 +1070,7 @@ function extractPaymentRequest(content: string): PaymentRequest | null {
       
       // Ensure we have either amount_sol or amount_usdc
       if (!parsed.amount_sol && !parsed.amount_usdc) {
-        parsed.amount_usdc = 0.01; // Default to USDC for message fees
+        parsed.amount_usdc = 0.05; // Default to USDC for message fees
       }
       
       return parsed;
