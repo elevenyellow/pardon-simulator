@@ -167,6 +167,24 @@ export class ScoringRepository {
       }
     }
     
+    // 🎮 Update service cooldown counters (points) - DEFENSIVE: never fails main flow
+    // Only update for positive scores (rewards), not penalties
+    if (result.newScore > 0 && result.scoreRecord.delta > 0) {
+      try {
+        await serviceUsageRepository.updateCooldowns(
+          userId,
+          sessionId,
+          result.weekId,
+          0,          // messageIncrement (handled in chat/send)
+          result.scoreRecord.delta  // pointsIncrement
+        );
+        console.log(`[Service Cooldowns] Incremented points counter by ${result.scoreRecord.delta.toFixed(2)} for user ${userId}`);
+      } catch (cooldownError) {
+        // CRITICAL: Don't fail scoring if cooldown update fails
+        console.error('[Service Cooldowns] Failed to update points counter (non-fatal):', cooldownError);
+      }
+    }
+    
     return {
       newScore: result.newScore,
       scoreRecord: {

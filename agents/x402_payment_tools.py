@@ -1874,10 +1874,13 @@ Service: {service_type}
 Context: {service_details or 'User wants you to contact another agent'}
 
 IMMEDIATELY call contact_agent() tool ONCE:
-   - Identify the target agent from conversation context
-   - Compose a natural message in YOUR voice
-   - Call: contact_agent(agent_to_contact="<target>", message="@<target> <your message>", current_thread_id=<thread>)
-   - Example: contact_agent("cz", "@cz Hey! SBF is asking if you'd consider hiring them at Binance. What do you think?", thread_id)
+   1. Extract the target agent from the conversation (who should you contact?)
+   2. Extract the question/topic from the conversation (what does the user want to know?)
+   3. Compose a natural message in YOUR voice that relays the user's question
+   4. Call: contact_agent(agent_to_contact="<target-agent-id>", message="@<target-agent-id> [your natural message]", current_thread_id=<thread-id>)
+   
+   Format: "@<agent> Hey! The user is asking [paraphrase their question in a natural way]"
+   DO NOT use hardcoded examples - compose based on the actual conversation context above!
 
 🎯 What contact_agent() does automatically (you don't need to do anything else):
    1. Sends your message to the target agent

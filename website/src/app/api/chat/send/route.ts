@@ -11,6 +11,7 @@ import type { PaymentPayload, PaymentRequirements } from'x402/types';
 import { restoreCoralSession } from'@/lib/sessionRestoration';
 import { USER_SENDER_ID } from'@/lib/constants';
 import { verifyWalletSignature } from'@/lib/wallet-verification';
+import { serviceUsageRepository } from'@/lib/premium-services/usage-repository';
 
 const CORAL_SERVER_URL = process.env.CORAL_SERVER_URL ||'http://localhost:5555';
 const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL;
@@ -968,6 +969,24 @@ async function handlePOST(request: NextRequest) {
     });
 
     console.log(`[Send API] Message saved to database, returning success to client`);
+    
+    // 🎮 Update service cooldown counters (messages) - DEFENSIVE: never fails main flow
+    if (session && session.user) {
+      try {
+        const weekId = getCurrentWeekId();
+        await serviceUsageRepository.updateCooldowns(
+          session.user.id,
+          session.id,
+          weekId,
+          1, // messageIncrement
+          0  // pointsIncrement (handled separately in scoring)
+        );
+        console.log(`[Service Cooldowns] Incremented message counter for user ${session.user.id}`);
+      } catch (cooldownError) {
+        // CRITICAL: Don't fail message sending if cooldown update fails
+        console.error('[Service Cooldowns] Failed to update message counter (non-fatal):', cooldownError);
+      }
+    }
 
     // Return immediately - frontend will get updates via SSE
     const response = NextResponse.json({
