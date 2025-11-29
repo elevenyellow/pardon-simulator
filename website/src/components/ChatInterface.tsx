@@ -289,6 +289,19 @@ export default function ChatInterface({
         const jsonStr = match[1].trim();
         const parsed = JSON.parse(jsonStr);
         
+        // Extract service_type - try multiple sources
+        let service_type = parsed.service_type || parsed.metadata?.service || 'premium_service';
+        
+        // Fallback: extract from payment_id if missing
+        // payment_id format: wht-{agent}-{service_type}-{target}-{timestamp}
+        if (service_type === 'premium_service' && parsed.payment_id) {
+          const paymentIdMatch = parsed.payment_id.match(/wht-[^-]+-([^-]+)-/);
+          if (paymentIdMatch) {
+            service_type = paymentIdMatch[1];
+            console.log(`[Payment Request] Extracted service_type from payment_id: ${service_type}`);
+          }
+        }
+        
         // Convert to PaymentRequest format expected by PaymentModal
         const paymentRequest: PaymentRequest = {
           type: 'x402_payment_required',
@@ -297,7 +310,7 @@ export default function ChatInterface({
           recipient_address: parsed.recipient_address || parsed.recipient?.address,
           amount_sol: 0,
           amount_usdc: parsed.amount_usdc || parseFloat(parsed.amount?.value || '0') / 1_000_000,
-          service_type: parsed.service_type || 'premium_service',
+          service_type: service_type,
           reason: parsed.reason || 'Premium service',
           timestamp: parsed.timestamp || Date.now(),
           payment_id: parsed.payment_id,
@@ -1310,8 +1323,12 @@ export default function ChatInterface({
 
         let signedTx;
         try {
+          // Use the payment_id from the payment request if available, otherwise generate one
+          const paymentId = paymentReq.payment_id || `payment-${Date.now()}`;
+          console.log('[Payment] Using payment_id:', paymentId);
+          
           signedTx = await createUSDCTransaction(
-            `payment-${Date.now()}`,
+            paymentId,
             publicKey,
             new PublicKey(paymentReq.recipient_address),
             amount,
@@ -1341,6 +1358,7 @@ export default function ChatInterface({
         console.log('[Payment Flow] Completion timestamp:', paymentTimestamp);
 
         // Build x402 payload to send to /api/chat/send
+        // Include the original payment_id from the request to help backend match the service
         const x402Payload = {
           x402Version: 1,
           scheme: 'exact',
@@ -1348,11 +1366,12 @@ export default function ChatInterface({
           payload: {
             transaction: signedTx.transaction_base64
           },
-          paymentId: signedTx.payment_id,
+          paymentId: signedTx.payment_id,  // This is from the payment request
           from: signedTx.from,
           to: signedTx.to,
           amount_usdc: amount,
-          service_type: paymentReq.service_type  // Include service type for backend marker
+          service_type: paymentReq.service_type,  // Include service type for backend marker
+          payment_id: paymentReq.payment_id  // Also include original payment_id for better matching
         };
 
       // Show user's message and loading indicator together to avoid timing/ordering issues

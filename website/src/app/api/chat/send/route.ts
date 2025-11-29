@@ -882,7 +882,17 @@ async function handlePOST(request: NextRequest) {
           const paymentPayload = JSON.parse(paymentData);
           serviceType = paymentPayload.service_type || 'unknown';
           amountUsdc = paymentPayload.amount_usdc || 0;
-          paymentId = paymentPayload.payment_id || 'unknown';
+          paymentId = paymentPayload.payment_id || paymentPayload.paymentId || 'unknown';
+          
+          // Fallback: extract service_type from payment_id if missing
+          // payment_id format: wht-{agent}-{service_type}-{target}-{timestamp}
+          if (serviceType === 'unknown' && paymentId !== 'unknown') {
+            const paymentIdMatch = paymentId.match(/wht-[^-]+-([^-]+)-/);
+            if (paymentIdMatch) {
+              serviceType = paymentIdMatch[1];
+              console.log(`[Premium Service] Extracted service_type from payment_id: ${serviceType}`);
+            }
+          }
         } catch (e) {
           console.error('[Premium Service] Failed to parse payment data for marker:', e);
         }
