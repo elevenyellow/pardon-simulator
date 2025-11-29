@@ -372,6 +372,88 @@ async function handlePOST(request: NextRequest) {
           throw new Error(`Key processing failed: ${error.message}`);
         }
         
+        // BLOCKHASH VALIDATION: Check if transaction blockhash is still valid before sending to CDP
+        // This prevents CDP simulation failures due to stale blockhashes
+        try {
+          const { Transaction: SolTransaction } = require('@solana/web3.js');
+          const txBuffer = Buffer.from(x402Payload.payload.transaction, 'base64');
+          const transaction = SolTransaction.from(txBuffer);
+          
+          if (transaction.recentBlockhash) {
+            const connection = new Connection(SOLANA_RPC_URL!, 'confirmed');
+            const { blockhash: currentBlockhash, lastValidBlockHeight: currentHeight } = await connection.getLatestBlockhash('confirmed');
+            
+            // Check if blockhash is still recent (within ~30 seconds / 75 slots)
+            // Solana blockhashes are valid for 150 slots (~60-90 seconds)
+            // We check with 75 slot buffer to ensure CDP has time to process
+            const isValidResponse = await connection.isBlockhashValid(transaction.recentBlockhash);
+            
+            console.log('[Blockhash Check] Transaction blockhash:', transaction.recentBlockhash.substring(0, 10) + '...');
+            console.log('[Blockhash Check] Current blockhash:', currentBlockhash.substring(0, 10) + '...');
+            console.log('[Blockhash Check] Is blockhash still valid?', isValidResponse.value);
+            
+            if (!isValidResponse.value) {
+              console.error('[Blockhash Check] ❌ Transaction blockhash is STALE');
+              console.log('[Blockhash Check] Transaction took too long between signing and processing');
+              console.log('[Blockhash Check] User took too long to approve, or network delays occurred');
+              
+              // For premium service payments, handle gracefully
+              if (isPremiumServicePayment) {
+                // Log the failed attempt
+                try {
+                  await prisma.payment.create({
+                    data: {
+                      fromWallet: userWallet,
+                      toWallet: process.env.WALLET_WHITE_HOUSE || '',
+                      toAgent: agentId,
+                      amount: amountUsdc,
+                      currency: 'USDC',
+                      signature: `expired-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+                      serviceType: 'premium_service_expired',
+                      verified: false,
+                      isAgentToAgent: false,
+                      initiatedBy: userWallet,
+                      x402Error: 'Transaction blockhash expired before processing'
+                    }
+                  });
+                } catch (dbError: any) {
+                  console.error('[Blockhash Check] Failed to log expired payment:', dbError.message);
+                }
+                
+                return NextResponse.json(
+                  { 
+                    error: 'Payment processing took too long',
+                    code: 'TRANSACTION_EXPIRED',
+                    retryable: true,
+                    userMessage: 'Transaction expired. Please try again and approve the payment promptly.'
+                  },
+                  { status: 409 }
+                );
+              }
+              
+              // For regular payments, return simple error
+              return NextResponse.json(
+                { 
+                  error: 'Payment processing took too long',
+                  code: 'TRANSACTION_EXPIRED',
+                  retryable: true
+                },
+                { status: 409 }
+              );
+            }
+            
+            console.log('[Blockhash Check] ✅ Blockhash is still valid, proceeding with CDP settlement');
+          }
+        } catch (blockhashError: any) {
+          console.error('[Blockhash Check] Validation error:', blockhashError.message);
+          // If the error is about stale blockhash, throw it
+          if (blockhashError.message.includes('expired') || blockhashError.message.includes('stale')) {
+            throw blockhashError;
+          }
+          // Otherwise, just warn and continue (don't block payment if validation fails)
+          console.warn('[Blockhash Check] Skipping validation, continuing with CDP settlement');
+        }
+        
         const facilitator = createFacilitatorConfig(cdpKeyId, cdpKeySecret);
         const authHeaders = await facilitator.createAuthHeaders?.();
         if (!authHeaders) {
@@ -817,41 +899,12 @@ async function handlePOST(request: NextRequest) {
             console.error('[Premium Service] Failed to log payment:', dbError.message);
           }
           
-          // Save system error message directly to database (bypass Coral - more reliable)
-          // The frontend will display this via polling or we'll return it in the response
+          // Error message will be displayed by frontend directly (no need to store)
+          // Frontend will show it as a local system message that persists across polling
           const systemErrorMessage = `📞 The prison payphone experienced technical difficulties while processing your payment. Service requested: ${serviceType} (${amountUsdc} USDC). Your funds are safe - the transaction was not completed. Please try again in a few moments.`;
           
-          try {
-            // Look up Thread record by coralThreadId
-            const threadRecord = await prisma.thread.findFirst({
-              where: { coralThreadId: threadId }
-            });
-            
-            if (threadRecord) {
-              await prisma.message.create({
-                data: {
-                  threadId: threadRecord.id,
-                  senderId: 'prison',
-                  content: systemErrorMessage,
-                  timestamp: new Date(),
-                  mentions: ['sbf'],
-                  isIntermediary: false,
-                  metadata: {
-                    isSystemError: true,
-                    originalError: error.message,
-                    serviceType,
-                    amountUsdc,
-                    paymentFailed: true
-                  }
-                }
-              });
-              console.log('[Premium Service] System error message saved to database');
-            } else {
-              console.warn('[Premium Service] Thread not found in database, cannot save error message');
-            }
-          } catch (dbSaveError: any) {
-            console.error('[Premium Service] Failed to save system message to database:', dbSaveError.message);
-          }
+          console.log('[Premium Service] Error message will be displayed by frontend');
+          console.log('[Premium Service] Message:', systemErrorMessage);
           
           // Return 503 Service Unavailable (NOT 402!)
           // This prevents frontend from thinking payment succeeded

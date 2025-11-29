@@ -1063,10 +1063,19 @@ export default function ChatInterface({
         
         let finalMessages = deduplicatedById;
         if (newAgentMessages.length > 0) {
-          // We got a NEW agent response, so remove the loading message
-          console.log('[Polling] NEW agent response detected, removing system messages');
+          // We got a NEW agent response, so remove ONLY loading messages (not error messages)
+          console.log('[Polling] NEW agent response detected, removing loading messages');
           console.log('[Polling] loadingMessageIdRef.current:', loadingMessageIdRef.current);
-          finalMessages = deduplicatedById.filter(m => m.senderId !== 'system');
+          finalMessages = deduplicatedById.filter(m => 
+            // Keep everything except:
+            // 1. System loading messages (⏳)
+            // 2. The specific loading message we're tracking
+            !(m.senderId === 'system' && (
+              m.id.startsWith('loading-') || 
+              m.content.startsWith('⏳') ||
+              m.id === loadingMessageIdRef.current
+            ))
+          );
           
           loadingMessageIdRef.current = null;
           setLoading(false);
@@ -1440,6 +1449,11 @@ export default function ChatInterface({
 
       if (!retryResponse.ok && retryResponse.status !== 402) {
         const errorData = await retryResponse.json();
+        
+        // Handle transaction expiration with user-friendly message
+        if (errorData.code === 'TRANSACTION_EXPIRED') {
+          throw new Error('Payment processing took too long. Please try again.');
+        }
         
         // Check if this is a payment processor error (503)
         if (retryResponse.status === 503 && errorData.retryable) {

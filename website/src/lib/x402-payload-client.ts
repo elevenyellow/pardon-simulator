@@ -121,28 +121,7 @@ export async function createUSDCTransaction(
   const fromAta = await getAssociatedTokenAddress(USDC_MINT, fromPubkey);
   const toAta = await getAssociatedTokenAddress(USDC_MINT, toPubkey);
   
-  // Get recent blockhash from backend
-  const blockhashResponse = await fetch('/api/solana/blockhash');
-  if (!blockhashResponse.ok) {
-    throw new Error('Failed to get blockhash from backend');
-  }
-  const { blockhash, lastValidBlockHeight } = await blockhashResponse.json();
-  
-  console.log('Creating USDC transfer transaction');
-  console.log('CDP facilitator pays fees, user signs transfer authority');
-  
-  // Create transaction with CDP facilitator as fee payer
-  const transaction = new Transaction({
-    feePayer: CDP_FACILITATOR,  // ← CDP pays fees and will cosign
-    blockhash,
-    lastValidBlockHeight
-  });
-  
-  // Add compute budget
-  transaction.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 300_000 }));
-  transaction.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1 }));
-  
-  // Check if recipient ATA exists
+  // Check if recipient ATA exists BEFORE getting blockhash (do slow operations first)
   const checkResponse = await fetch('/api/solana/check-token-accounts', {
     method:'POST',
     headers: {'Content-Type':'application/json'},
@@ -154,6 +133,31 @@ export async function createUSDCTransaction(
   
   const { accounts } = await checkResponse.json();
   const recipientExists = accounts[0]?.exists;
+  
+  console.log('[x402] ⏱️ Fetching FRESH blockhash (as late as possible to minimize staleness)');
+  
+  // Get blockhash as LATE as possible - right before building transaction
+  // This minimizes the time window between blockhash retrieval and CDP settlement
+  // Blockhashes are valid for ~60-90 seconds (150 slots), so every second counts
+  const blockhashResponse = await fetch('/api/solana/blockhash');
+  if (!blockhashResponse.ok) {
+    throw new Error('Failed to get blockhash from backend');
+  }
+  const { blockhash, lastValidBlockHeight } = await blockhashResponse.json();
+  
+  console.log('[x402] Blockhash retrieved:', blockhash.substring(0, 10) + '...');
+  console.log('[x402] Building transaction immediately to minimize staleness window');
+  
+  // Create transaction with CDP facilitator as fee payer
+  const transaction = new Transaction({
+    feePayer: CDP_FACILITATOR,  // ← CDP pays fees and will cosign
+    blockhash,
+    lastValidBlockHeight
+  });
+  
+  // Add compute budget
+  transaction.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 300_000 }));
+  transaction.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1 }));
   
   // Create recipient ATA if it doesn't exist
   if (!recipientExists) {
