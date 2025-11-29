@@ -257,6 +257,16 @@ class APIClient {
 
     if (!response.ok) {
       console.error('Error response:', response.status, data);
+      
+      // For payment processor errors (503), include additional context
+      if (response.status === 503 && data.retryable) {
+        const error: any = new Error(data.error ||`Failed to send message: ${response.statusText}`);
+        error.isPaymentProcessorError = true;
+        error.details = data.details;
+        error.retryable = data.retryable;
+        throw error;
+      }
+      
       throw new Error(data.error ||`Failed to send message: ${response.statusText}`);
     }
 

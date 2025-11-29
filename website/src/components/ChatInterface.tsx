@@ -1232,8 +1232,30 @@ export default function ChatInterface({
     } catch (err: any) {
       console.error('Send message error:', err);
       
-      const errorMessage = err.message ||'Failed to send message';
-      showToast(errorMessage,'error');
+      // Check if this is a payment processor error
+      if (err.isPaymentProcessorError) {
+        // Show the error as a message in the chat (prison phone style)
+        const systemErrorMessage: Message = {
+          id: `system-error-${Date.now()}`,
+          senderId: 'system',
+          sender: 'Prison Phone System',
+          content: '📞 The prison payphone experienced technical difficulties processing your call. The payment system is temporarily unavailable. Please try again in a few moments.',
+          timestamp: new Date(),
+          isAgent: true,
+          mentions: [USER_SENDER_ID],
+          isIntermediary: false
+        };
+        
+        setMessages(prev => [...prev, systemErrorMessage]);
+        
+        // Also show a toast for immediate feedback
+        showToast('Payment system temporarily unavailable', 'error');
+      } else {
+        // Regular error - just show toast
+        const errorMessage = err.message ||'Failed to send message';
+        showToast(errorMessage,'error');
+      }
+      
       setLoading(false); // Only clear loading on error
     }
     // Note: loading stays true until agent response arrives via SSE/polling
@@ -1393,6 +1415,16 @@ export default function ChatInterface({
 
       if (!retryResponse.ok && retryResponse.status !== 402) {
         const errorData = await retryResponse.json();
+        
+        // Check if this is a payment processor error (503)
+        if (retryResponse.status === 503 && errorData.retryable) {
+          const error: any = new Error(errorData.error ||`Request failed: ${retryResponse.status}`);
+          error.isPaymentProcessorError = true;
+          error.details = errorData.details;
+          error.retryable = errorData.retryable;
+          throw error;
+        }
+        
         throw new Error(errorData.error ||`Request failed: ${retryResponse.status}`);
       }
 
@@ -1500,29 +1532,58 @@ export default function ChatInterface({
         lastUserMessageRef.current = null;
       }
       
-      // Remove ALL system/loading messages and optimistic payment messages on error
-      if (loadingMessageIdRef.current) {
-        setMessages(prev => prev.filter(m => 
-          m.id !== loadingMessageIdRef.current && 
-          m.senderId !== 'system' &&
-          !m.id.startsWith('optimistic-') ||
-          (m.id.startsWith('optimistic-') && !m.content.includes('Payment for premium service'))
-        ));
+      // Check if this is a payment processor error
+      if (err.isPaymentProcessorError) {
+        // Show the error as a message in the chat (prison phone style)
+        const systemErrorMessage: Message = {
+          id: `system-error-${Date.now()}`,
+          senderId: 'system',
+          sender: 'Prison Phone System',
+          content: '📞 The prison payphone experienced technical difficulties processing your call. The payment system is temporarily unavailable. Your payment was not completed. Please try again in a few moments.',
+          timestamp: new Date(),
+          isAgent: true,
+          mentions: [USER_SENDER_ID],
+          isIntermediary: false
+        };
+        
+        // Remove loading messages and add error message
+        setMessages(prev => {
+          const withoutLoading = prev.filter(m => 
+            m.id !== loadingMessageIdRef.current && 
+            m.senderId !== 'system' &&
+            (!m.id.startsWith('optimistic-') || !m.content.includes('Payment for premium service'))
+          );
+          return [...withoutLoading, systemErrorMessage];
+        });
         loadingMessageIdRef.current = null;
+        
+        // Also show a toast for immediate feedback
+        showToast('Payment system temporarily unavailable', 'error');
+      } else {
+        // Remove ALL system/loading messages and optimistic payment messages on error
+        if (loadingMessageIdRef.current) {
+          setMessages(prev => prev.filter(m => 
+            m.id !== loadingMessageIdRef.current && 
+            m.senderId !== 'system' &&
+            !m.id.startsWith('optimistic-') ||
+            (m.id.startsWith('optimistic-') && !m.content.includes('Payment for premium service'))
+          ));
+          loadingMessageIdRef.current = null;
+        }
+        
+        // Show user-friendly error message
+        if (err.message?.includes('User rejected') || err.message?.includes('rejected the request')) {
+          showToast('Payment cancelled by user','error');
+        } else if (err.message?.includes('Extension context invalidated') || 
+                   err.message?.includes('context invalidated')) {
+          showToast('Wallet extension error. Please reload the page and try again.','error');
+        } else {
+          showToast(err.message ||'Payment failed. Please try again.','error');
+        }
       }
       
       // CRITICAL: Always reset loading state to unblock the UI
       setLoading(false);
-      
-      // Show user-friendly error message
-      if (err.message?.includes('User rejected') || err.message?.includes('rejected the request')) {
-        showToast('Payment cancelled by user','error');
-      } else if (err.message?.includes('Extension context invalidated') || 
-                 err.message?.includes('context invalidated')) {
-        showToast('Wallet extension error. Please reload the page and try again.','error');
-      } else {
-        showToast(err.message ||'Payment failed. Please try again.','error');
-      }
     }
   };
 
