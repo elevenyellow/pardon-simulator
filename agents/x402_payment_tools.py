@@ -309,6 +309,22 @@ Would you like to use one of those instead?"""
     # Get x402 adapter for standard-compliant format
     adapter = get_x402_adapter(network="mainnet-beta")
     
+    # Extract target agent from details for connection_intro
+    target_agent = None
+    if service_type == "connection_intro":
+        # Extract target agent from details
+        # Details format: "Ask {agent} about..." or "Contact {agent}..."
+        import re
+        # Match common patterns for agent names
+        agent_match = re.search(
+            r'\b(trump-donald|trump-melania|trump-eric|trump-donjr|trump-barron|cz|sbf)\b', 
+            details.lower(), 
+            re.IGNORECASE
+        )
+        if agent_match:
+            target_agent = agent_match.group(1).lower()
+            print(f"   🎯 Extracted target agent for connection_intro: {target_agent}")
+    
     # Create x402-compliant payment request (USDC) - directed to Treasury
     payment_request = adapter.create_payment_request(
         resource_url=f"pardon-simulator://{to_agent}/{service_type}",
@@ -317,7 +333,9 @@ Would you like to use one of those instead?"""
         recipient_address=treasury_address,  # White House Treasury address
         amount_usdc=amount,
         service_type=service_type,
-        details=details
+        details=details,
+        provider_agent=to_agent,
+        target_agent=target_agent
     )
     
     # Store pending payment
@@ -328,6 +346,7 @@ Would you like to use one of those instead?"""
         "service": service_type,
         "amount": amount,
         "details": details,
+        "target_agent": target_agent,
         "timestamp": time.time()
     }
     
@@ -1619,6 +1638,7 @@ async def verify_payment_transaction(
     expected_amount_usdc: float,
     service_type: str,
     to_agent: Optional[str] = None,
+    payment_id: Optional[str] = None,
     backend_url: Optional[str] = None
 ) -> str:
     """
@@ -1640,6 +1660,7 @@ async def verify_payment_transaction(
         expected_amount_usdc: Expected payment amount in USDC
         service_type: Type of service being paid for
         to_agent: Agent ID receiving the payment (e.g., 'cz', 'trump-donald'). Pass os.getenv('CORAL_AGENT_ID') to identify yourself.
+        payment_id: Payment ID from the payment request (for precise service matching)
         backend_url: Backend URL (defaults to BACKEND_URL env var or localhost:3000)
     
     Returns:
@@ -1847,21 +1868,40 @@ Please ensure you sent the correct payment."""
         
         # Find service details from payment ledger
         service_details = None
-        for payment_id, payment_data in payment_ledger.get("pending", {}).items():
-            if (payment_data.get("service") == service_type and 
-                payment_data.get("amount") == expected_amount_usdc):
-                service_details = payment_data.get("details", "")
-                break
+        target_agent_for_intro = None
+        
+        # Try to match by payment_id first (most reliable)
+        if payment_id and payment_id in payment_ledger.get("pending", {}):
+            payment_data = payment_ledger["pending"][payment_id]
+            service_details = payment_data.get("details", "")
+            target_agent_for_intro = payment_data.get("target_agent")
+            print(f"✅ Found service details by payment_id: {payment_id}")
+            # Clean up used payment
+            del payment_ledger["pending"][payment_id]
+        else:
+            # Fallback: match by service_type and amount
+            # This handles payments made before the payment_id fix
+            print(f"⚠️ Payment ID not found or not provided, falling back to service_type + amount matching")
+            for pid, payment_data in list(payment_ledger.get("pending", {}).items()):
+                if (payment_data.get("service") == service_type and 
+                    abs(payment_data.get("amount", 0) - expected_amount_usdc) < 0.0001):
+                    service_details = payment_data.get("details", "")
+                    target_agent_for_intro = payment_data.get("target_agent")
+                    print(f"⚠️ Matched by service+amount, using oldest pending: {pid}")
+                    # Clean up used payment
+                    del payment_ledger["pending"][pid]
+                    break
         
         # Service-specific instructions
         if service_type == "connection_intro":
+            target_info = f" (target: {target_agent_for_intro})" if target_agent_for_intro else ""
             return f"""✅ PAYMENT VERIFIED!
 
 Transaction: {transaction_hash}
 From: {details['from'][:8]}...{details['from'][-8:]}
 To: {details['to'][:8]}...{details['to'][-8:]}
 Amount: {details['amount']} {details['currency']}
-Service: {service_type}
+Service: {service_type}{target_info}
 
 🔍 View transaction:
 - x402scan: {result.get('x402ScanUrl', 'N/A')}
@@ -1872,10 +1912,11 @@ Service: {service_type}
 ═══════════════════════════════════════════════════════════════
 
 Context: {service_details or 'User wants you to contact another agent'}
+{f'Target Agent: {target_agent_for_intro}' if target_agent_for_intro else ''}
 
 IMMEDIATELY call contact_agent() tool ONCE:
-   1. Extract the target agent from the conversation (who should you contact?)
-   2. Extract the question/topic from the conversation (what does the user want to know?)
+   1. Extract the target agent from the conversation{f' (hint: {target_agent_for_intro})' if target_agent_for_intro else ''}
+   2. Extract the question/topic from the conversation
    3. Compose a natural message in YOUR voice that relays the user's question
    4. Call: contact_agent(agent_to_contact="<target-agent-id>", message="@<target-agent-id> [your natural message]", current_thread_id=<thread-id>)
    

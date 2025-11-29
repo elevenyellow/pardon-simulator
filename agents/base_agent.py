@@ -730,7 +730,7 @@ class BaseAgent(ABC):
         wallet_match = re.search(r'\[USER_WALLET:([1-9A-HJ-NP-Za-km-z]{32,44})\]', message_content)
         return wallet_match.group(1) if wallet_match else None
     
-    def detect_payment(self, message_content: str) -> Optional[Tuple[str, str, float]]:
+    def detect_payment(self, message_content: str) -> Optional[Tuple[str, str, float, Optional[str]]]:
         """
         Detect payment completion marker in message.
         
@@ -738,11 +738,12 @@ class BaseAgent(ABC):
             message_content: Message content to scan
         
         Returns:
-            Tuple of (transaction_signature, service_type, amount_usdc) or None
+            Tuple of (transaction_signature, service_type, amount_usdc, payment_id) or None
         """
-        # Enhanced marker format: [PREMIUM_SERVICE_PAYMENT_COMPLETED: tx|service|amount]
+        # Enhanced marker format: [PREMIUM_SERVICE_PAYMENT_COMPLETED: tx|service|amount|payment_id]
+        # payment_id is optional for backward compatibility
         payment_match = re.search(
-            r'\[PREMIUM_SERVICE_PAYMENT_COMPLETED:\s*([A-Za-z0-9]{87,88})\|(\w+)\|([\d.]+)\]',
+            r'\[PREMIUM_SERVICE_PAYMENT_COMPLETED:\s*([A-Za-z0-9]{87,88})\|(\w+)\|([\d.]+)(?:\|([^\]]+))?\]',
             message_content
         )
         
@@ -750,8 +751,9 @@ class BaseAgent(ABC):
             transaction_signature = payment_match.group(1)
             service_type = payment_match.group(2)
             amount_usdc = float(payment_match.group(3))
-            print(f"[PAYMENT DETECTION] Enhanced marker: tx={transaction_signature[:8]}..., service={service_type}, amount={amount_usdc} USDC")
-            return (transaction_signature, service_type, amount_usdc)
+            payment_id = payment_match.group(4) if payment_match.group(4) else None
+            print(f"[PAYMENT DETECTION] Enhanced marker: tx={transaction_signature[:8]}..., service={service_type}, amount={amount_usdc} USDC, payment_id={payment_id}")
+            return (transaction_signature, service_type, amount_usdc, payment_id)
         
         # Fallback: old format without service info (for backwards compatibility)
         legacy_match = re.search(
@@ -765,7 +767,8 @@ class BaseAgent(ABC):
             # Try to extract from context or use safe defaults
             service_type = "unknown"
             amount_usdc = 0.0005  # Minimum default
-            return (transaction_signature, service_type, amount_usdc)
+            payment_id = None
+            return (transaction_signature, service_type, amount_usdc, payment_id)
         
         return None
     
@@ -774,9 +777,11 @@ class BaseAgent(ABC):
         transaction_signature: str,
         user_wallet: str,
         service_type: str,
-        amount_usdc: float
+        amount_usdc: float,
+        payment_id: Optional[str] = None
     ) -> str:
         """Create explicit payment processing instruction for LLM."""
+        payment_id_param = f',\n       payment_id="{payment_id}"' if payment_id else ''
         return f"""
 🚨 PAYMENT COMPLETION DETECTED 🚨
 
@@ -784,6 +789,7 @@ Transaction Signature: {transaction_signature}
 User Wallet: {user_wallet}
 Service Type: {service_type}
 Amount: {amount_usdc} USDC
+Payment ID: {payment_id or 'N/A'}
 
 MANDATORY ACTIONS (Execute in THIS turn):
 
@@ -792,7 +798,7 @@ MANDATORY ACTIONS (Execute in THIS turn):
        transaction_hash="{transaction_signature}",
        expected_from="{user_wallet}",
        expected_amount_usdc={amount_usdc},
-       service_type="{service_type}"
+       service_type="{service_type}"{payment_id_param}
    )
 
 2. After verification succeeds, deliver the {service_type} service immediately
@@ -873,9 +879,9 @@ DO NOT just acknowledge payment - DELIVER THE SERVICE NOW!
                 payment_instruction = ""
                 
                 if payment_info:
-                    tx_sig, service_type, amount = payment_info
+                    tx_sig, service_type, amount, payment_id = payment_info
                     payment_instruction = self.create_payment_instruction(
-                        tx_sig, user_wallet, service_type, amount
+                        tx_sig, user_wallet, service_type, amount, payment_id
                     )
                 else:
                     # NO PAYMENT DETECTED - Check if this is a connection_intro request!

@@ -55,7 +55,9 @@ class X402SolanaAdapter:
         recipient_address: str,
         amount_usdc: float,
         service_type: str,
-        details: str = ""
+        details: str = "",
+        provider_agent: str = None,
+        target_agent: str = None
     ) -> Dict[str, Any]:
         """
         Create x402-compliant payment request for Solana using USDC.
@@ -71,11 +73,22 @@ class X402SolanaAdapter:
             amount_usdc: Amount in USDC (e.g., 0.5 for 0.5 USDC)
             service_type: Type of service (e.g., "insider_info")
             details: Additional details about the service
+            provider_agent: Agent providing the service (e.g., "trump-donald")
+            target_agent: For connection_intro - the agent to contact (e.g., "trump-barron")
         
         Returns:
             x402-compliant payment request dictionary
         """
-        payment_id = f"{recipient_id}-{service_type}-{int(time.time())}"
+        # Enhanced payment_id with agent context
+        if service_type == "connection_intro" and target_agent and provider_agent:
+            # Include target agent for connection_intro
+            payment_id = f"wht-{provider_agent}-{service_type}-{target_agent}-{int(time.time())}"
+        elif provider_agent:
+            # Include provider agent for all other services
+            payment_id = f"wht-{provider_agent}-{service_type}-{int(time.time())}"
+        else:
+            # Fallback to old format for backward compatibility
+            payment_id = f"{recipient_id}-{service_type}-{int(time.time())}"
         
         return {
             # Core x402 protocol fields
@@ -126,6 +139,8 @@ class X402SolanaAdapter:
                 "service": service_type,
                 "details": details,
                 "agent": recipient_id,
+                "provider_agent": provider_agent,
+                "target_agent": target_agent,
                 "token": "USDC",
                 "mint": self.usdc_mint
             }

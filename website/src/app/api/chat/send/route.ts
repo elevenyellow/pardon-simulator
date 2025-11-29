@@ -875,20 +875,22 @@ async function handlePOST(request: NextRequest) {
       // Extract service info from the payment data header (already parsed earlier)
       let serviceType = 'unknown';
       let amountUsdc = 0;
+      let paymentId = 'unknown';
       
       if (paymentData) {
         try {
           const paymentPayload = JSON.parse(paymentData);
           serviceType = paymentPayload.service_type || 'unknown';
           amountUsdc = paymentPayload.amount_usdc || 0;
+          paymentId = paymentPayload.payment_id || 'unknown';
         } catch (e) {
           console.error('[Premium Service] Failed to parse payment data for marker:', e);
         }
       }
       
-      // Enhanced marker with service_type and amount for agent verification
-      contentWithWallet +=`\n[PREMIUM_SERVICE_PAYMENT_COMPLETED: ${settlementResult.transaction}|${serviceType}|${amountUsdc}]`;
-      console.log(`[Premium Service] Enhanced marker added: service=${serviceType}, amount=${amountUsdc} USDC`);
+      // Enhanced marker with service_type, amount, and payment_id for agent verification
+      contentWithWallet +=`\n[PREMIUM_SERVICE_PAYMENT_COMPLETED: ${settlementResult.transaction}|${serviceType}|${amountUsdc}|${paymentId}]`;
+      console.log(`[Premium Service] Enhanced marker added: service=${serviceType}, amount=${amountUsdc} USDC, payment_id=${paymentId}`);
     } else if (isPremiumServicePayment && !settlementResult?.success) {
       console.log('[Premium Service] Payment marker NOT added - settlement failed:', settlementResult?.error || 'unknown error');
     }
