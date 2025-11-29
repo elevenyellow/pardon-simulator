@@ -994,38 +994,46 @@ Only after payment verified should you call contact_agent()!
                 # This prevents silent failures where agent thinks but doesn't speak
                 # IMPORTANT: Only trigger if we have intermediate_steps and can confidently say send_message wasn't called
                 # If intermediate_steps is missing/empty, the execution might have failed - don't send duplicate
-                if not send_message_called and has_intermediate_steps and isinstance(response, dict) and response.get('output'):
-                    output_text = response['output'].strip()
-                    if output_text:  # Only if there's actual content
-                        print(f"[Fallback] ⚠️  LLM generated output but didn't call coral_send_message - using fallback")
-                        thread_id = mentions_data.get("messages", [{}])[0].get("threadId")
-                        
-                        # Find the coral_send_message tool
-                        send_message_tool = None
-                        for tool in agent_executor.tools:
-                            if hasattr(tool, 'name') and 'coral_send_message' in tool.name:
-                                send_message_tool = tool
-                                break
-                        
-                        if thread_id and send_message_tool:
-                            try:
-                                await send_message_tool.ainvoke({
-                                    "threadId": thread_id,
-                                    "content": output_text,
-                                    "mentions": ["sbf"] if is_user_message else [sender_id]
-                                })
-                                print(f"[Fallback] ✅ Response auto-sent via fallback mechanism")
-                            except Exception as e:
-                                print(f"[Fallback] ❌ Failed to auto-send response: {e}")
-                                traceback.print_exc()
-                        else:
-                            if not thread_id:
-                                print(f"[Fallback] ⚠️  Cannot auto-send: no threadId in mentions_data")
-                            if not send_message_tool:
-                                print(f"[Fallback] ⚠️  Cannot auto-send: coral_send_message tool not found")
-                elif not send_message_called and not has_intermediate_steps and isinstance(response, dict) and response.get('output'):
-                    # Execution may have failed/restarted - don't use fallback to avoid duplicates
-                    print(f"[Fallback] ⚠️  Output exists but no intermediate_steps - possible execution error, skipping fallback to avoid duplicates")
+                # CRITICAL: Wrap in try-except to prevent fallback failures from triggering agent retries
+                try:
+                    if not send_message_called and has_intermediate_steps and isinstance(response, dict) and response.get('output'):
+                        output_text = response['output'].strip()
+                        if output_text:  # Only if there's actual content
+                            print(f"[Fallback] ⚠️  LLM generated output but didn't call coral_send_message - using fallback")
+                            thread_id = mentions_data.get("messages", [{}])[0].get("threadId")
+                            
+                            # Find the coral_send_message tool
+                            send_message_tool = None
+                            for tool in self.agent_executor.tools:
+                                if hasattr(tool, 'name') and 'coral_send_message' in tool.name:
+                                    send_message_tool = tool
+                                    break
+                            
+                            if thread_id and send_message_tool:
+                                try:
+                                    await send_message_tool.ainvoke({
+                                        "threadId": thread_id,
+                                        "content": output_text,
+                                        "mentions": ["sbf"] if is_user_message else [sender_id]
+                                    })
+                                    print(f"[Fallback] ✅ Response auto-sent via fallback mechanism")
+                                except Exception as e:
+                                    print(f"[Fallback] ❌ Failed to auto-send response: {e}")
+                                    traceback.print_exc()
+                            else:
+                                if not thread_id:
+                                    print(f"[Fallback] ⚠️  Cannot auto-send: no threadId in mentions_data")
+                                if not send_message_tool:
+                                    print(f"[Fallback] ⚠️  Cannot auto-send: coral_send_message tool not found")
+                    elif not send_message_called and not has_intermediate_steps and isinstance(response, dict) and response.get('output'):
+                        # Execution may have failed/restarted - don't use fallback to avoid duplicates
+                        print(f"[Fallback] ⚠️  Output exists but no intermediate_steps - possible execution error, skipping fallback to avoid duplicates")
+                except Exception as fallback_error:
+                    # Fallback mechanism failed - log but don't propagate
+                    # The agent execution itself was successful, so don't trigger retries
+                    print(f"[Fallback] ❌ CRITICAL: Fallback mechanism encountered error: {fallback_error}")
+                    traceback.print_exc()
+                    print(f"[Fallback] Agent execution was successful but message may not have been sent")
                 
                 print(f"[OK] Response processed successfully on attempt {attempt + 1}", flush=True)
                 return response
@@ -1414,38 +1422,46 @@ Only after payment verified should you call contact_agent()!
                 # This prevents silent failures where agent thinks but doesn't speak
                 # IMPORTANT: Only trigger if we have intermediate_steps and can confidently say send_message wasn't called
                 # If intermediate_steps is missing/empty, the execution might have failed - don't send duplicate
-                if not send_message_called and has_intermediate_steps and isinstance(response, dict) and response.get('output'):
-                    output_text = response['output'].strip()
-                    if output_text:  # Only if there's actual content
-                        print(f"[{pool_name}] ⚠️  LLM generated output but didn't call coral_send_message - using fallback")
-                        thread_id = mentions_data.get("messages", [{}])[0].get("threadId")
-                        
-                        # Find the coral_send_message tool
-                        send_message_tool = None
-                        for tool in agent_executor.tools:
-                            if hasattr(tool, 'name') and 'coral_send_message' in tool.name:
-                                send_message_tool = tool
-                                break
-                        
-                        if thread_id and send_message_tool:
-                            try:
-                                await send_message_tool.ainvoke({
-                                    "threadId": thread_id,
-                                    "content": output_text,
-                                    "mentions": ["sbf"] if is_user_message else [sender_id]
-                                })
-                                print(f"[{pool_name}] ✅ Response auto-sent via fallback mechanism")
-                            except Exception as e:
-                                print(f"[{pool_name}] ❌ Failed to auto-send response: {e}")
-                                traceback.print_exc()
-                        else:
-                            if not thread_id:
-                                print(f"[{pool_name}] ⚠️  Cannot auto-send: no threadId in mentions_data")
-                            if not send_message_tool:
-                                print(f"[{pool_name}] ⚠️  Cannot auto-send: coral_send_message tool not found")
-                elif not send_message_called and not has_intermediate_steps and isinstance(response, dict) and response.get('output'):
-                    # Execution may have failed/restarted - don't use fallback to avoid duplicates
-                    print(f"[{pool_name}] ⚠️  Output exists but no intermediate_steps - possible execution error, skipping fallback to avoid duplicates")
+                # CRITICAL: Wrap in try-except to prevent fallback failures from triggering agent retries
+                try:
+                    if not send_message_called and has_intermediate_steps and isinstance(response, dict) and response.get('output'):
+                        output_text = response['output'].strip()
+                        if output_text:  # Only if there's actual content
+                            print(f"[{pool_name}] ⚠️  LLM generated output but didn't call coral_send_message - using fallback")
+                            thread_id = mentions_data.get("messages", [{}])[0].get("threadId")
+                            
+                            # Find the coral_send_message tool
+                            send_message_tool = None
+                            for tool in self.agent_executor.tools:
+                                if hasattr(tool, 'name') and 'coral_send_message' in tool.name:
+                                    send_message_tool = tool
+                                    break
+                            
+                            if thread_id and send_message_tool:
+                                try:
+                                    await send_message_tool.ainvoke({
+                                        "threadId": thread_id,
+                                        "content": output_text,
+                                        "mentions": ["sbf"] if is_user_message else [sender_id]
+                                    })
+                                    print(f"[{pool_name}] ✅ Response auto-sent via fallback mechanism")
+                                except Exception as e:
+                                    print(f"[{pool_name}] ❌ Failed to auto-send response: {e}")
+                                    traceback.print_exc()
+                            else:
+                                if not thread_id:
+                                    print(f"[{pool_name}] ⚠️  Cannot auto-send: no threadId in mentions_data")
+                                if not send_message_tool:
+                                    print(f"[{pool_name}] ⚠️  Cannot auto-send: coral_send_message tool not found")
+                    elif not send_message_called and not has_intermediate_steps and isinstance(response, dict) and response.get('output'):
+                        # Execution may have failed/restarted - don't use fallback to avoid duplicates
+                        print(f"[{pool_name}] ⚠️  Output exists but no intermediate_steps - possible execution error, skipping fallback to avoid duplicates")
+                except Exception as fallback_error:
+                    # Fallback mechanism failed - log but don't propagate
+                    # The agent execution itself was successful, so don't trigger retries
+                    print(f"[{pool_name}] ❌ CRITICAL: Fallback mechanism encountered error: {fallback_error}")
+                    traceback.print_exc()
+                    print(f"[{pool_name}] Agent execution was successful but message may not have been sent")
                 
                 print(f"[{pool_name}] ✓ Response processed successfully", flush=True)
                 return response
