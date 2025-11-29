@@ -682,6 +682,51 @@ export default function ChatInterface({
     };
   }, [threadId, sessionId, publicKey, selectedAgent, shouldPoll]);
 
+  // 🔄 Page Visibility API: Handle browser focus loss and regain
+  // This ensures messages aren't missed when user switches tabs/apps
+  useEffect(() => {
+    if (!threadId || !sessionId) return;
+
+    const handleVisibilityChange = async () => {
+      if (!document.hidden) {
+        // Page became visible again - user returned to tab
+        console.log('[Visibility] Page became visible - forcing message poll');
+        
+        // Force immediate poll to catch any missed messages (silently)
+        try {
+          const coralMessages = await apiClient.getMessages(sessionId, threadId);
+          const currentMessageCount = messages.length;
+          
+          if (coralMessages.length > currentMessageCount) {
+            console.log(`[Visibility] Found ${coralMessages.length - currentMessageCount} new message(s)`);
+            // Messages will be updated by the main SSE/polling logic
+          }
+        } catch (error) {
+          console.error('[Visibility] Error polling for messages:', error);
+        }
+        
+        // If SSE was closed, signal that it should reconnect
+        if (!eventSourceRef.current && shouldPoll) {
+          console.log('[Visibility] SSE connection lost - will reconnect via main SSE effect');
+          // The main SSE effect will handle reconnection
+          setShouldPoll(false);
+          setTimeout(() => setShouldPoll(true), 100);
+        }
+      } else {
+        // Page became hidden - user switched away
+        console.log('[Visibility] Page hidden - connection may be throttled');
+      }
+    };
+
+    // Add visibility change listener
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Cleanup
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [threadId, sessionId, shouldPoll, messages.length]);
+
   // Auto-scroll only when new messages are added
   useEffect(() => {
     const currentMessageCount = messages.length;
