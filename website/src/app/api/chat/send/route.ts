@@ -391,16 +391,64 @@ async function handlePOST(request: NextRequest) {
         
         console.log('[CDP] Sending settle request to:', settleUrl);
         
-        const settleResponse = await fetch(settleUrl, {
-          method:'POST',
-          headers: {
-            ...settleHeaders,
-'Content-Type':'application/json',
-          },
-          body: JSON.stringify(settleRequestBody),
-        });
+        // Retry logic for CDP settle call (CDP 500 errors are often transient)
+        // Retry up to 2 times with exponential backoff for 5xx errors only
+        const maxRetries = 2;
+        let settleResponse: Response | null = null;
+        let lastError: Error | null = null;
         
-        console.log('[CDP] Settle response status:', settleResponse.status, settleResponse.statusText);
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+          if (attempt > 0) {
+            const backoffMs = Math.min(1000 * Math.pow(2, attempt - 1), 3000); // 1s, 2s max
+            console.log(`[CDP] Retrying settle call after ${backoffMs}ms (attempt ${attempt + 1}/${maxRetries + 1})...`);
+            await new Promise(resolve => setTimeout(resolve, backoffMs));
+          }
+          
+          try {
+            settleResponse = await fetch(settleUrl, {
+              method:'POST',
+              headers: {
+                ...settleHeaders,
+'Content-Type':'application/json',
+              },
+              body: JSON.stringify(settleRequestBody),
+            });
+            
+            console.log(`[CDP] Settle response status (attempt ${attempt + 1}):`, settleResponse.status, settleResponse.statusText);
+            
+            // If response is OK or a 4xx error (client error - don't retry), break out
+            if (settleResponse.ok || (settleResponse.status >= 400 && settleResponse.status < 500)) {
+              break;
+            }
+            
+            // 5xx error - retry if we have attempts left
+            if (settleResponse.status >= 500 && attempt < maxRetries) {
+              console.warn(`[CDP] Server error ${settleResponse.status} - will retry...`);
+              lastError = new Error(`CDP server error: ${settleResponse.status}`);
+              continue;
+            }
+            
+            // Last attempt or non-5xx error - break and handle below
+            break;
+          } catch (fetchError: any) {
+            console.error(`[CDP] Network error on attempt ${attempt + 1}:`, fetchError.message);
+            lastError = fetchError;
+            
+            // If we have retries left and this is a network error, retry
+            if (attempt < maxRetries) {
+              continue;
+            }
+            
+            // Last attempt failed - throw
+            throw fetchError;
+          }
+        }
+        
+        if (!settleResponse) {
+          throw lastError || new Error('CDP settle call failed after retries');
+        }
+        
+        console.log('[CDP] Final settle response status:', settleResponse.status, settleResponse.statusText);
         
         if (!settleResponse.ok) {
           const errorText = await settleResponse.text();
@@ -769,68 +817,51 @@ async function handlePOST(request: NextRequest) {
             console.error('[Premium Service] Failed to log payment:', dbError.message);
           }
           
-          // Post a system error message directly to the thread (no agent involvement)
-          const systemErrorMessage = `🔧 System Notice: The prison payphone experienced technical difficulties while processing your payment. Service requested: ${serviceType} (${amountUsdc} USDC). Please try again in a few moments. CDC Facility Management apologizes for the inconvenience.`;
+          // Save system error message directly to database (bypass Coral - more reliable)
+          // The frontend will display this via polling or we'll return it in the response
+          const systemErrorMessage = `📞 The prison payphone experienced technical difficulties while processing your payment. Service requested: ${serviceType} (${amountUsdc} USDC). Your funds are safe - the transaction was not completed. Please try again in a few moments.`;
           
           try {
-            const errorMsgResponse = await fetch(
-              `${CORAL_SERVER_URL}/api/v1/debug/thread/sendMessage/app/priv/${sessionId}/prison`,
-              {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  threadId,
-                  content: systemErrorMessage,
-                  mentions: ['sbf'], // Direct the system notice to the user
-                }),
-              }
-            );
+            // Look up Thread record by coralThreadId
+            const threadRecord = await prisma.thread.findFirst({
+              where: { coralThreadId: threadId }
+            });
             
-            if (errorMsgResponse.ok) {
-              console.log('[Premium Service] System error message posted to thread');
-              
-              // Save system message to database - need to look up Thread record by coralThreadId
-              const threadRecord = await prisma.thread.findFirst({
-                where: { coralThreadId: threadId }
-              });
-              
-              if (threadRecord) {
-                await prisma.message.create({
-                  data: {
-                    threadId: threadRecord.id,
-                    senderId: 'prison',
-                    content: systemErrorMessage,
-                    timestamp: new Date(),
-                    mentions: ['sbf'],
-                    isIntermediary: false,
-                    metadata: {
-                      isSystemError: true,
-                      originalError: error.message,
-                      serviceType,
-                      amountUsdc,
-                      paymentFailed: true
-                    }
+            if (threadRecord) {
+              await prisma.message.create({
+                data: {
+                  threadId: threadRecord.id,
+                  senderId: 'prison',
+                  content: systemErrorMessage,
+                  timestamp: new Date(),
+                  mentions: ['sbf'],
+                  isIntermediary: false,
+                  metadata: {
+                    isSystemError: true,
+                    originalError: error.message,
+                    serviceType,
+                    amountUsdc,
+                    paymentFailed: true
                   }
-                });
-                console.log('[Premium Service] System error message saved to database');
-              } else {
-                console.warn('[Premium Service] Thread not found in database, skipping message save');
-              }
+                }
+              });
+              console.log('[Premium Service] System error message saved to database');
             } else {
-              console.error('[Premium Service] Failed to post system message:', errorMsgResponse.status);
+              console.warn('[Premium Service] Thread not found in database, cannot save error message');
             }
-          } catch (threadError: any) {
-            console.error('[Premium Service] Error posting system message:', threadError.message);
+          } catch (dbSaveError: any) {
+            console.error('[Premium Service] Failed to save system message to database:', dbSaveError.message);
           }
           
           // Return 503 Service Unavailable (NOT 402!)
           // This prevents frontend from thinking payment succeeded
+          // Frontend will display its own user-friendly error message
           return NextResponse.json(
             { 
               error: 'Payment processor temporarily unavailable',
-              details: 'CDP payment facilitator is experiencing issues. Your transaction was not completed.',
+              details: `The Coinbase CDP payment service returned an error (${error.message}). This is a known reliability issue with third-party payment processors. Your transaction was NOT completed and no funds were charged. Please try again in a few moments.`,
               retryable: true,
-              systemMessage: 'A system notice has been posted to the chat explaining the issue.'
+              userFriendlyMessage: systemErrorMessage
             },
             { status: 503 } // Service Unavailable - prevents payment loop
           );
