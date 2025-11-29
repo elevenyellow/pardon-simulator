@@ -2,11 +2,29 @@ import { NextRequest } from 'next/server';
 import { USER_SENDER_ID } from '@/lib/constants';
 import { prisma } from '@/lib/prisma';
 import { withRetry } from '@/lib/db-retry';
+import { 
+  checkSSEConnection, 
+  registerSSEConnection, 
+  unregisterSSEConnection,
+  updateConnectionActivity 
+} from '@/lib/middleware/sse-protection';
 
 const CORAL_SERVER_URL = process.env.CORAL_SERVER_URL || 'http://localhost:5555';
+const DEBUG_SSE = process.env.NODE_ENV === 'development';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+
+// Helper to get client IP
+function getClientIP(request: NextRequest): string {
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) return forwarded.split(',')[0].trim();
+  
+  const realIP = request.headers.get('x-real-ip');
+  if (realIP) return realIP;
+  
+  return 'unknown';
+}
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -17,40 +35,76 @@ export async function GET(request: NextRequest) {
     return new Response('Missing sessionId or threadId', { status: 400 });
   }
 
+  // 🛡️ PROTECTION: Check if connection should be allowed
+  const clientIP = getClientIP(request);
+  const connectionCheck = checkSSEConnection(sessionId, threadId, clientIP);
+  
+  if (!connectionCheck.allowed) {
+    console.warn(`🚫 [SSE] Connection blocked: ${connectionCheck.reason}`);
+    return new Response(
+      JSON.stringify({ 
+        error: 'connection_limit_exceeded',
+        message: connectionCheck.reason,
+        retryAfter: connectionCheck.retryAfter 
+      }), 
+      { 
+        status: 429,
+        headers: {
+          'Content-Type': 'application/json',
+          'Retry-After': connectionCheck.retryAfter?.toString() || '10'
+        }
+      }
+    );
+  }
+
+  // 🛡️ PROTECTION: Register this connection
+  const connectionId = registerSSEConnection(sessionId, threadId, clientIP);
+
   const encoder = new TextEncoder();
   let timeoutId: NodeJS.Timeout;
   let heartbeatId: NodeJS.Timeout;
   
   const stream = new ReadableStream({
     start(controller) {
-      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'connected' })}\n\n`));
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'connected', connectionId })}\n\n`));
       
       let lastMessageCount = 0;
-      let pollInterval = 300; // Start with fast polling (300ms)
+      let pollInterval = 500; // Start with 500ms polling
       let consecutiveEmptyPolls = 0;
+      let pollCount = 0;
       
       const poll = async () => {
         try {
+          pollCount++;
+          
+          // 🛡️ PROTECTION: Update connection activity
+          updateConnectionActivity(sessionId, threadId);
+          
           const response = await fetch(
-            `${CORAL_SERVER_URL}/api/v1/debug/thread/app/priv/${sessionId}/${threadId}/messages`
+            `${CORAL_SERVER_URL}/api/v1/debug/thread/app/priv/${sessionId}/${threadId}/messages`,
+            { signal: AbortSignal.timeout(10000) } // 🛡️ 10s timeout
           );
           
           if (response.ok) {
             const data = await response.json();
             const messages = data.messages || [];
             
-            console.log(`[SSE Poll] Thread ${threadId.slice(0, 8)}... has ${messages.length} messages (lastCount: ${lastMessageCount})`);
+            if (DEBUG_SSE && pollCount % 20 === 0) {
+              // Only log every 20th poll to reduce noise
+              console.log(`[SSE Poll] Thread ${threadId.slice(0, 8)}... - ${pollCount} polls, ${messages.length} messages`);
+            }
             
             if (messages.length > lastMessageCount) {
               const newMessages = messages.slice(lastMessageCount);
-              console.log(`[SSE Poll] Detected ${newMessages.length} NEW messages, sending to client`);
               
-              // Save agent messages to database
-              for (const msg of newMessages) {
-                // Only save agent messages (user messages already saved in send route)
-                if (msg.senderId !== USER_SENDER_ID) {
-                  try {
-                    await saveAgentMessageToDatabase({
+              // Batch save agent messages to database
+              const agentMessages = newMessages.filter((msg: any) => msg.senderId !== USER_SENDER_ID);
+              
+              if (agentMessages.length > 0) {
+                // Use Promise.allSettled so one failure doesn't block others
+                await Promise.allSettled(
+                  agentMessages.map((msg: any) => 
+                    saveAgentMessageToDatabase({
                       threadId,
                       sessionId,
                       senderId: msg.senderId,
@@ -58,35 +112,20 @@ export async function GET(request: NextRequest) {
                       mentions: msg.mentions || [],
                       isIntermediary: msg.isIntermediary || false,
                       timestamp: msg.timestamp
-                    });
-                  } catch (err) {
-                    console.error('[SSE Poll] Failed to save agent message to DB:', err);
-                    // Don't fail the stream if DB save fails
-                  }
-                }
+                    })
+                  )
+                );
               }
               
-              // Filter out premium service payment confirmation echoes from user
-              // These are needed in the DB for agent-to-agent forwarding, but shouldn't show to user
+              // Filter out premium service payment confirmation echoes
               const filteredMessages = newMessages.filter((msg: any) => {
                 const isUserMessage = msg.senderId === USER_SENDER_ID;
                 const hasPaymentMarker = msg.content?.includes('[PREMIUM_SERVICE_PAYMENT_COMPLETED]');
-                
-                // Keep agent messages, keep user messages without the marker
-                // Filter out user messages with the marker (they're already shown optimistically)
-                if (isUserMessage && hasPaymentMarker) {
-                  console.log(`[SSE Poll] Filtering premium service payment echo: ${msg.id}`);
-                  return false;
-                }
-                return true;
+                return !(isUserMessage && hasPaymentMarker);
               });
               
               if (filteredMessages.length > 0) {
-                filteredMessages.forEach((msg: any, idx: number) => {
-                  console.log(`[SSE Poll]   New message ${idx + 1}: from=${msg.senderId}, id=${msg.id}, content=${msg.content.substring(0, 50)}...`);
-                });
-                
-                lastMessageCount = messages.length; // Update count with ALL messages (not just filtered)
+                lastMessageCount = messages.length;
                 
                 controller.enqueue(
                   encoder.encode(`data: ${JSON.stringify({ 
@@ -94,47 +133,41 @@ export async function GET(request: NextRequest) {
                     messages: filteredMessages 
                   })}\n\n`)
                 );
-                console.log(`[SSE Poll] Sent ${filteredMessages.length} messages to client via SSE (filtered ${newMessages.length - filteredMessages.length})`);
                 
-                // Reset to fast polling when new messages arrive
-                pollInterval = 300;
+                // Reset to faster polling when new messages arrive
+                pollInterval = 500;
                 consecutiveEmptyPolls = 0;
               } else {
-                // All messages were filtered out, but update count to avoid re-processing
+                // All filtered out, but update count
                 lastMessageCount = messages.length;
-                console.log(`[SSE Poll] All ${newMessages.length} new messages were filtered out`);
               }
             } else {
-              // No new messages - adjust polling interval based on idle time
+              // No new messages - back off polling
               consecutiveEmptyPolls++;
               
               if (consecutiveEmptyPolls < 10) {
-                // First 5 seconds: poll every 500ms
                 pollInterval = 500;
               } else if (consecutiveEmptyPolls < 30) {
-                // Next 20 seconds: poll every 1000ms
                 pollInterval = 1000;
               } else if (consecutiveEmptyPolls < 90) {
-                // Up to 3 minutes: poll every 2000ms
                 pollInterval = 2000;
               } else {
-                // After 3 minutes of no messages (90 polls * ~2s = 180s), close stream
-                console.log(`[SSE Poll] Closing stream - no activity for 3 minutes (${consecutiveEmptyPolls} empty polls)`);
+                // Close after 3 minutes idle
+                console.log(`[SSE Poll] Closing stream - 3 minutes idle (thread: ${threadId.slice(0, 8)})`);
                 clearTimeout(timeoutId);
                 clearInterval(heartbeatId);
+                unregisterSSEConnection(sessionId, threadId); // 🛡️ Cleanup
                 controller.close();
-                return; // Stop polling
+                return;
               }
             }
           } else {
-            console.error(`[SSE Poll] Failed to fetch messages: ${response.status} ${response.statusText}`);
-            // Back off on errors
-            pollInterval = 2000;
+            console.error(`[SSE Poll] Fetch failed: ${response.status}`);
+            pollInterval = 3000;
           }
         } catch (err) {
-          console.error('[SSE] Error polling messages:', err);
-          // Back off on errors
-          pollInterval = 2000;
+          console.error('[SSE] Poll error:', err);
+          pollInterval = 3000;
         }
         
         // Schedule next poll with current interval
@@ -146,24 +179,27 @@ export async function GET(request: NextRequest) {
       
       heartbeatId = setInterval(() => {
         controller.enqueue(encoder.encode(': heartbeat\n\n'));
+        updateConnectionActivity(sessionId, threadId); // 🛡️ Update on heartbeat
       }, 30000);
       
       request.signal.addEventListener('abort', () => {
         clearTimeout(timeoutId);
         clearInterval(heartbeatId);
+        unregisterSSEConnection(sessionId, threadId); // 🛡️ Cleanup on abort
         controller.close();
       });
     },
     cancel() {
       if (timeoutId) clearTimeout(timeoutId);
       if (heartbeatId) clearInterval(heartbeatId);
+      unregisterSSEConnection(sessionId, threadId); // 🛡️ Cleanup on cancel
     }
   });
 
   return new Response(stream, {
     headers: {
       'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
       'Connection': 'keep-alive',
       'X-Accel-Buffering': 'no',
     },

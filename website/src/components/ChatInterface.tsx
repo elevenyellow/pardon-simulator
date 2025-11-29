@@ -48,6 +48,9 @@ interface ScoreEntry {
   currentScore: number;
 }
 
+// Debug flag for SSE logging
+const DEBUG_SSE = process.env.NODE_ENV === 'development';
+
 // Memoized message component to prevent unnecessary re-renders
 const MessageItem = memo(({ 
   message, 
@@ -448,28 +451,28 @@ export default function ChatInterface({
   useEffect(() => {
     if (threadId && sessionId && !eventSourceRef.current) {
       // Smart polling: Only connect if we should be polling
-      const shouldStartPolling = shouldPoll || hasRecentActivity(messages);
+      const shouldStartPolling = shouldPoll;
       
       if (!shouldStartPolling) {
-        console.log('[SSE] Skipping polling - no recent activity (conversation is idle)');
+        console.log('[SSE] Skipping polling - not requested');
         return;
       }
       
-      console.log('[SSE] Starting polling - conversation is active or polling requested');
+      if (DEBUG_SSE) console.log('[SSE] Starting polling - conversation is active');
       const eventSource = new EventSource(
         `/api/chat/stream?sessionId=${sessionId}&threadId=${threadId}`
       );
       eventSourceRef.current = eventSource;
       
       eventSource.onopen = () => {
-        console.log('[SSE] Connected to message stream');
+        if (DEBUG_SSE) console.log('[SSE] Connected to message stream');
         setPolling(true);
       };
       
       eventSource.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          console.log('[SSE Client] Received event:', data.type, data.messages?.length || 0, 'messages');
+          if (DEBUG_SSE) console.log('[SSE Client] Received event:', data.type, data.messages?.length || 0, 'messages');
           
           if (data.type === 'messages' && data.messages) {
             // Track pending payment requests from agent messages
@@ -564,8 +567,10 @@ export default function ChatInterface({
               let finalMessages = merged;
               if (newAgentMessages.length > 0) {
                 // We got a NEW agent response, so remove the loading message
-                console.log('[SSE] NEW agent response detected, removing system messages');
-                console.log('[SSE] loadingMessageIdRef.current:', loadingMessageIdRef.current);
+                if (DEBUG_SSE) {
+                  console.log('[SSE] NEW agent response detected, removing system messages');
+                  console.log('[SSE] loadingMessageIdRef.current:', loadingMessageIdRef.current);
+                }
                 finalMessages = merged.filter(m => m.senderId !== 'system');
                 
                 // Clear the loading ref and state
@@ -675,7 +680,7 @@ export default function ChatInterface({
         clearTimeout(autoStopTimerRef.current);
       }
     };
-  }, [threadId, sessionId, publicKey, selectedAgent, shouldPoll, messages]);
+  }, [threadId, sessionId, publicKey, selectedAgent, shouldPoll]);
 
   // Auto-scroll only when new messages are added
   useEffect(() => {
