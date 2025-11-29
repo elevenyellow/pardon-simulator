@@ -831,6 +831,7 @@ DO NOT just acknowledge payment - DELIVER THE SERVICE NOW!
         sender_id = message_payload["senderId"]
         message_content = message_payload["content"]
         thread_id = message_payload.get("threadId", "unknown")
+        message_timestamp = message_payload.get("timestamp", 0)
         
         # CRITICAL SAFETY: SBF agent never generates responses
         # This prevents SBF from responding even if override fails
@@ -838,6 +839,16 @@ DO NOT just acknowledge payment - DELIVER THE SERVICE NOW!
             print(f"[SBF-PROXY] Blocking message processing - SBF is user proxy only")
             print(f"[SBF-PROXY] Ignoring mention from '{sender_id}'")
             return None
+        
+        # STALENESS CHECK: Ignore messages older than 5 minutes for non-user messages
+        # This prevents agents from responding to out-of-context messages after container restarts
+        if sender_id != "sbf" and message_timestamp:
+            import time
+            message_age_seconds = time.time() - (message_timestamp / 1000.0)  # Convert ms to seconds
+            if message_age_seconds > 300:  # 5 minutes
+                print(f"[MessageFilter] Ignoring stale message from {sender_id} (age: {message_age_seconds:.0f}s)")
+                print(f"[MessageFilter] Message too old - likely from before container restart")
+                return None
         
         # FIX ISSUE #2: Check if this agent is in intermediary mode
         # If we're waiting for a response from sender_id (after using contact_agent),
@@ -885,27 +896,36 @@ DO NOT just acknowledge payment - DELIVER THE SERVICE NOW!
                     )
                 else:
                     # NO PAYMENT DETECTED - Check if this is a connection_intro request!
-                    # Add prominent detection instruction
+                    # Add context-aware detection instruction
                     payment_instruction = f"""
-🚨 FIRST CHECK: IS THIS A CONNECTION_INTRO REQUEST? 🚨
+🚨 CONNECTION_INTRO CHECK (Read Carefully - Context Matters!) 🚨
 
-Before doing ANYTHING else, check if the user is asking you to contact another agent!
+STEP 1: Is the user's CURRENT message asking you to contact another agent?
 
-DETECTION PATTERNS - If user message contains ANY of:
-- "Can you ask [agent]..."
-- "Would you ask [agent]..."
-- "Ask [agent] about..."
-- "Contact [agent]..."
-- "Talk to [agent] for me..."
-- "Get [agent]'s opinion..."
-- "Find out what [agent] thinks..."
-- "Reach out to [agent]..."
-- "Ping [agent]..."
+⚠️ IMPORTANT: Only trigger connection_intro if ALL conditions are met:
+   a) User's CURRENT message explicitly asks you to contact/ask another agent
+   b) The request is new and not already fulfilled
+   c) User hasn't moved on to other topics since the request
 
-→ THIS IS A connection_intro REQUEST (0.002 USDC)
-→ YOU MUST CHARGE BEFORE CONTACTING ANYONE!
+DETECTION PATTERNS - User's CURRENT message must DIRECTLY ask:
+- "Can you ask [agent]..." / "Would you ask [agent]..."
+- "Ask [agent] about..." / "Contact [agent]..."
+- "Talk to [agent] for me..." / "Reach out to [agent]..."
+- "Get [agent]'s opinion..." / "Ping [agent]..."
 
-MANDATORY WORKFLOW if connection_intro detected:
+❌ DO NOT TRIGGER if:
+- The user already received a response from the requested agent
+- The user is talking about other topics now
+- You already provided the connection_intro service
+- The message is just mentioning an agent (not asking you to contact them)
+- The request is more than 2-3 messages old
+
+✅ ONLY TRIGGER if:
+- User's CURRENT message is clearly asking you to contact an agent RIGHT NOW
+- No payment request was sent yet for this specific request
+- The conversation hasn't moved on to other topics
+
+WORKFLOW if connection_intro detected:
 1. Parse: target_agent and question
 2. IMMEDIATELY call request_premium_service(from_agent='sbf', to_agent='{self.agent_id}', service_type='connection_intro', details='...')
 3. Send payment request XML to user

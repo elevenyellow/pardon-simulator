@@ -17,8 +17,9 @@ from typing import Optional, Dict
 # In-memory cache for fast lookups (backed by backend database)
 _intermediary_cache: Dict[str, Dict] = {}
 
-# State expires after 10 minutes (prevents stale state)
-STATE_EXPIRY_SECONDS = 600
+# State expires after 2 minutes (prevents stale state from old interactions)
+# Shortened from 10 minutes to reduce out-of-context agent responses
+STATE_EXPIRY_SECONDS = 120
 
 async def set_intermediary_state(
     agent_id: str,
@@ -90,24 +91,9 @@ async def check_intermediary_state(
     """
     cache_key = f"{agent_id}:{thread_id}"
     
-    # Check cache first
-    if cache_key in _intermediary_cache:
-        state = _intermediary_cache[cache_key]
-        
-        # Check if expired
-        if time.time() > state.get("expires_at", 0):
-            print(f"[IntermediaryState] Expired state for {cache_key}, clearing")
-            del _intermediary_cache[cache_key]
-            return None
-        
-        # Check if sender matches target_agent
-        if state.get("target_agent") == sender_id:
-            print(f"[IntermediaryState] Match! {agent_id} is waiting for {sender_id}")
-            return state
-        
-        return None
-    
-    # If not in cache, try backend (for cross-instance consistency)
+    # CRITICAL FIX: Check backend FIRST for distributed system consistency
+    # This prevents stale in-memory cache from causing out-of-context responses
+    backend_checked = False
     try:
         api_url = os.getenv('BACKEND_API_URL', 'http://localhost:3000')
         async with aiohttp.ClientSession() as session:
@@ -115,6 +101,7 @@ async def check_intermediary_state(
                 f'{api_url}/api/agent/intermediary-state/{agent_id}/{thread_id}',
                 timeout=aiohttp.ClientTimeout(total=2)
             ) as resp:
+                backend_checked = True
                 if resp.status == 200:
                     state = await resp.json()
                     
@@ -125,9 +112,35 @@ async def check_intermediary_state(
                         _intermediary_cache[cache_key] = state
                         print(f"[IntermediaryState] Match from backend! {agent_id} waiting for {sender_id}")
                         return state
+                    else:
+                        # State exists but doesn't match or expired - clear cache
+                        if cache_key in _intermediary_cache:
+                            del _intermediary_cache[cache_key]
+                        return None
+                elif resp.status == 404:
+                    # No state in backend - clear cache if exists
+                    if cache_key in _intermediary_cache:
+                        print(f"[IntermediaryState] Backend has no state, clearing stale cache for {cache_key}")
+                        del _intermediary_cache[cache_key]
+                    return None
     except Exception as e:
-        # Backend unavailable, cache-only mode
-        pass
+        print(f"[IntermediaryState] Backend check error: {e}")
+        # Fall through to cache check
+    
+    # Only check cache if backend was unreachable
+    if not backend_checked and cache_key in _intermediary_cache:
+        state = _intermediary_cache[cache_key]
+        
+        # Check if expired
+        if time.time() > state.get("expires_at", 0):
+            print(f"[IntermediaryState] Expired state for {cache_key}, clearing")
+            del _intermediary_cache[cache_key]
+            return None
+        
+        # Check if sender matches target_agent
+        if state.get("target_agent") == sender_id:
+            print(f"[IntermediaryState] Match from cache (backend unavailable)! {agent_id} is waiting for {sender_id}")
+            return state
     
     return None
 
