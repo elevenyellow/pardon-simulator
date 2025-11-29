@@ -810,13 +810,50 @@ DO NOT just acknowledge payment - DELIVER THE SERVICE NOW!
 
 """
     
-    def fetch_thread_history(self, session_id: str, thread_id: str, limit: int = 10) -> str:
+    def extract_session_id_from_url(self) -> Optional[str]:
+        """
+        Extract session ID from CORAL_SSE_URL or CORAL_SESSION_ID env var.
+        
+        Production URL format: http://localhost:5555/sse/v1/devmode/app/priv/production-main
+        The session ID is the last path segment before query params.
+        
+        Returns:
+            Session ID or None if not found
+        """
+        # First check explicit env var
+        session_id = os.getenv('CORAL_SESSION_ID')
+        if session_id:
+            return session_id
+        
+        # Extract from CORAL_SSE_URL
+        sse_url = os.getenv('CORAL_SSE_URL', '')
+        if not sse_url:
+            return None
+        
+        try:
+            # Parse URL: http://localhost:5555/sse/v1/devmode/app/priv/production-main
+            # Extract "production-main" from the path
+            from urllib.parse import urlparse
+            parsed = urlparse(sse_url)
+            path_parts = parsed.path.strip('/').split('/')
+            
+            # Look for path pattern: /sse/v1/devmode/app/priv/{session_id}
+            if 'sse' in path_parts and len(path_parts) >= 6:
+                # Session ID is typically the last part of the path
+                session_id = path_parts[-1]
+                if session_id and session_id != 'sse':  # Validate it's not the endpoint
+                    return session_id
+        except Exception as e:
+            print(f"[Context] Failed to parse session ID from URL: {e}", flush=True)
+        
+        return None
+    
+    def fetch_thread_history(self, thread_id: str, limit: int = 10) -> str:
         """
         Fetch recent thread history for conversation context.
         Returns formatted conversation history (last N messages).
         
         Args:
-            session_id: Coral session ID
             thread_id: Thread ID to fetch messages from
             limit: Number of recent messages to include (default: 10)
         
@@ -824,6 +861,12 @@ DO NOT just acknowledge payment - DELIVER THE SERVICE NOW!
             Formatted conversation history as a string
         """
         try:
+            # Get session ID from environment
+            session_id = self.extract_session_id_from_url()
+            if not session_id:
+                print(f"[Context] No session ID available - skipping history fetch", flush=True)
+                return ""
+            
             coral_server_url = os.getenv('CORAL_SERVER_URL', 'http://localhost:5555')
             url = f"{coral_server_url}/api/v1/debug/thread/app/priv/{session_id}/{thread_id}/messages"
             
@@ -1012,12 +1055,11 @@ Only after payment verified should you call contact_agent()!
 """
                 
                 # Fetch conversation history for context
-                session_id = os.getenv('CORAL_SESSION_ID', '')
                 conversation_history = ""
                 
-                if session_id and thread_id != "unknown":
+                if thread_id != "unknown":
                     print(f"[Context] Fetching thread history for context (thread: {thread_id[:8]}...)", flush=True)
-                    history_text = self.fetch_thread_history(session_id, thread_id, limit=10)
+                    history_text = self.fetch_thread_history(thread_id, limit=10)
                     
                     if history_text:
                         conversation_history = f"""
@@ -1035,8 +1077,6 @@ Only after payment verified should you call contact_agent()!
                         print(f"[Context] Added {len(history_text.split(chr(10)))} messages of context", flush=True)
                     else:
                         print(f"[Context] No history available (new conversation)", flush=True)
-                else:
-                    print(f"[Context] Skipping history (session_id={bool(session_id)}, thread_id={thread_id})", flush=True)
                 
                 # Build full input with scoring
                 scoring_mandate = dynamic_content['scoring_mandate']
@@ -1058,12 +1098,11 @@ Only after payment verified should you call contact_agent()!
         else:
             # Agent-to-agent communication
             # Fetch conversation history for agent-to-agent context too
-            session_id = os.getenv('CORAL_SESSION_ID', '')
             conversation_history = ""
             
-            if session_id and thread_id != "unknown":
+            if thread_id != "unknown":
                 print(f"[Context] Fetching thread history for agent-to-agent context (thread: {thread_id[:8]}...)", flush=True)
-                history_text = self.fetch_thread_history(session_id, thread_id, limit=10)
+                history_text = self.fetch_thread_history(thread_id, limit=10)
                 
                 if history_text:
                     conversation_history = f"""
@@ -1501,12 +1540,11 @@ Only after payment verified should you call contact_agent()!
 """
             
             # Fetch conversation history for context
-            session_id = os.getenv('CORAL_SESSION_ID', '')
             conversation_history = ""
             
-            if session_id and thread_id != "unknown":
+            if thread_id != "unknown":
                 print(f"[{pool_name}] [Context] Fetching thread history (thread: {thread_id[:8]}...)", flush=True)
-                history_text = self.fetch_thread_history(session_id, thread_id, limit=10)
+                history_text = self.fetch_thread_history(thread_id, limit=10)
                 
                 if history_text:
                     conversation_history = f"""
@@ -1537,12 +1575,11 @@ Only after payment verified should you call contact_agent()!
         else:
             # Agent-to-agent communication
             # Fetch conversation history for agent-to-agent context too
-            session_id = os.getenv('CORAL_SESSION_ID', '')
             conversation_history = ""
             
-            if session_id and thread_id != "unknown":
+            if thread_id != "unknown":
                 print(f"[{pool_name}] [Context] Fetching thread history for agent-to-agent (thread: {thread_id[:8]}...)", flush=True)
-                history_text = self.fetch_thread_history(session_id, thread_id, limit=10)
+                history_text = self.fetch_thread_history(thread_id, limit=10)
                 
                 if history_text:
                     conversation_history = f"""
