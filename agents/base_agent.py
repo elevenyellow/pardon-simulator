@@ -977,7 +977,10 @@ Only after payment verified should you call contact_agent()!
                             # Track important tool calls
                             if 'contact_agent' in tool_name.lower():
                                 contact_agent_called = True
-                                print(f"[DEBUG] ✅ contact_agent was called - will suppress duplicate confirmation")
+                                # CRITICAL FIX: contact_agent internally calls coral_send_message,
+                                # so we must mark send_message_called = True to prevent fallback
+                                send_message_called = True
+                                print(f"[DEBUG] ✅ contact_agent was called - will suppress duplicate confirmation and disable fallback")
                             if 'send_message' in tool_name.lower() and 'coral' in tool_name.lower():
                                 send_message_called = True
                                 print(f"[DEBUG] ✅ coral_send_message was detected in intermediate_steps")
@@ -1405,7 +1408,10 @@ Only after payment verified should you call contact_agent()!
                             # Track important tool calls
                             if 'contact_agent' in tool_name.lower():
                                 contact_agent_called = True
-                                print(f"[{pool_name}] ✅ contact_agent was called - will suppress duplicate confirmation")
+                                # CRITICAL FIX: contact_agent internally calls coral_send_message,
+                                # so we must mark send_message_called = True to prevent fallback
+                                send_message_called = True
+                                print(f"[{pool_name}] ✅ contact_agent was called - will suppress duplicate confirmation and disable fallback")
                             if 'send_message' in tool_name.lower() and 'coral' in tool_name.lower():
                                 send_message_called = True
                                 print(f"[{pool_name}] ✅ coral_send_message was detected in intermediate_steps")
