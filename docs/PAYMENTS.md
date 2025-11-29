@@ -19,10 +19,11 @@ Pardon Simulator implements the **x402 protocol** - an HTTP 402-based micropayme
 ### Key Features
 
 - HTTP 402 compliant payment protocol
-- Real Solana blockchain transactions
-- USDC (SPL Token) payments
-- On-chain payment verification
-- User-to-agent and agent-to-agent payments
+- Real Solana blockchain transactions using USDC (SPL Token)
+- On-chain payment verification via Helius RPC
+- Premium services system with 8 service types
+- Payment forwarding to White House Treasury
+- Payment ID format: `wht-{agent}-{service}-{target}-{timestamp}`
 
 ---
 
@@ -44,19 +45,24 @@ The system supports two types of payment flows:
 5. Middleware verifies payment
 6. Route handler processes request
 
-### 2. Agent-Initiated Payments
+### 2. Agent-Initiated Payments (Premium Services)
 
-**Dynamic payments** requested by agents during conversation.
+**Dynamic payments** requested by agents for premium services.
 
-**Example**: Premium service requests with variable pricing (e.g., 0.01-0.10 USDC depending on service)
+**Premium Services:**
+- Various premium services available
+- Pricing dynamically determined by agents
+- Services include connections, information, strategy, and more
+- Check in-game for current offerings
 
 **Flow**:
-1. User sends message to agent
-2. Agent decides payment is needed
+1. User requests premium service from agent
+2. Agent generates payment request with service type
 3. Backend returns HTTP 402 with payment details
-4. User signs and submits transaction
-5. Agent verifies payment on-chain
-6. Agent delivers promised service
+4. User approves USDC transaction
+5. Payment sent to White House Treasury
+6. Agent verifies payment on-chain
+7. Agent delivers service and awards bonus points
 
 ---
 
@@ -153,13 +159,20 @@ This is the most compliant x402 implementation possible for Solana's architectur
 - Industry standard for payments and pricing
 - Stable value (pegged to USD)
 - Standard token interface (SPL Token)
-- Better for micropayments
+- Better for micropayments and consistent pricing
 
 **Transaction Structure**:
 - USDC uses 6 decimals (0.01 USDC = 10,000 micro-USDC)
 - Transactions use `createTransferCheckedInstruction` for safety
 - Includes compute budget for priority fees
 - Automatically creates recipient token accounts if needed
+- All payments forward to White House Treasury wallet
+
+**White House Treasury:**
+- Central collection point for all user payments
+- Provides secure revenue centralization
+- Reduces attack surface (agent wallets hold minimal funds)
+- Public address: Configured in environment variables
 
 ---
 
@@ -348,5 +361,23 @@ The system enables genuine economic interactions between users and AI agents, wi
 
 ---
 
-**Last Updated**: November 2025
+## Production System
+
+**Current Implementation:**
+- Payment Currency: USDC on Solana
+- RPC Provider: Helius (recommended)
+- Treasury Wallet: Configured via environment
+- Premium Services system
+- Point bonuses for services
+
+**Key Features:**
+- Sub-second transaction finality
+- Low transaction fees
+- On-chain verification
+- Automatic treasury forwarding
+- Service delivery on payment confirmation
+
+---
+
+**Last Updated**: November 29, 2025
 

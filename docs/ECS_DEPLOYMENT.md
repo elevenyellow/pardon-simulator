@@ -4,32 +4,71 @@ Guide for deploying Pardon Simulator to AWS ECS Fargate.
 
 ---
 
-## ⚠️ Security Warning
+## Current Production Environment
 
-**NEVER commit `scripts/ecs-task-definition.json` with real secrets!**
-
-The ECS task definition contains environment variables with secrets hardcoded inline. This is a limitation of how ECS task definitions work. Always keep the actual file gitignored.
+**Live System:**
+- Deployed on AWS ECS Fargate
+- Architecture: Single session, all agents in one ECS task
+- Database: Managed PostgreSQL
+- Config Storage: Cloud storage bucket
 
 ---
 
-## Setup
+## ⚠️ Security Warning
 
-### 1. Create Your Task Definition
+**Use AWS Secrets Manager for production secrets.**
 
-```bash
-# Copy the example
-cd scripts
-cp ecs-task-definition.example.json ecs-task-definition.json
+The ECS task definition can reference secrets from AWS Secrets Manager instead of hardcoding them inline.
 
-# Edit with your actual values
-nano ecs-task-definition.json
+---
+
+## Architecture Overview
+
+**Single Session Design:**
+- All agents run in one ECS task (simplified from multi-session)
+- Single Coral session: `production-main`
+- Agents connect to shared session on startup
+- Config files fetched from S3 on container start
+- More stable and easier to manage than multi-session
+
+**Container Structure:**
+```
+ECS Task
+├── Coral Server (port 5555)
+└── 6 Agent Processes
+    ├── trump-donald
+    ├── trump-melania
+    ├── trump-eric
+    ├── trump-donjr
+    ├── trump-barron
+    └── cz
 ```
 
-**Replace these placeholders:**
-- `YOUR_ACCOUNT_ID` - Your AWS account ID
-- `YOUR_OPENAI_API_KEY_HERE` - Your OpenAI API key
-- `YOUR_HELIUS_API_KEY` - Your Helius API key
-- `YOUR_*_SOLANA_PRIVATE_KEY_BASE58` - Solana private keys for each agent
+## Deployment
+
+### Quick Deploy
+
+```bash
+# Update service with latest code (GitHub Actions handles this)
+git push origin main
+
+# Or manual deployment
+./scripts/deploy-ecs.sh
+```
+
+### Manual Task Definition Update
+
+```bash
+# Register new task definition
+aws ecs register-task-definition \
+  --cli-input-json file://scripts/ecs-task-definition.json
+
+# Update service (use your cluster and service names)
+aws ecs update-service \
+  --cluster YOUR_CLUSTER_NAME \
+  --service YOUR_SERVICE_NAME \
+  --force-new-deployment
+```
 
 ### 2. Configure AWS CLI
 
@@ -81,14 +120,91 @@ aws logs tail /ecs/pardon-simulator --follow
 
 ---
 
-## Better Alternative: AWS Secrets Manager
+## Monitoring Production
 
-**Recommended:** Instead of hardcoding secrets in task definition, use AWS Secrets Manager:
+### Check Service Health
+
+```bash
+# Service status
+aws ecs describe-services \
+  --cluster YOUR_CLUSTER_NAME \
+  --services YOUR_SERVICE_NAME
+
+# List running tasks
+aws ecs list-tasks --cluster YOUR_CLUSTER_NAME
+
+# Task details
+aws ecs describe-tasks \
+  --cluster YOUR_CLUSTER_NAME \
+  --tasks <TASK_ID>
+```
+
+### View Logs
+
+```bash
+# Tail all logs in real-time
+aws logs tail YOUR_LOG_GROUP --follow
+
+# Filter specific agent
+aws logs tail YOUR_LOG_GROUP --follow --filter-pattern "agent-name"
+
+# Last 1 hour of errors
+aws logs filter-log-events \
+  --log-group-name YOUR_LOG_GROUP \
+  --start-time $(date -u -v-1H +%s)000 \
+  --filter-pattern "ERROR"
+```
+
+### Restart Service
+
+```bash
+# Force new deployment (restarts all agents)
+aws ecs update-service \
+  --cluster YOUR_CLUSTER_NAME \
+  --service YOUR_SERVICE_NAME \
+  --force-new-deployment
+
+# Monitor deployment
+watch -n 5 'aws ecs describe-services \
+  --cluster YOUR_CLUSTER_NAME \
+  --services YOUR_SERVICE_NAME \
+  --query "services[0].deployments"'
+```
+
+## Configuration Management
+
+### Cloud Config Files
+
+Agent configurations stored in cloud storage:
+```
+config-bucket/
+├── agent1/
+│   ├── operational-private.txt
+│   ├── personality-public.txt
+│   └── scoring-config.txt
+├── agent2/
+├── agent3/
+└── ...
+```
+
+### Update Agent Config
+
+```bash
+# Update config file
+aws s3 cp agents/AGENT_NAME/operational-private.txt \
+  s3://YOUR_CONFIG_BUCKET/AGENT_NAME/
+
+# Agents reload config on next message (no restart needed)
+```
+
+## AWS Secrets Manager (Production)
+
+**Current Production Setup:**
 
 ### 1. Create Secrets in AWS Secrets Manager
 
 ```bash
-# OpenAI API Key
+# LLM Provider API Key
 aws secretsmanager create-secret \
     --name pardon/openai-api-key \
     --secret-string "sk-proj-your-key-here"

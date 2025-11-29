@@ -48,16 +48,18 @@ Pardon Simulator is a multi-agent AI negotiation game where you play as Sam Bank
 ### Key Features
 
 **Autonomous AI Agents**
-- 7 independent agents with distinct personalities
-- Powered by GPT-4 and Claude LLMs
-- Make autonomous decisions about pricing and negotiations
+- 6 active agents with distinct personalities (Donald Trump, Melania, Eric, Don Jr, Barron, CZ)
+- LLM-powered autonomous decision-making
+- Independent pricing and negotiation strategies
 - Real personality traits influence behavior
+- Premium services system with dynamic pricing
 
 **Real Cryptocurrency**
-- All transactions execute on Solana mainnet
+- Transactions on Solana mainnet using USDC
 - Agents have real Solana wallets
 - Fast (<1 second) and cheap (<$0.01) transactions
 - Public and verifiable on-chain
+- White House Treasury collects payments
 
 **x402 Payment Protocol**
 - HTTP 402-style payment protocol for agent services
@@ -66,9 +68,10 @@ Pardon Simulator is a multi-agent AI negotiation game where you play as Sam Bank
 - Agents can act as intermediaries
 
 **Competitive Gameplay**
-- Points earned through strategic interactions
-- Weekly leaderboards
-- Prize eligibility for high performers
+- Points system (0-100 per week)
+- Premium service bonuses with diminishing returns
+- Speed multipliers for fast responses
+- Weekly leaderboards and scoring categories
 - Fair play enforcement
 
 ---
@@ -79,29 +82,36 @@ Pardon Simulator is a multi-agent AI negotiation game where you play as Sam Bank
 - Next.js 14 with React 18
 - TypeScript and Tailwind CSS
 - Solana Wallet Adapter
-- PostgreSQL with Prisma ORM
+- Deployed on Vercel
 
 **Backend**
 - Next.js API Routes
-- Prisma for database access
-- Solana Web3.js for blockchain
+- Prisma ORM
+- AWS RDS PostgreSQL
 - Helius RPC for Solana
 
 **AI Agents**
 - Python 3.10+ with Langchain
-- OpenAI GPT-4o and Anthropic Claude
+- LLM integration for agent intelligence
 - Solana Python SDK
 - Autonomous decision-making
+- Containerized deployment
 
 **Orchestration**
-- Coral Server (Kotlin/Java)
+- Coral Server (Kotlin)
 - Server-Sent Events (SSE)
-- Multi-agent coordination
+- Single session architecture
 
 **Blockchain**
 - Solana Mainnet
-- Real SOL transactions
-- SPL Token support
+- USDC (SPL Token) payments
+- x402 payment protocol
+
+**Infrastructure**
+- AWS ECS Fargate
+- Managed PostgreSQL
+- Cloud storage for configs
+- GitHub Actions for CI/CD
 
 ---
 
@@ -151,18 +161,17 @@ See [GAMEPLAY.md](./GAMEPLAY.md) for strategies and tips.
 
 ## Project Status
 
-**Production Ready Features:**
-- ✅ 7 autonomous AI agents
-- ✅ Real Solana mainnet integration
-- ✅ x402 payment protocol
-- ✅ Scoring and leaderboard system
-- ✅ Anti-cheat measures
-- ✅ Agent-to-agent intermediaries
+**Production Ready:**
+- ✅ 6 autonomous AI agents
+- ✅ USDC payments via x402 protocol
+- ✅ Premium services system
+- ✅ Scoring system with categories
 - ✅ PostgreSQL database
-- ✅ Production deployment ready
+- ✅ Vercel frontend with auto-deployment
+- ✅ Single session architecture (stable)
+- ✅ Cloud-based config storage
 
 **Active Development:**
-- Token integration features
 - Enhanced analytics
 - Additional game modes
 - Performance optimizations
@@ -205,7 +214,7 @@ This project is open source and available for educational and demonstration purp
 
 ## Credits
 
-Built with:
+**Technology:**
 - [Coral Protocol](https://github.com/CoralProtocol/coral-server) - Multi-agent orchestration
 - [Langchain](https://github.com/langchain-ai/langchain) - AI agent framework
 - [Solana](https://solana.com/) - Blockchain infrastructure

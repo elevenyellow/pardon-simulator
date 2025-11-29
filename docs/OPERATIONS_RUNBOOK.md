@@ -2,53 +2,85 @@
 
 ## Quick Reference
 
-### Emergency Contacts
-- DevOps Lead: [Your Email]
-- AWS Account ID: 640080112933
-- Region: us-east-1
+### Production Environment
+- Deployed on AWS ECS
+- Architecture: Single session (simplified, stable)
+- Region: Check AWS Console
+- AWS Account: Check AWS Console
 
-### Critical URLs
-- Production: https://pardonsimulator.com
-- ECS Console: https://console.aws.amazon.com/ecs/home?region=us-east-1#/clusters/pardon-production-cluster
-- CloudWatch Dashboard: [Set after deployment]
-- RDS Console: https://console.aws.amazon.com/rds/home?region=us-east-1
+### AWS Resources
+- ECS Cluster: Check your AWS setup
+- ECS Service: Check your AWS setup
+- Task Definition: Managed via scripts
+- Log Group: Check CloudWatch
+- Config Bucket: Cloud storage
+- Load Balancer: Check AWS Console
+
+### Coral Session
+- Single production session
+- All 6 agents connect to shared session
+
+### Active Agents
+- 6 AI agents (check agent directories)
 
 ## Common Operations
 
 ### Check System Health
 
 ```bash
-# Pool health
-curl https://pardonsimulator.com/api/cron/pool-health
+# Quick health check
+curl YOUR_DOMAIN/api/health/coral
 
 # ECS service status
 aws ecs describe-services \
-  --cluster pardon-production-cluster \
-  --services pardon-production-service \
+  --cluster YOUR_CLUSTER \
+  --services YOUR_SERVICE \
   --query "services[0].[runningCount,desiredCount,deployments]"
 
-# Database connections
-psql $DATABASE_URL -c "SELECT count(*) FROM pg_stat_activity;"
+# View recent logs
+aws logs tail YOUR_LOG_GROUP --since 5m
+
+# Check Coral sessions
+curl YOUR_CORAL_ENDPOINT/api/v1/sessions
+```
+
+### Run Diagnostic Script
+
+```bash
+# Comprehensive production health check
+./scripts/diagnose-production.sh
+
+# Output includes:
+# - ECS service status
+# - Running tasks
+# - Recent agent logs
+# - Error patterns
 ```
 
 ### Deploy New Version
 
+**Automatic Deployment (Recommended):**
 ```bash
-# 1. Build and push images
-cd /path/to/pardon-simulator
-./scripts/build-and-push.sh
+# Push to main branch - GitHub Actions handles deployment
+git push origin main
+```
 
-# 2. Update ECS service
-./scripts/deploy-ecs.sh
+**Manual Deployment:**
+```bash
+# Force new ECS deployment
+aws ecs update-service \
+  --cluster YOUR_CLUSTER \
+  --service YOUR_SERVICE \
+  --force-new-deployment
 
-# 3. Monitor deployment
+# Monitor deployment
 aws ecs describe-services \
-  --cluster pardon-production-cluster \
-  --services pardon-production-service \
+  --cluster YOUR_CLUSTER \
+  --services YOUR_SERVICE \
   --query "services[0].events[0:5]"
 
-# 4. Watch for errors in logs
-aws logs tail /ecs/pardon-production --follow --filter-pattern "ERROR"
+# Watch for errors in logs
+aws logs tail YOUR_LOG_GROUP --follow --filter-pattern "ERROR"
 ```
 
 ### Rollback Deployment
@@ -464,6 +496,13 @@ aws ce get-cost-and-usage \
 **RPO**: 24 hours (last database backup)
 
 ## Changelog
+
+### 2025-11-29
+- Updated for single-session production architecture
+- Added current production environment details
+- Updated AWS resource references
+- Added S3 config management procedures
+- Simplified deployment workflow
 
 ### 2024-11-22
 - Initial version

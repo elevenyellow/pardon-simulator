@@ -1,8 +1,18 @@
 # Pardon Simulator - Scaling Architecture
 
-## Overview
+## Current Production Architecture
 
-This document describes the production scaling architecture for supporting 100+ concurrent users with impressive performance and reliability.
+**Status:** Production currently uses a **simplified single-session architecture** for stability.
+- Single ECS task with one Coral session (`production-main`)
+- 6 AI agents (trump-donald, trump-melania, trump-eric, trump-donjr, trump-barron, cz)
+- Designed for stability and ease of management
+- Suitable for current user load
+
+**This document describes the advanced multi-pool scaling architecture** for future expansion to 100+ concurrent users.
+
+## Overview (Future Scaling Design)
+
+This document describes a future scaling architecture for supporting 100+ concurrent users with high performance and reliability.
 
 ## Architecture Diagram
 
@@ -33,14 +43,13 @@ This document describes the production scaling architecture for supporting 100+ 
 │ - pool-3        │          │ - pool-3        │
 │ - pool-4        │          │ - pool-4        │
 ├─────────────────┤          ├─────────────────┤
-│ 7 AI Agents     │          │ 7 AI Agents     │
-│ - CZ            │          │ - CZ            │
-│ - SBF           │          │ - SBF           │
-│ - Donald        │          │ - Donald        │
-│ - Melania       │          │ - Melania       │
-│ - Eric          │          │ - Eric          │
-│ - Don Jr        │          │ - Don Jr        │
-│ - Barron        │          │ - Barron        │
+│ 6 AI Agents     │          │ 6 AI Agents     │
+│ - trump-donald  │          │ - trump-donald  │
+│ - trump-melania │          │ - trump-melania │
+│ - trump-eric    │          │ - trump-eric    │
+│ - trump-donjr   │          │ - trump-donjr   │
+│ - trump-barron  │          │ - trump-barron  │
+│ - cz            │          │ - cz            │
 └────────┬────────┘          └────────┬────────┘
          │                            │
          └────────────┬───────────────┘
@@ -58,12 +67,14 @@ This document describes the production scaling architecture for supporting 100+ 
 
 **Purpose**: Distribute user load across 5 Coral sessions to prevent resource exhaustion.
 
-**Implementation**:
+**Implementation** (Future):
 - Each ECS task runs a single Coral Server instance
 - Coral Server hosts 5 session pools: `pool-0` through `pool-4`
-- All 7 agents connect to all 5 pools simultaneously
+- All 6 agents connect to all 5 pools simultaneously
 - Users are assigned to pools using consistent hashing (based on wallet address)
 - Each pool can handle ~30-40 concurrent threads
+
+**Current Production** uses single session without pooling for simplicity and stability.
 
 **Benefits**:
 - 5x capacity increase (from ~20 to ~100-200 users)

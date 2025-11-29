@@ -40,14 +40,16 @@ See [SETUP.md](./SETUP.md) for complete installation instructions.
 
 - Install Phantom or Solflare wallet extension
 - Create/import a Solana wallet
-- Get some SOL for transaction fees (~0.5 SOL recommended)
-- Connect wallet on the Pardon Simulator website
+- Get USDC for premium services
+- Get SOL for transaction fees
+- Connect wallet on the game website
 
 ### 3. Start Playing
 
-- Navigate to http://localhost:3000
+- Navigate to the game website (or http://localhost:3000 for local dev)
 - Create a new conversation thread
 - @mention an agent to begin interaction
+- Try free interactions first before purchasing premium services
 
 ---
 
@@ -97,29 +99,36 @@ See [SETUP.md](./SETUP.md) for complete installation instructions.
 ### Payment System
 
 **x402 Protocol:**
-- Agents may charge for premium services
-- Payments made in SOL (Solana cryptocurrency)
+- Agents charge for premium services
+- Payments made in USDC (stablecoin on Solana)
 - Transactions execute on-chain
 - Payment requests appear as modals in UI
+- All payments forward to White House Treasury
 
-**When Payments Are Required:**
-- Premium services and advice
-- Exclusive information
-- Important introductions
-- High-value recommendations
+**Premium Services:**
+- Multiple service types available from agents
+- Services may include connections, information, strategy, and more
+- Pricing determined dynamically by agents
+- Check in-game for current offerings
+
+**Benefits:**
+- Unlock key connections and information
+- Earn bonus points (with diminishing returns)
+- Progress faster toward objectives
+- Demonstrate serious intent
 
 **Managing Resources:**
 - Start with free interactions when possible
-- Invest strategically in key services
-- Consider ROI of each payment
-- Budget for multiple interactions
+- Invest strategically in high-value services
+- Premium services award bonus points
+- Multiple purchases of same service give less points
 
 **How to Pay:**
 1. Agent requests payment (modal appears)
 2. Review amount and service description
-3. Approve transaction in wallet
+3. Approve USDC transaction in wallet
 4. Agent verifies payment on-chain
-5. Service delivered after verification
+5. Service delivered + bonus points awarded
 
 ---
 
@@ -127,33 +136,40 @@ See [SETUP.md](./SETUP.md) for complete installation instructions.
 
 ### How Scoring Works
 
-Points are awarded based on your performance:
-- Quality of interactions
-- Strategic decisions
-- Successful negotiations
-- Achievement of milestones
-- Payment completion
+**Points System:**
+- Points earned through strategic interactions
+- Multiple scoring categories
+- Quality of engagement matters
+- Premium service bonuses available
+- Time-based bonuses for responsiveness
 
-Points can also be deducted for:
-- Poor approach or strategy
-- Inappropriate messages
-- Failed attempts
-- Wasted opportunities
+**Scoring Categories:**
+- Negotiation quality
+- Payment completion
+- Strategic thinking
+- Quality of interactions
+- Progress toward objectives
+
+**Bonuses and Penalties:**
+- Premium services award bonus points
+- Diminishing returns discourage repetition
+- Points can be deducted for poor behavior
+- Speed bonuses for quick responses
 
 ### Leaderboard
 
 **Weekly Competition:**
-- Scores reset each week
-- Top performers tracked on leaderboard
-- High scores may qualify for prizes
+- Scores reset weekly
+- Top performers ranked on leaderboard
+- Prize eligibility for high performers
 - Fair play enforced through anti-cheat measures
 
 **Scoring Tips:**
-- Quality over quantity
-- Strategic thinking matters
-- Build genuine relationships
-- Complete meaningful interactions
-- Avoid spam or poor behavior
+- Variety in strategy is rewarded
+- Respond quickly when opportunities arise
+- Build genuine strategic relationships
+- Quality interactions > message quantity
+- Balance free and paid interactions
 
 ---
 

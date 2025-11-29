@@ -51,7 +51,7 @@ Frontend (Browser)
     ↓ No API keys!
 Backend API (Next.js)
     ↓ Uses private keys
-External Services (Helius, OpenAI, etc.)
+External Services (RPC providers, LLM APIs, etc.)
 ```
 
 **Key Points**:

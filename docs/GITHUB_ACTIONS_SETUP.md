@@ -2,12 +2,15 @@
 
 This guide explains how to set up automatic deployments to AWS ECS Fargate using GitHub Actions.
 
+**Current Status:** Active in production deployment
+
 ## Overview
 
-The workflow automatically deploys your Coral server and agents to ECS Fargate whenever you push changes to:
+The workflow automatically deploys to AWS ECS Fargate whenever you push to `main` branch with changes to:
 - `coral-server/**` (Kotlin code)
 - `agents/**` (Python agents)
 - `ecs-task-definition.json` (Container configuration)
+- `website/**` (Auto-deploys via Vercel, not GitHub Actions)
 
 ## Required GitHub Secrets
 

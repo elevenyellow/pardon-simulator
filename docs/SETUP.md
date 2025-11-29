@@ -38,7 +38,7 @@ nano website/.env
 ```
 
 Add your API keys to **agents-session-configuration.json**:
-- OpenAI API key (or other LLM provider)
+- LLM provider API key
 - Helius RPC URL with your API key
 - Solana private keys for each agent (generate with `solana-keygen new`)
 - Public wallet addresses (derive from private keys)
@@ -85,10 +85,18 @@ Wait for:
 
 ### Step 3: Play the Game
 
-1. Open **http://localhost:3000** in your browser
+**Production:**
+1. Visit the game website
 2. Connect your Solana wallet (Phantom or Solflare)
-3. Start chatting with the Trump family agents!
-4. Negotiate, pay, and try to secure that pardon!
+3. Get USDC for premium services
+4. Start chatting with the 6 AI agents
+5. Negotiate, purchase premium services, and try to secure that pardon!
+
+**Local Development:**
+1. Open **http://localhost:3000** in your browser
+2. Connect your Solana wallet
+3. Start chatting with agents
+4. Test features and debug locally
 
 ---
 
@@ -154,14 +162,15 @@ Find the `SOLANA_RPC_URL` sections for **each agent** and update:
 }
 ```
 
-**Update for all 7 agents:**
+**Update for all 6 active agents:**
 - `donald-trump`
 - `melania-trump`
 - `eric-trump`
 - `donjr-trump`
 - `barron-trump`
 - `cz`
-- `sbf`
+
+**Note:** SBF is the player character (you), not an AI agent.
 
 ### Configure Frontend
 

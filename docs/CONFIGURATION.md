@@ -14,22 +14,47 @@ Pardon Simulator uses multiple configuration files for different deployment scen
 
 ## Production Deployment
 
-### ECS Fargate (Recommended for AWS)
+### AWS ECS (Production)
 
-#### `ecs-task-definition.json` (Root Directory)
+**Production Setup:**
+- Deployed on AWS ECS
+- Single task with Coral + 6 agents
+- Config files fetched from cloud storage
+- Secrets managed via AWS Secrets Manager
+- Database: Managed PostgreSQL
+- Auto-deploy: GitHub Actions on push to main
 
-**Purpose:** ECS task definition with container configurations and environment variables  
-**Used by:** `scripts/deploy-ecs.sh` registers this with AWS ECS  
-**Contains:** API keys, Solana private keys, AWS account info  
-**Security:** ⚠️ **NEVER COMMIT** - Listed in `.gitignore`
+**Configuration Sources:**
+1. AWS Secrets Manager (API keys, private keys)
+2. Cloud storage bucket (agent config files)
+3. ECS task definition (environment variables)
+4. GitHub Secrets (for CI/CD)
 
-**Setup:**
-```bash
-cp ecs-task-definition.example.json ecs-task-definition.json
-nano ecs-task-definition.json  # Fill in your actual secrets
+**Agent Config Files Structure:**
+```
+config-bucket/
+├── agent1/
+│   ├── operational-private.txt
+│   ├── personality-public.txt
+│   └── scoring-config.txt
+├── agent2/
+├── agent3/
+└── ...
 ```
 
-**Better Alternative:** Use AWS Secrets Manager instead of hardcoded secrets. See `docs/ECS_DEPLOYMENT.md` for details.
+**Updating Production Config:**
+```bash
+# Update agent config locally
+nano agents/AGENT_NAME/operational-private.txt
+
+# Upload to cloud storage
+aws s3 cp agents/AGENT_NAME/operational-private.txt \
+  s3://YOUR_CONFIG_BUCKET/AGENT_NAME/
+
+# Agents reload on next message (no restart needed)
+```
+
+See `docs/ECS_DEPLOYMENT.md` for detailed setup.
 
 ---
 
@@ -49,7 +74,7 @@ nano .env.production  # Fill in your actual secrets
 ```
 
 **Key Variables:**
-- `MODEL_API_KEY` - OpenAI API key (shared by all agents)
+- `MODEL_API_KEY` - LLM provider API key (shared by all agents)
 - `SOLANA_PRIVATE_KEY_*` - Private keys for each agent
 - `WALLET_*` - Public wallet addresses
 - `SOLANA_RPC_URL` - Helius RPC endpoint
@@ -183,7 +208,7 @@ These example files are safe to commit and serve as templates:
 
 | Scenario | Files Needed | Location |
 |----------|--------------|----------|
-| **Production (EB/Docker)** | `.env.production` | Root |
+| **Production (AWS ECS)** | AWS Secrets Manager<br>S3 Config Files<br>ECS Task Definition | AWS Console<br>S3 bucket<br>scripts/ |
 | **Local Dev (Full System)** | `agents-session-configuration.json`<br>`website/.env` | Root<br>website/ |
 | **Local Dev (Single Agent)** | `agents/[agent]/.env`<br>`website/.env` | Per agent<br>website/ |
 | **GitHub Actions** | GitHub Secrets | Repository settings |
@@ -196,7 +221,7 @@ These example files are safe to commit and serve as templates:
 
 ```bash
 # LLM Configuration
-MODEL_API_KEY=sk-proj-...        # OpenAI API key
+MODEL_API_KEY=sk-proj-...        # LLM provider API key
 MODEL_NAME=gpt-5.1                # Model to use
 
 # Solana Configuration

@@ -395,7 +395,7 @@ npx prisma studio
 ### Rotate API Keys
 
 1. **Generate new keys:**
-   - OpenAI/LLM provider
+   - LLM provider
    - Helius RPC
    - CDP credentials
 

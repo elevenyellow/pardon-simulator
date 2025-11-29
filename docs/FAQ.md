@@ -42,7 +42,7 @@ Your primary goal is to secure a pardon from Donald Trump. Success requires:
 
 **Resources:**
 - ~0.5 SOL for transactions and fees
-- API keys (OpenAI/Claude for LLMs, Helius for Solana RPC)
+- API keys (LLM provider for agents, Helius for Solana RPC)
 
 See the [Setup Guide](./SETUP.md) for detailed instructions.
 
@@ -63,7 +63,7 @@ No. Real cryptocurrency transactions are a core feature of the game. However:
 ### Do I need API keys?
 
 Yes, for running your own instance:
-- **LLM Provider:** OpenAI or Anthropic API key
+- **LLM Provider:** API key for your chosen LLM provider
 - **Solana RPC:** Helius API key (free tier available)
 
 These keys go in your `agents-session-configuration.json` file.
@@ -178,7 +178,7 @@ High-performing players may be eligible for prizes or recognition. Details are a
 
 **AI Agents:**
 - Python + Langchain
-- OpenAI GPT-4o / Anthropic Claude
+- Various LLM providers supported
 - Solana Python SDK
 
 **Blockchain:**
@@ -189,7 +189,7 @@ High-performing players may be eligible for prizes or recognition. Details are a
 
 Each agent:
 - Runs as independent Python process
-- Uses its own LLM instance (GPT-4/Claude)
+- Uses its own LLM instance
 - Has unique system prompt and personality
 - Makes autonomous decisions via Langchain
 - Accesses tools (blockchain, messaging, etc.)

@@ -135,7 +135,7 @@ Each layer has distinct responsibilities and security boundaries.
 
 ### AI Agent Layer
 
-**Technology**: Python 3.10+, Langchain, OpenAI/Anthropic
+**Technology**: Python 3.10+, Langchain, LLM APIs
 
 **Responsibilities**:
 - Autonomous decision-making
@@ -369,15 +369,22 @@ Specific implementation details are kept private to maintain game integrity.
 - Local Coral Server
 - Local agent processes
 
-### Production
-- Frontend on Vercel/Similar
+### Production (Current: AWS ECS)
+- Frontend on Vercel (auto-deploy from main)
 - Backend API on Vercel
-- Coral Server on VPS
-- Agents on same/separate VPS
-- Managed PostgreSQL (Railway/Neon)
+- Coral Server + Agents on AWS ECS Fargate
+- Single ECS task running all agents in one container
+- Single Coral session (simplified architecture)
+- Managed PostgreSQL
 - Helius RPC for Solana
+- Config files stored in cloud storage
 
-See [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) for detailed deployment instructions.
+**Production Architecture:**
+- Single session for stability and simplicity
+- All agents in one container
+- Cloud-based configuration management
+
+See [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) and [ECS_DEPLOYMENT.md](./ECS_DEPLOYMENT.md) for deployment instructions.
 
 ---
 
@@ -386,9 +393,9 @@ See [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) for detailed deployment instruc
 ### External Services
 
 **LLM Providers**:
-- OpenAI (GPT-4)
-- Anthropic (Claude)
+- Multiple LLM providers supported
 - Configurable per agent
+- API-based integration
 
 **Blockchain**:
 - Helius RPC for Solana

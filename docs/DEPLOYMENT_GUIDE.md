@@ -56,6 +56,11 @@ railway variables
 
 **Time**: 20 minutes
 
+**Production:**
+- Auto-deploys from `main` branch via GitHub integration
+- Manual deployment not typically needed
+
+**Manual Deployment:**
 ```bash
 cd website
 
@@ -66,7 +71,7 @@ npm i -g vercel
 vercel login
 
 # Deploy
-vercel
+vercel --prod
 ```
 
 **Configure Environment Variables** (Vercel Dashboard):
@@ -122,11 +127,44 @@ npx prisma migrate deploy
 npx prisma studio
 ```
 
-### Step 3: Deploy Coral Server (VPS)
+### Step 3: Deploy to AWS ECS (Production Method)
 
-**Recommended: DigitalOcean Droplet or AWS EC2**
+**Current Production Setup:**
+- AWS ECS Fargate in us-east-1
+- Single task running Coral Server + all 6 agents
+- Simplified single-session architecture
+- Auto-deployment via GitHub Actions
 
-**Time**: 1-2 hours
+**Architecture:**
+```
+ECS Task (pardon-production-service)
+├── Coral Server (localhost:5555)
+└── 6 Agent Processes
+    ├── trump-donald
+    ├── trump-melania
+    ├── trump-eric
+    ├── trump-donjr
+    ├── trump-barron
+    └── cz
+```
+
+**Deployment:**
+```bash
+# Automatic: Push to main branch
+git push origin main
+
+# Manual: Force new deployment
+aws ecs update-service \
+  --cluster pardon-production-cluster \
+  --service pardon-production-service \
+  --force-new-deployment
+```
+
+See [ECS_DEPLOYMENT.md](./ECS_DEPLOYMENT.md) for detailed ECS setup.
+
+### Alternative: Deploy Coral Server (VPS)
+
+**For Development/Testing:**
 
 **Create VPS**:
 - OS: Ubuntu 22.04 LTS
@@ -570,7 +608,7 @@ If critical issues occur:
 | Railway/Neon (Database) | $5-25 |
 | DigitalOcean VPS | $12-24 |
 | Helius RPC | $50 (Growth plan) |
-| OpenAI API (Agents) | $100-500 (usage-based) |
+| LLM API (Agents) | $100-500 (usage-based) |
 | Sentry | Free tier |
 | Domain | $12/year |
 | **Total** | **~$200-650/month** |
@@ -578,7 +616,7 @@ If critical issues occur:
 ### Optimization Tips
 - Use Helius free tier initially (limited requests)
 - Start with smaller VPS, scale up
-- Monitor OpenAI usage, optimize prompts
+- Monitor LLM API usage, optimize prompts
 - Use Vercel hobby plan for testing
 
 ---

@@ -49,7 +49,7 @@ Backend (Next.js API)
         ↓
   AI Agents (Python processes)
         ↓
-  LLM APIs (OpenAI/Anthropic)
+  LLM APIs
 ```
 
 ### Communication Flow

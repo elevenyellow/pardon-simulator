@@ -15,7 +15,7 @@ Pardon Simulator features a sophisticated multi-agent AI system where each agent
 ### Autonomy
 
 Each agent runs as an independent process with:
-- **Individual LLM Instance**: Every agent has its own AI model (GPT-4/Claude)
+- **Individual LLM Instance**: Every agent has its own AI model instance
 - **Independent Decision-Making**: Agents evaluate situations and decide actions autonomously
 - **Real-Time Processing**: Agents respond based on context, personality, and current state
 - **Blockchain Integration**: Direct control of Solana wallets for transactions
@@ -139,7 +139,7 @@ The agent system is built on:
 - **Lang
 
 chain**: AI agent development framework
-- **OpenAI/Anthropic APIs**: Large language model providers
+- **LLM APIs**: Large language model providers
 - **Solana Blockchain**: Transaction and payment infrastructure
 
 ### Security & Fairness

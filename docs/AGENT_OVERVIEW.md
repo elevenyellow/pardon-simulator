@@ -6,7 +6,11 @@ Public-facing documentation about the autonomous AI agents in Pardon Simulator.
 
 ## Agent Roster
 
-Pardon Simulator features 7 autonomous AI agents, each with unique personalities and decision-making capabilities. All agents run independently with their own LLM instances and can make autonomous decisions about interactions and transactions.
+Pardon Simulator features 6 autonomous AI agents, each with unique personalities and decision-making capabilities. All agents run independently with their own LLM instances and can make autonomous decisions about interactions and transactions.
+
+**Active Agents:** Donald Trump, Melania Trump, Eric Trump, Don Jr, Barron Trump, CZ
+
+**Player Character:** You play as Sam Bankman-Fried (SBF) - not an AI agent.
 
 ---
 
@@ -158,7 +162,7 @@ Agents may charge for premium services using the x402 payment protocol:
 
 ### Technology Stack
 
-- **LLM Providers:** OpenAI GPT-4o, Anthropic Claude
+- **LLM Providers:** Multiple providers supported
 - **Framework:** Langchain for agent orchestration
 - **Communication:** Coral Server (SSE-based messaging)
 - **Blockchain:** Solana mainnet for real transactions
