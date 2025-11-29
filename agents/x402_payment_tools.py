@@ -338,8 +338,9 @@ Would you like to use one of those instead?"""
         target_agent=target_agent
     )
     
-    # Store pending payment
+    # Store pending payment (expires in 5 minutes - conversational context)
     payment_id = payment_request["payment_id"]
+    current_time = time.time()
     payment_ledger["pending"][payment_id] = {
         "from": from_agent,
         "to": to_agent,
@@ -347,7 +348,8 @@ Would you like to use one of those instead?"""
         "amount": amount,
         "details": details,
         "target_agent": target_agent,
-        "timestamp": time.time()
+        "timestamp": current_time,
+        "expires_at": current_time + (5 * 60)  # 5 minutes expiration for conversational flow
     }
     
     # Return x402-formatted response
@@ -1869,10 +1871,29 @@ Please ensure you sent the correct payment."""
         # Find service details from payment ledger
         service_details = None
         target_agent_for_intro = None
+        current_time = time.time()
         
         # Try to match by payment_id first (most reliable)
         if payment_id and payment_id in payment_ledger.get("pending", {}):
             payment_data = payment_ledger["pending"][payment_id]
+            
+            # CRITICAL: Check if payment request has expired (5-minute window)
+            expires_at = payment_data.get("expires_at", float('inf'))
+            if current_time > expires_at:
+                # Payment request expired - clean it up
+                del payment_ledger["pending"][payment_id]
+                age_minutes = (current_time - payment_data.get("timestamp", current_time)) / 60
+                print(f"❌ Payment request expired: {payment_id} (age: {age_minutes:.1f} minutes)")
+                return f"""❌ PAYMENT REQUEST EXPIRED
+
+This payment request expired {age_minutes:.1f} minutes ago (5-minute limit).
+
+In conversational payments, you should pay within a few minutes of the request.
+If you still want this service, please request it again - it only takes a moment!
+
+Service: {service_type}
+Amount: {expected_amount_usdc} USDC"""
+            
             service_details = payment_data.get("details", "")
             target_agent_for_intro = payment_data.get("target_agent")
             print(f"✅ Found service details by payment_id: {payment_id}")
@@ -1883,11 +1904,21 @@ Please ensure you sent the correct payment."""
             # This handles payments made before the payment_id fix
             print(f"⚠️ Payment ID not found or not provided, falling back to service_type + amount matching")
             for pid, payment_data in list(payment_ledger.get("pending", {}).items()):
+                # Check expiration for fallback matches too
+                expires_at = payment_data.get("expires_at", float('inf'))
+                if current_time > expires_at:
+                    # Expired - skip and clean up
+                    print(f"⚠️ Skipping expired payment: {pid}")
+                    del payment_ledger["pending"][pid]
+                    continue
+                
+                # Match by service type, amount, and to_agent (prevent cross-agent confusion)
                 if (payment_data.get("service") == service_type and 
+                    payment_data.get("to") == to_agent and
                     abs(payment_data.get("amount", 0) - expected_amount_usdc) < 0.0001):
                     service_details = payment_data.get("details", "")
                     target_agent_for_intro = payment_data.get("target_agent")
-                    print(f"⚠️ Matched by service+amount, using oldest pending: {pid}")
+                    print(f"⚠️ Matched by service+amount+agent, using oldest pending: {pid}")
                     # Clean up used payment
                     del payment_ledger["pending"][pid]
                     break

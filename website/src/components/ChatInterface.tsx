@@ -418,6 +418,12 @@ export default function ChatInterface({
       }
       setPolling(false);
       
+      // CRITICAL: Clear payment-related state when switching agents
+      // This prevents stale payment requests from being processed for the wrong agent
+      processedMessageIdsRef.current.clear();
+      lastUserMessageRef.current = null;
+      console.log('[Agent Switch] Cleared payment state (processed IDs + last message) to prevent mixed requests');
+      
       // Check if we already have a threadId for this agent
       if (threadId) {
         // Thread already exists, just load cached messages if available
