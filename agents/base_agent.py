@@ -14,6 +14,7 @@ import traceback
 import sys
 import time
 import re
+import requests
 from typing import Dict, List, Optional, Tuple, Any, Callable
 from abc import ABC, abstractmethod
 
@@ -809,6 +810,81 @@ DO NOT just acknowledge payment - DELIVER THE SERVICE NOW!
 
 """
     
+    def fetch_thread_history(self, session_id: str, thread_id: str, limit: int = 10) -> str:
+        """
+        Fetch recent thread history for conversation context.
+        Returns formatted conversation history (last N messages).
+        
+        Args:
+            session_id: Coral session ID
+            thread_id: Thread ID to fetch messages from
+            limit: Number of recent messages to include (default: 10)
+        
+        Returns:
+            Formatted conversation history as a string
+        """
+        try:
+            coral_server_url = os.getenv('CORAL_SERVER_URL', 'http://localhost:5555')
+            url = f"{coral_server_url}/api/v1/debug/thread/app/priv/{session_id}/{thread_id}/messages"
+            
+            response = requests.get(url, timeout=2)
+            
+            if response.ok:
+                data = response.json()
+                messages = data.get('messages', [])
+                
+                if not messages:
+                    return ""
+                
+                # Get last N messages (we'll exclude the current one being processed)
+                # Take one extra to account for the current message
+                recent_messages = messages[-(limit + 1):-1] if len(messages) > limit else messages[:-1] if len(messages) > 1 else []
+                
+                if not recent_messages:
+                    return ""
+                
+                # Format as conversation
+                formatted = []
+                for msg in recent_messages:
+                    sender = msg.get('senderId', 'unknown')
+                    content = msg.get('content', '')
+                    
+                    # Clean up USER_WALLET markers
+                    content = re.sub(r'\[USER_WALLET:[1-9A-HJ-NP-Za-km-z]{32,44}]\s*', '', content)
+                    
+                    # Clean up premium service payment markers
+                    content = re.sub(r'\[PREMIUM_SERVICE_PAYMENT_COMPLETED\]', '', content)
+                    
+                    # Skip empty messages after cleaning
+                    if not content.strip():
+                        continue
+                    
+                    # Format sender name
+                    if sender == 'sbf':
+                        sender_name = "User (SBF)"
+                    elif sender == self.agent_id:
+                        sender_name = "You"
+                    elif sender == 'system' or sender == 'prison':
+                        sender_name = "System"
+                    else:
+                        # Format agent names nicely (e.g., "trump-donald" -> "Donald Trump")
+                        sender_name = sender.replace('-', ' ').replace('trump ', '').title()
+                        if 'trump' in sender:
+                            sender_name = sender_name + " Trump"
+                    
+                    formatted.append(f"{sender_name}: {content.strip()}")
+                
+                if not formatted:
+                    return ""
+                
+                return "\n".join(formatted)
+            
+            return ""
+        
+        except Exception as e:
+            print(f"[Context] Failed to fetch thread history: {e}", flush=True)
+            return ""
+    
     async def process_message(
         self,
         mentions_data: Dict[str, Any],
@@ -935,6 +1011,33 @@ Only after payment verified should you call contact_agent()!
 
 """
                 
+                # Fetch conversation history for context
+                session_id = os.getenv('CORAL_SESSION_ID', '')
+                conversation_history = ""
+                
+                if session_id and thread_id != "unknown":
+                    print(f"[Context] Fetching thread history for context (thread: {thread_id[:8]}...)", flush=True)
+                    history_text = self.fetch_thread_history(session_id, thread_id, limit=10)
+                    
+                    if history_text:
+                        conversation_history = f"""
+═══════════════════════════════════════════════════════════════
+📜 RECENT CONVERSATION HISTORY (Last 10 messages)
+═══════════════════════════════════════════════════════════════
+
+{history_text}
+
+═══════════════════════════════════════════════════════════════
+📨 CURRENT MESSAGE (respond to this)
+═══════════════════════════════════════════════════════════════
+
+"""
+                        print(f"[Context] Added {len(history_text.split(chr(10)))} messages of context", flush=True)
+                    else:
+                        print(f"[Context] No history available (new conversation)", flush=True)
+                else:
+                    print(f"[Context] Skipping history (session_id={bool(session_id)}, thread_id={thread_id})", flush=True)
+                
                 # Build full input with scoring
                 scoring_mandate = dynamic_content['scoring_mandate']
                 user_wallet_instruction = (
@@ -946,6 +1049,7 @@ Only after payment verified should you call contact_agent()!
                 
                 mentions_result_clean = json.dumps(mentions_data)
                 full_input = (
+                    f"{conversation_history}"  # ← Add history at the beginning
                     f"{payment_instruction}{scoring_mandate}{user_wallet_instruction}"
                     f"Process these mentions and respond appropriately: {mentions_result_clean}"
                 )
@@ -953,9 +1057,32 @@ Only after payment verified should you call contact_agent()!
                 return None
         else:
             # Agent-to-agent communication
+            # Fetch conversation history for agent-to-agent context too
+            session_id = os.getenv('CORAL_SESSION_ID', '')
+            conversation_history = ""
+            
+            if session_id and thread_id != "unknown":
+                print(f"[Context] Fetching thread history for agent-to-agent context (thread: {thread_id[:8]}...)", flush=True)
+                history_text = self.fetch_thread_history(session_id, thread_id, limit=10)
+                
+                if history_text:
+                    conversation_history = f"""
+═══════════════════════════════════════════════════════════════
+📜 RECENT CONVERSATION HISTORY (Last 10 messages)
+═══════════════════════════════════════════════════════════════
+
+{history_text}
+
+═══════════════════════════════════════════════════════════════
+📨 CURRENT MESSAGE (respond to this)
+═══════════════════════════════════════════════════════════════
+
+"""
+                    print(f"[Context] Added {len(history_text.split(chr(10)))} messages of context", flush=True)
+            
             agent_comms_note = dynamic_content['agent_comms_note']
             mentions_result_clean = json.dumps(mentions_data)
-            full_input = f"{agent_comms_note}Process this agent message: {mentions_result_clean}"
+            full_input = f"{conversation_history}{agent_comms_note}Process this agent message: {mentions_result_clean}"
         
         # Execute with retry logic
         max_retries = 3
@@ -1312,6 +1439,7 @@ Only after payment verified should you call contact_agent()!
         message_payload = mentions_data["messages"][0]
         sender_id = message_payload["senderId"]
         message_content = message_payload["content"]
+        thread_id = message_payload.get("threadId", "unknown")
         
         # CRITICAL SAFETY: SBF agent never generates responses
         # This prevents SBF from responding even if override fails
@@ -1372,6 +1500,29 @@ Only after payment verified should you call contact_agent()!
 
 """
             
+            # Fetch conversation history for context
+            session_id = os.getenv('CORAL_SESSION_ID', '')
+            conversation_history = ""
+            
+            if session_id and thread_id != "unknown":
+                print(f"[{pool_name}] [Context] Fetching thread history (thread: {thread_id[:8]}...)", flush=True)
+                history_text = self.fetch_thread_history(session_id, thread_id, limit=10)
+                
+                if history_text:
+                    conversation_history = f"""
+═══════════════════════════════════════════════════════════════
+📜 RECENT CONVERSATION HISTORY (Last 10 messages)
+═══════════════════════════════════════════════════════════════
+
+{history_text}
+
+═══════════════════════════════════════════════════════════════
+📨 CURRENT MESSAGE (respond to this)
+═══════════════════════════════════════════════════════════════
+
+"""
+                    print(f"[{pool_name}] [Context] Added {len(history_text.split(chr(10)))} messages of context", flush=True)
+            
             # Build full input with scoring
             scoring_mandate = dynamic_content['scoring_mandate']
             user_wallet_instruction = (
@@ -1382,12 +1533,35 @@ Only after payment verified should you call contact_agent()!
             )
             
             mentions_result_clean = json.dumps(mentions_data)
-            full_input = f"{payment_instruction}{scoring_mandate}{user_wallet_instruction}Process these mentions and respond appropriately: {mentions_result_clean}"
+            full_input = f"{conversation_history}{payment_instruction}{scoring_mandate}{user_wallet_instruction}Process these mentions and respond appropriately: {mentions_result_clean}"
         else:
             # Agent-to-agent communication
+            # Fetch conversation history for agent-to-agent context too
+            session_id = os.getenv('CORAL_SESSION_ID', '')
+            conversation_history = ""
+            
+            if session_id and thread_id != "unknown":
+                print(f"[{pool_name}] [Context] Fetching thread history for agent-to-agent (thread: {thread_id[:8]}...)", flush=True)
+                history_text = self.fetch_thread_history(session_id, thread_id, limit=10)
+                
+                if history_text:
+                    conversation_history = f"""
+═══════════════════════════════════════════════════════════════
+📜 RECENT CONVERSATION HISTORY (Last 10 messages)
+═══════════════════════════════════════════════════════════════
+
+{history_text}
+
+═══════════════════════════════════════════════════════════════
+📨 CURRENT MESSAGE (respond to this)
+═══════════════════════════════════════════════════════════════
+
+"""
+                    print(f"[{pool_name}] [Context] Added {len(history_text.split(chr(10)))} messages of context", flush=True)
+            
             agent_comms_note = dynamic_content['agent_comms_note']
             mentions_result_clean = json.dumps(mentions_data)
-            full_input = f"{agent_comms_note}Process this agent message: {mentions_result_clean}"
+            full_input = f"{conversation_history}{agent_comms_note}Process this agent message: {mentions_result_clean}"
         
         # Execute with retry logic using pool-specific executor
         max_retries = 3
