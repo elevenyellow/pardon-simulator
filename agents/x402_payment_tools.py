@@ -1290,7 +1290,8 @@ async def _submit_score_async(
     subcategory: Optional[str],
     agent_id: Optional[str],
     message_id: Optional[str],
-    premium_service_amount: float
+    premium_service_amount: float,
+    premium_service_type: Optional[str] = None
 ):
     """
     Submit score update asynchronously (background task).
@@ -1313,6 +1314,8 @@ async def _submit_score_async(
             payload["messageId"] = message_id
         if premium_service_amount > 0:
             payload["premiumServicePayment"] = premium_service_amount
+            if premium_service_type:
+                payload["premiumServiceType"] = premium_service_type
         
         # Get agent API key for authentication
         agent_api_key = os.getenv("AGENT_API_KEY") or os.getenv("CORAL_AGENT_API_KEY")
@@ -1352,7 +1355,8 @@ async def award_points(
     subcategory: Optional[str] = None,
     agent_id: Optional[str] = None,
     message_id: Optional[str] = None,
-    premium_service_amount: float = 0.0
+    premium_service_amount: float = 0.0,
+    premium_service_type: Optional[str] = None
 ) -> str:
     """
     Award or deduct points from user's score with personality-based evaluation.
@@ -1384,6 +1388,7 @@ async def award_points(
         agent_id: Optional agent ID who awarded/deducted points (e.g., "trump-donald")
         message_id: Optional message ID that triggered this score change
         premium_service_amount: USDC amount if user paid for premium service (auto-adds 2-10 bonus points)
+        premium_service_type: Type of premium service if applicable (e.g., "connection_intro", "insider_info")
     
     Returns:
         JSON with updated score and feedback
@@ -1402,7 +1407,8 @@ async def award_points(
         award_points("6pF45ay...", -2.5, "Insulted agent", "penalty", "insult", "trump-donald")
         
         # Premium service with payment bonus:
-        award_points("6pF45ay...", 2.1, "Good message with premium service", "payment", None, "cz", premium_service_amount=0.005)
+        award_points("6pF45ay...", 2.1, "Connection intro delivered", "payment", None, "trump-donald", 
+                    premium_service_amount=0.4, premium_service_type="connection_intro")
     """
     # Validate evaluation_score range (-3.0 to 3.0)
     if evaluation_score < -3.0 or evaluation_score > 3.0:
@@ -1420,7 +1426,8 @@ async def award_points(
         subcategory=subcategory,
         agent_id=agent_id,
         message_id=message_id,
-        premium_service_amount=premium_service_amount
+        premium_service_amount=premium_service_amount,
+        premium_service_type=premium_service_type
     ))
     
     # Return immediate estimated result

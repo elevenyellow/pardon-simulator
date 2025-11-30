@@ -18,7 +18,8 @@ async def award_points_async(
     agent_id: Optional[str],
     message_id: Optional[str],
     premium_service_amount: float,
-    backend_url: str
+    backend_url: str,
+    premium_service_type: Optional[str] = None
 ) -> None:
     """
     Submit score update asynchronously (background task).
@@ -35,6 +36,7 @@ async def award_points_async(
         message_id: Message ID that triggered score change
         premium_service_amount: USDC amount if premium service payment
         backend_url: Backend API URL
+        premium_service_type: Type of premium service if applicable (e.g., "connection_intro")
     """
     try:
         payload = {
@@ -53,6 +55,8 @@ async def award_points_async(
             payload["messageId"] = message_id
         if premium_service_amount > 0:
             payload["premiumServicePayment"] = premium_service_amount
+            if premium_service_type:
+                payload["premiumServiceType"] = premium_service_type
         
         # Get agent API key for authentication
         agent_api_key = os.getenv("AGENT_API_KEY") or os.getenv("CORAL_AGENT_API_KEY")
