@@ -204,6 +204,7 @@ scripts/ecs-task-definition.json
 
 # Premium services pricing configuration
 agents/premium_services.json
+website/src/lib/premium-services/premium-services.json
 
 # Premium services usage limitations (contain game rules - prevent cheating)
 website/src/lib/premium-services/service-limits.json

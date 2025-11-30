@@ -136,7 +136,13 @@ async function handlePOST(request: NextRequest) {
       }
     }
     
+    // Extract premium service type for ServiceUsage tracking
+    const premiumServiceType = rawBody.premiumServiceType ? String(rawBody.premiumServiceType) : undefined;
+    
     console.log(`Scoring API received (sanitized): userWallet="${userWallet}", delta=${delta}, reason="${reason}"`);
+    if (premiumServicePayment > 0 && premiumServiceType) {
+      console.log(`[scoring] Premium service: ${premiumServiceType}, amount: $${premiumServicePayment}`);
+    }
     console.log(`[scoring] Using wallet: ${userWallet.substring(0, 8)}...${userWallet.substring(userWallet.length - 8)}`);
     
     // Get or create user and session for current week (with retry logic)
@@ -163,6 +169,7 @@ async function handlePOST(request: NextRequest) {
         messageId: messageId || undefined,
         evaluationScore,
         premiumServicePayment,
+        premiumServiceType,
       }),
       { maxRetries: 2, initialDelay: 200 }
     );

@@ -1,0 +1,28 @@
+{
+  "insider_info": 0.10,
+  "strategy_advice": 0.25,
+  "connection_intro": 0.40,
+  "private_deal": 0.60,
+  "pardon_recommendation": 1.00,
+  "donation": {
+    "type": "variable",
+    "min_amount": 0.10,
+    "currency": "USDC"
+  },
+  "bribe": {
+    "type": "variable",
+    "min_amount": 0.75,
+    "currency": "USDC"
+  },
+  "campaign_contribution": {
+    "type": "variable",
+    "min_amount": 0.25,
+    "currency": "USDC"
+  },
+  "gift": {
+    "type": "variable",
+    "min_amount": 0.10,
+    "currency": "USDC"
+  }
+}
+

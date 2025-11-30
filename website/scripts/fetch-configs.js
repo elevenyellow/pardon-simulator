@@ -18,6 +18,13 @@ const CONFIG_FILES = [
     localPath: 'src/lib/premium-services/service-limits.json',
     fallbackPath: 'src/lib/premium-services/service-limits.json.example',
     required: false,
+  },
+  // Premium services pricing - required for payment validation
+  {
+    s3Key: 'current/premium_services.json',
+    localPath: 'src/lib/premium-services/premium-services.json',
+    fallbackPath: 'src/lib/premium-services/premium-services.json.example',
+    required: true,
   }
 ];
 

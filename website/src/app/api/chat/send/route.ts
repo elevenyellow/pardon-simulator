@@ -12,6 +12,7 @@ import { restoreCoralSession } from'@/lib/sessionRestoration';
 import { USER_SENDER_ID } from'@/lib/constants';
 import { verifyWalletSignature } from'@/lib/wallet-verification';
 import { serviceUsageRepository } from'@/lib/premium-services/usage-repository';
+import { validatePaymentAmount, getServicePriceInfo } from'@/lib/premium-services/payment-validation';
 
 const CORAL_SERVER_URL = process.env.CORAL_SERVER_URL ||'http://localhost:5555';
 const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL;
@@ -258,6 +259,60 @@ async function handlePOST(request: NextRequest) {
         
         // Extract service metadata for x402 transparency
         const serviceType = frontendPayload.service_type;
+        
+        // PAYMENT AMOUNT VALIDATION - Verify amount matches expected price
+        // This prevents wrong transactions due to agent bugs, config mismatches, or manipulation
+        if (isPremiumServicePayment && serviceType && serviceType !== 'message_fee') {
+          console.log(`[Payment Validation] Validating ${serviceType}: $${amountUsdc}`);
+          
+          const validation = validatePaymentAmount(serviceType, amountUsdc);
+          
+          if (!validation.valid) {
+            console.error(`[Payment Validation] ❌ FAILED: ${validation.error}`);
+            
+            // Log validation failure to database for audit trail
+            try {
+              await prisma.payment.create({
+                data: {
+                  fromWallet: userWallet,
+                  toWallet: process.env.WALLET_WHITE_HOUSE || '',
+                  toAgent: agentId,
+                  amount: amountUsdc,
+                  currency: 'USDC',
+                  signature: `validation-failed-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+                  serviceType: `${serviceType}_validation_failed`,
+                  verified: false,
+                  isAgentToAgent: false,
+                  initiatedBy: userWallet,
+                  x402Error: `Payment amount validation failed: ${validation.error}`
+                }
+              });
+            } catch (dbError: any) {
+              console.error('[Payment Validation] Failed to log validation failure:', dbError.message);
+            }
+            
+            // Reject the payment before it goes through CDP
+            return NextResponse.json(
+              { 
+                error: 'Invalid payment amount',
+                details: validation.error,
+                serviceType,
+                amountPaid: amountUsdc,
+                expectedAmount: validation.expectedAmount,
+                minAmount: validation.minAmount
+              },
+              { status: 400 }
+            );
+          }
+          
+          // Log successful validation
+          const priceInfo = getServicePriceInfo(serviceType);
+          if (priceInfo.type === 'fixed') {
+            console.log(`[Payment Validation] ✅ Valid fixed-price: $${amountUsdc} (expected: $${priceInfo.amount})`);
+          } else if (priceInfo.type === 'variable') {
+            console.log(`[Payment Validation] ✅ Valid variable-amount: $${amountUsdc} (min: $${priceInfo.minAmount})`);
+          }
+        }
         
         // Create privacy-safe, descriptive description
         let description = 'Pardon Simulator Message Fee';
@@ -765,6 +820,31 @@ async function handlePOST(request: NextRequest) {
                   }
                 });
                 console.log('[CDP Fallback] Payment stored in database:', signature, 'ID:', payment.id);
+                
+                // Record ServiceUsage immediately for premium services (fallback path)
+                if (isPremiumServicePayment && serviceType && serviceType !== 'premium_service') {
+                  try {
+                    const user = await prisma.user.findUnique({
+                      where: { walletAddress: userWallet },
+                      select: { id: true }
+                    });
+                    
+                    if (user && session) {
+                      await serviceUsageRepository.recordServiceUsage(
+                        user.id,
+                        session.id,
+                        getCurrentWeekId(),
+                        serviceType,
+                        agentId,
+                        0 // Score bonus will be calculated when agent awards points
+                      );
+                      console.log(`[Service Usage] Recorded ${serviceType} usage for ${userWallet.slice(0, 8)}... immediately after fallback payment`);
+                    }
+                  } catch (usageError: any) {
+                    console.error('[Service Usage] Failed to record usage after fallback payment:', usageError.message);
+                    // Don't fail payment if usage recording fails
+                  }
+                }
               } catch (storeError: any) {
                 console.error('[CDP Fallback] Failed to store payment in database:', storeError.message);
                 // Don't fail the whole request if storage fails
@@ -855,6 +935,32 @@ async function handlePOST(request: NextRequest) {
                 }
               });
               console.log('[CDP] Payment stored in database:', txSignature, 'ID:', payment.id);
+              
+              // Record ServiceUsage immediately for premium services
+              if (isPremiumServicePayment && serviceType && serviceType !== 'premium_service') {
+                try {
+                  // Get user and session info for ServiceUsage
+                  const user = await prisma.user.findUnique({
+                    where: { walletAddress: userWallet },
+                    select: { id: true }
+                  });
+                  
+                  if (user && session) {
+                    await serviceUsageRepository.recordServiceUsage(
+                      user.id,
+                      session.id,
+                      getCurrentWeekId(),
+                      serviceType,
+                      agentId,
+                      0 // Score bonus will be calculated when agent awards points
+                    );
+                    console.log(`[Service Usage] Recorded ${serviceType} usage for ${userWallet.slice(0, 8)}... immediately after payment`);
+                  }
+                } catch (usageError: any) {
+                  console.error('[Service Usage] Failed to record usage after payment:', usageError.message);
+                  // Don't fail payment if usage recording fails
+                }
+              }
             } catch (storeError: any) {
               console.error('[CDP] Failed to store payment in database:', storeError.message);
               // Don't fail the whole request if storage fails
