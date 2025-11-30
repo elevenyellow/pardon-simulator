@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyAdminAuth } from '@/lib/admin/auth';
+import { requireAdminAuth } from '@/lib/admin/middleware';
 import { scoringRepository } from '@/lib/scoring/repository';
 import { getCurrentWeekId } from '@/lib/utils/week';
 
@@ -11,20 +11,19 @@ import { getCurrentWeekId } from '@/lib/utils/week';
  */
 export async function GET(request: NextRequest) {
   // Verify admin authentication
-  const authResult = await verifyAdminAuth(request);
-  if (!authResult.authenticated) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    );
-  }
+  const { admin, error } = await requireAdminAuth(request);
+  if (error) return error;
 
   try {
     const { searchParams } = new URL(request.url);
     const weekId = searchParams.get('weekId') || getCurrentWeekId();
     
+    console.log(`[Admin Leaderboard] Fetching for week: ${weekId}`);
+    
     // Get all sessions for the week (no filtering by score)
     const sessions = await scoringRepository.getLeaderboard(weekId, 1000);
+    
+    console.log(`[Admin Leaderboard] Found ${sessions.length} sessions for week ${weekId}`);
     
     // Map to leaderboard entries (no 90-point filter - show ALL users)
     const entries = sessions.map((session, index) => ({
@@ -39,6 +38,8 @@ export async function GET(request: NextRequest) {
         walletAddress: session.user.walletAddress,
       },
     }));
+    
+    console.log(`[Admin Leaderboard] Returning ${entries.length} entries, ${entries.filter(e => e.finalScore >= 90).length} prize eligible`);
     
     return NextResponse.json({
       success: true,
