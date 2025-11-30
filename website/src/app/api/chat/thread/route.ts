@@ -165,6 +165,13 @@ async function saveThreadToDatabase(params: {
     return;
   }
 
+  // SECURITY: Prevent creating user records with agent IDs as wallet addresses
+  // SBF is a proxy agent, not a real user
+  if (params.userWallet === 'sbf' || params.userWallet.length < 32) {
+    console.warn('[Thread Creation] Invalid wallet address provided:', params.userWallet);
+    return;
+  }
+
   // Upsert user
   const user = await prisma.user.upsert({
     where: { walletAddress: params.userWallet },

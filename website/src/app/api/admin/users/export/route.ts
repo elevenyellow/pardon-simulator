@@ -2,6 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAuthWithLogging } from '@/lib/admin/middleware';
 import { prisma } from '@/lib/prisma';
 
+// Agent wallet addresses to filter out from user export
+// These are system agents, not real users
+const AGENT_WALLETS: string[] = [
+  process.env.WALLET_DONALD_TRUMP,
+  process.env.WALLET_MELANIA_TRUMP,
+  process.env.WALLET_ERIC_TRUMP,
+  process.env.WALLET_DONJR_TRUMP,
+  process.env.WALLET_BARRON_TRUMP,
+  process.env.WALLET_CZ,
+  process.env.WALLET_WHITE_HOUSE,
+  'sbf', // SBF is a proxy agent, not a real user
+].filter((addr): addr is string => Boolean(addr)); // Remove any undefined values
+
 export async function GET(request: NextRequest) {
   // CRITICAL: Export operations are audited
   const { admin, error } = await requireAdminAuthWithLogging(request, 'export_users');
@@ -12,6 +25,12 @@ export async function GET(request: NextRequest) {
     const format = searchParams.get('format') || 'json';
 
     const users = await prisma.user.findMany({
+      where: {
+        // Filter out agent wallets - they're not real users
+        walletAddress: {
+          notIn: AGENT_WALLETS
+        }
+      },
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,

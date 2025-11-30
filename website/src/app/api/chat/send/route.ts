@@ -743,7 +743,11 @@ async function handlePOST(request: NextRequest) {
               // Store payment in database (fallback case)
               try {
                 const paymentAmount = amountUsdc;
-                const serviceType = isPremiumServicePayment ? 'premium_service' : 'message_fee';
+                // Extract the ACTUAL service type from payment data for premium services
+                // serviceType was extracted earlier from frontendPayload on line 260
+                const paymentServiceType = isPremiumServicePayment && serviceType 
+                  ? serviceType  // Use the actual service type (e.g., "insider_info", "connection_intro")
+                  : (isPremiumServicePayment ? 'premium_service' : 'message_fee');
                 
                 const payment = await prisma.payment.create({
                   data: {
@@ -753,7 +757,7 @@ async function handlePOST(request: NextRequest) {
                     amount: paymentAmount,
                     currency:'USDC',
                     signature,
-                    serviceType,
+                    serviceType: paymentServiceType,
                     verified: true,
                     verifiedAt: new Date(),
                     isAgentToAgent: false,
@@ -820,7 +824,7 @@ async function handlePOST(request: NextRequest) {
               success: true,
               transaction: txSignature,
               network:'solana',
-              payer: settleResult.payer || frontendPayload.from,
+              payer: userWallet, // Use actual user wallet, not facilitator address
               solanaExplorer:`https://explorer.solana.com/tx/${txSignature}`,
             };
             
@@ -829,17 +833,21 @@ async function handlePOST(request: NextRequest) {
             // Store payment in database
             try {
               const paymentAmount = amountUsdc;
-              const serviceType = isPremiumServicePayment ? 'premium_service' : 'message_fee';
+              // Extract the ACTUAL service type from payment data for premium services
+              // serviceType was extracted earlier from frontendPayload on line 260
+              const paymentServiceType = isPremiumServicePayment && serviceType 
+                ? serviceType  // Use the actual service type (e.g., "insider_info", "connection_intro")
+                : (isPremiumServicePayment ? 'premium_service' : 'message_fee');
               
               const payment = await prisma.payment.create({
                 data: {
-                  fromWallet: settlementResult.payer,
+                  fromWallet: userWallet, // Use actual user wallet, not CDP facilitator address
                   toWallet: to,
                   toAgent: agentId,
                   amount: paymentAmount,
                   currency:'USDC',
                   signature: txSignature,
-                  serviceType,
+                  serviceType: paymentServiceType,
                   verified: true,
                   verifiedAt: new Date(),
                   isAgentToAgent: false,
@@ -1272,6 +1280,13 @@ async function saveMessageToDatabase(params: {
 
         if (!session) {
           if (!params.userWallet) {
+            return;
+          }
+          
+          // SECURITY: Prevent creating user records with agent IDs as wallet addresses
+          // SBF is a proxy agent, not a real user
+          if (params.userWallet === 'sbf' || params.userWallet.length < 32) {
+            console.warn('[Message Save] Invalid wallet address provided:', params.userWallet);
             return;
           }
           

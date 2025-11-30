@@ -5,7 +5,7 @@ import { validatePagination, validateDateRange, validateSearchQuery, validateSor
 
 // Agent wallet addresses to filter out from user list
 // These are system agents, not real users
-const AGENT_WALLETS = [
+const AGENT_WALLETS: string[] = [
   process.env.WALLET_DONALD_TRUMP,
   process.env.WALLET_MELANIA_TRUMP,
   process.env.WALLET_ERIC_TRUMP,
@@ -13,7 +13,8 @@ const AGENT_WALLETS = [
   process.env.WALLET_BARRON_TRUMP,
   process.env.WALLET_CZ,
   process.env.WALLET_WHITE_HOUSE,
-].filter(Boolean); // Remove any undefined values
+  'sbf', // SBF is a proxy agent, not a real user
+].filter((addr): addr is string => Boolean(addr)); // Remove any undefined values
 
 export async function GET(request: NextRequest) {
   const { admin, error } = await requireAdminAuth(request);

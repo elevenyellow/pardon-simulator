@@ -526,6 +526,12 @@ export class ScoringRepository {
     weekId: string,
     coralSessionId?: string
   ): Promise<{ userId: string; sessionId: string; currentScore: number }> {
+    // SECURITY: Prevent creating user records with agent IDs as wallet addresses
+    // SBF is a proxy agent, not a real user
+    if (walletAddress === 'sbf' || walletAddress.length < 32) {
+      throw new Error(`Invalid wallet address: ${walletAddress}`);
+    }
+    
     // Find or create user (upsert for safety)
     const user = await prisma.user.upsert({
       where: { walletAddress },
