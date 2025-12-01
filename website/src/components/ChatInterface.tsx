@@ -530,6 +530,21 @@ export default function ChatInterface({
       console.log('[SSE] Closing existing connection before reconnect');
       eventSourceRef.current.close();
       eventSourceRef.current = null;
+      
+      // Small delay to let server unregister the connection
+      // Prevents "connection_limit_exceeded" errors
+      const reconnectTimer = setTimeout(() => {
+        if (threadId && sessionId && shouldPoll) {
+          console.log('[SSE] Starting SSE connection after cleanup delay (trigger:', sseReconnectTrigger, ')');
+          const eventSource = new EventSource(
+            `/api/chat/stream?sessionId=${sessionId}&threadId=${threadId}`
+          );
+          eventSourceRef.current = eventSource;
+          setupEventSource(eventSource);
+        }
+      }, 500);
+      
+      return () => clearTimeout(reconnectTimer);
     }
     
     if (threadId && sessionId) {
@@ -546,6 +561,23 @@ export default function ChatInterface({
         `/api/chat/stream?sessionId=${sessionId}&threadId=${threadId}`
       );
       eventSourceRef.current = eventSource;
+      setupEventSource(eventSource);
+    }
+    
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+      if (autoStopTimerRef.current) {
+        clearTimeout(autoStopTimerRef.current);
+      }
+    };
+    
+    function setupEventSource(eventSource: EventSource) {
       
       eventSource.onopen = () => {
         if (DEBUG_SSE) console.log('[SSE] Connected to message stream');
@@ -751,19 +783,6 @@ export default function ChatInterface({
         }
       };
     }
-    
-    return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-      }
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-      }
-      if (autoStopTimerRef.current) {
-        clearTimeout(autoStopTimerRef.current);
-      }
-    };
   }, [threadId, sessionId, publicKey, selectedAgent, shouldPoll, sseReconnectTrigger]);
 
   // 🔄 Page Visibility API: Handle browser focus loss and regain
@@ -779,10 +798,13 @@ export default function ChatInterface({
         // Force immediate poll to catch any missed messages
         try {
           const coralMessages = await apiClient.getMessages(sessionId, threadId, publicKey?.toString());
-          const currentMessageCount = messages.length;
           
-          if (coralMessages.length > currentMessageCount) {
-            console.log(`[Visibility] Found ${coralMessages.length - currentMessageCount} new message(s) - updating immediately`);
+          // Check for truly new messages by ID, not just count
+          const existingIds = new Set(messages.map(m => m.id));
+          const newCoralMessages = coralMessages.filter((m: any) => !existingIds.has(m.id));
+          
+          if (newCoralMessages.length > 0) {
+            console.log(`[Visibility] Found ${newCoralMessages.length} new message(s) - updating immediately`);
             
             // CRITICAL FIX: Actually update the messages instead of waiting for SSE
             const newMessages: Message[] = coralMessages.map((m: any) => {
