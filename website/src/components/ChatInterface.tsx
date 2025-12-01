@@ -202,6 +202,7 @@ export default function ChatInterface({
   const phoneDialRef = useRef<HTMLAudioElement | null>(null); // Phone sound for payment confirmation
   const lastUserMessageRef = useRef<string | null>(null); // Store the last user message for premium service payments
   const consecutiveEmptyPollsRef = useRef<number>(0); // Track empty polls to auto-stop interval polling
+  const seenMessageIdsRef = useRef<Set<string>>(new Set()); // Global deduplication across all handlers
   
   // Score tracking state
   const [currentScore, setCurrentScore] = useState(0);
@@ -476,6 +477,8 @@ export default function ChatInterface({
         if (cached && cached.length > 0) {
           console.log(`[Thread Load] Loaded ${cached.length} messages from cache`);
           setMessages(cached);
+          // Mark all cached messages as seen in global deduplication
+          cached.forEach(m => seenMessageIdsRef.current.add(m.id));
         } else {
           // No cache - fetch from server (database + Coral)
           console.log('[Thread Load] No cache, fetching conversation history from server...');
@@ -506,6 +509,8 @@ export default function ChatInterface({
                   isIntermediary: m.isIntermediary || false
                 }));
                 setMessages(formattedMessages);
+                // Mark all loaded messages as seen in global deduplication
+                formattedMessages.forEach(m => seenMessageIdsRef.current.add(m.id));
                 
                 // Update cache for next time
                 cacheConversation(walletAddress, threadId, formattedMessages, selectedAgent);
@@ -627,7 +632,22 @@ export default function ChatInterface({
             // Track pending payment requests from agent messages
             let pendingPaymentRequest: { request: PaymentRequest; messageId: string } | null = null;
             
-            const newMessages: Message[] = data.messages.map((m: any) => {
+            // GLOBAL DEDUPLICATION: Filter messages we've already seen
+            const unseenMessages = data.messages.filter((m: any) => {
+              if (seenMessageIdsRef.current.has(m.id)) {
+                return false; // Already processed
+              }
+              return true;
+            });
+            
+            if (unseenMessages.length === 0) {
+              return; // No new messages
+            }
+            
+            // Mark as seen
+            unseenMessages.forEach((m: any) => seenMessageIdsRef.current.add(m.id));
+            
+            const newMessages: Message[] = unseenMessages.map((m: any) => {
               const isFromUser = m.senderId === USER_SENDER_ID;
               const mentionsUser = m.mentions?.includes(USER_SENDER_ID);
               const isIntermediary = !isFromUser && !mentionsUser;
@@ -662,6 +682,8 @@ export default function ChatInterface({
                 isIntermediary
               };
             });
+            
+            console.log('[SSE] Processing', newMessages.length, 'new messages');
             
             setMessages(prev => {
               const existingIds = new Set(prev.map(m => m.id));
@@ -840,8 +862,25 @@ export default function ChatInterface({
           if (newCoralMessages.length > 0) {
             console.log(`[Visibility] Found ${newCoralMessages.length} new message(s) - updating immediately`);
             
+            // GLOBAL DEDUPLICATION: Filter messages we've already seen
+            const unseenMessages = newCoralMessages.filter((m: any) => {
+              if (seenMessageIdsRef.current.has(m.id)) {
+                console.log('[Visibility Global Dedup] Skipping already seen:', m.id.substring(0, 12));
+                return false;
+              }
+              return true;
+            });
+            
+            if (unseenMessages.length === 0) {
+              console.log('[Visibility] All messages already seen, skipping update');
+              return;
+            }
+            
+            // Mark as seen
+            unseenMessages.forEach((m: any) => seenMessageIdsRef.current.add(m.id));
+            
             // CRITICAL FIX: Actually update the messages instead of waiting for SSE
-            const newMessages: Message[] = coralMessages.map((m: any) => {
+            const newMessages: Message[] = unseenMessages.map((m: any) => {
               const isFromUser = m.senderId === USER_SENDER_ID;
               const mentionsUser = m.mentions?.includes(USER_SENDER_ID);
               const isIntermediary = !isFromUser && !mentionsUser;
@@ -1167,14 +1206,33 @@ export default function ChatInterface({
       const initialMessageCount = messages.length;
       let hasNewMessages = false;
       
+      // GLOBAL DEDUPLICATION: Filter out messages we've already seen (prevents race conditions)
+      const unseenMessages = allMessages.filter(m => {
+        if (seenMessageIdsRef.current.has(m.id)) {
+          console.log('[Global Dedup] ✋ Already seen message:', m.id.substring(0, 12), '-', m.senderId);
+          return false;
+        }
+        return true;
+      });
+      
+      // Mark these messages as seen
+      unseenMessages.forEach(m => seenMessageIdsRef.current.add(m.id));
+      
+      if (unseenMessages.length === 0) {
+        console.log('[Polling] No new messages (all already seen globally)');
+        return; // Nothing new, skip state update
+      }
+      
+      console.log('[Polling] Processing', unseenMessages.length, 'truly new messages');
+      
       // Deduplicate and merge messages  
       setMessages(prev => {
-        console.log('[Dedup] Poll results - Current state:', prev.length, 'messages, New from API:', allMessages.length);
+        console.log('[Dedup] Current state:', prev.length, 'messages, Adding:', unseenMessages.length, 'new');
         
-        // STEP 1: Deduplicate by ID (primary check)
+        // STEP 1: Deduplicate by ID (safety check - should already be filtered by global ref)
         const existingIds = new Set(prev.map(m => m.id));
         
-        let newMessages = allMessages.filter(m => !existingIds.has(m.id));
+        let newMessages = unseenMessages.filter(m => !existingIds.has(m.id));
         console.log('[Dedup] After ID filter:', newMessages.length, 'new messages');
         
         // STEP 2: Handle optimistic user messages (replace with server versions)
