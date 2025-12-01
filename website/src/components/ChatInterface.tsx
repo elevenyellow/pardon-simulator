@@ -544,19 +544,15 @@ export default function ChatInterface({
             }
             setLoading(false);
             
-            // Re-enable polling after initial load completes
-            // Small delay to ensure state is settled
-            setTimeout(() => {
-              console.log('[Thread Load] Initial load complete, re-enabling SSE/polling');
-              setShouldPoll(true);
-            }, 100);
+            // DON'T re-enable polling for existing conversations
+            // Polling will be enabled when user sends a message (waiting for reply)
+            console.log('[Thread Load] Initial load complete, polling will start when user sends message');
           })
           .catch(error => {
             console.error('[Thread Load] Error fetching conversation history:', error);
             setLoading(false);
-            // Re-enable polling even on error
-            setShouldPoll(true);
             // Keep welcome message on error
+            // Polling will be enabled when user sends a message
           });
       } else {
         // No thread yet, create a new one
@@ -670,10 +666,14 @@ export default function ChatInterface({
             let pendingPaymentRequest: { request: PaymentRequest; messageId: string } | null = null;
             
             // GLOBAL DEDUPLICATION: Filter messages we've already seen
+            console.log('[SSE] Checking', data.messages.length, 'messages against', seenMessageIdsRef.current.size, 'seen IDs');
             const unseenMessages = data.messages.filter((m: any) => {
-              if (seenMessageIdsRef.current.has(m.id)) {
+              const isSeen = seenMessageIdsRef.current.has(m.id);
+              if (isSeen) {
+                console.log('[SSE] ✋ Filtering out already seen:', m.id.substring(0, 16));
                 return false; // Already processed
               }
+              console.log('[SSE] ✅ New message:', m.id.substring(0, 16), m.senderId);
               return true;
             });
             
