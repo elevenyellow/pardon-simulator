@@ -1288,7 +1288,8 @@ Only after payment verified should you call contact_agent()!
                         response = await self.process_message(mentions_data, dynamic_content)
                         
                         if response is None:
-                            print("[FATAL] No response after all retry attempts")
+                            # This is expected for proxy agents like SBF that don't generate responses
+                            # print("[DEBUG] process_message returned None - continuing loop")
                             continue
                             
                     except Exception as e:

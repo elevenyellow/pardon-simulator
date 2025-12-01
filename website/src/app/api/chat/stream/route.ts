@@ -171,7 +171,10 @@ export async function GET(request: NextRequest) {
             pollInterval = 3000;
           }
         } catch (err) {
-          console.error('[SSE] Poll error:', err);
+          // Timeout errors are expected during slow operations (e.g., payment settlement)
+          if (err instanceof Error && err.name !== 'TimeoutError') {
+            console.error('[SSE] Poll error:', err);
+          }
           pollInterval = 3000;
         }
         

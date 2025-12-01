@@ -20,6 +20,7 @@ if command -v osascript &> /dev/null; then
         
         -- Configure website pane (the right pane created first)
         tell websitePane
+          delay 0.5
           write text "cd '$PROJECT_DIR' && echo '🌐 WEBSITE' && echo 'Waiting for agents...' && sleep 25 && ./start-website.sh"
         end tell
         
