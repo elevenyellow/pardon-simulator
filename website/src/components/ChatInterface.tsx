@@ -1476,18 +1476,21 @@ export default function ChatInterface({
     setLoading(true);
     
     // CRITICAL: We just sent a message, so we MUST poll for the reply
-    // Start polling immediately - don't wait for SSE or rate limiting
-    console.log('[Polling] Message sent - starting polling to receive reply');
+    console.log('[Polling] Message sent - enabling SSE/polling to receive reply');
     
-    // Start interval polling immediately as safety net
-    if (!pollIntervalRef.current) {
-      console.log('[Polling] Starting interval polling immediately');
-      consecutiveEmptyPollsRef.current = 0;
-      pollIntervalRef.current = setInterval(pollMessages, 1000);
-    }
-    
-    // ALSO try to connect SSE (preferred, but interval polling is already running)
+    // Try SSE first (preferred method)
     triggerSSEReconnection();
+    
+    // Safety net: If SSE doesn't connect within 3 seconds, start interval polling as fallback
+    const pollFallbackTimer = setTimeout(() => {
+      if (!eventSourceRef.current || eventSourceRef.current.readyState !== EventSource.OPEN) {
+        if (!pollIntervalRef.current) {
+          console.log('[Polling] SSE not connected after message send, starting interval polling fallback');
+          consecutiveEmptyPollsRef.current = 0;
+          pollIntervalRef.current = setInterval(pollMessages, 1000);
+        }
+      }
+    }, 3000);
 
     try {
       
@@ -1862,17 +1865,21 @@ export default function ChatInterface({
       
       // CRITICAL: If we didn't get the agent response yet, we MUST poll for it
       if (!receivedAgentResponse) {
-        console.log('[Payment] Waiting for agent response - starting polling');
+        console.log('[Payment] Waiting for agent response - enabling SSE/polling');
         
-        // Start interval polling immediately to ensure we get the response
-        if (!pollIntervalRef.current) {
-          console.log('[Payment] Starting interval polling immediately');
-          consecutiveEmptyPollsRef.current = 0;
-          pollIntervalRef.current = setInterval(pollMessages, 1000);
-        }
-        
-        // Also try SSE (preferred, but interval polling is already running)
+        // Try SSE first (preferred method)
         triggerSSEReconnection();
+        
+        // Safety net: If SSE doesn't connect within 3 seconds, start interval polling as fallback
+        setTimeout(() => {
+          if (!eventSourceRef.current || eventSourceRef.current.readyState !== EventSource.OPEN) {
+            if (!pollIntervalRef.current) {
+              console.log('[Payment] SSE not connected, starting interval polling fallback');
+              consecutiveEmptyPollsRef.current = 0;
+              pollIntervalRef.current = setInterval(pollMessages, 1000);
+            }
+          }
+        }, 3000);
       }
       } else {
         // SOL payments (not currently supported for CDP facilitator)
