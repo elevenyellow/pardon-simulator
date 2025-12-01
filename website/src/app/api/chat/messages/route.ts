@@ -99,7 +99,8 @@ export async function GET(request: NextRequest) {
         senderId: msg.senderId,
         content: msg.content,
         timestamp: msg.createdAt.getTime(),
-        mentions: msg.mentions
+        mentions: msg.mentions,
+        metadata: msg.metadata
       }));
       
       // Filter out premium service payment confirmation echoes

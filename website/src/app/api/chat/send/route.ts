@@ -1179,6 +1179,29 @@ async function handlePOST(request: NextRequest) {
       throw new Error(`Failed to send message: ${sendResponse.statusText}`);
     }
 
+    // Prepare payment metadata for database (if this is a premium service payment)
+    let paymentMetadata = undefined;
+    if (isPremiumServicePayment && settlementResult?.success && paymentData) {
+      try {
+        const paymentPayload = JSON.parse(paymentData);
+        const serviceType = paymentPayload.service_type || 'unknown';
+        const amountUsdc = paymentPayload.amount_usdc || 0;
+        const paymentId = paymentPayload.payment_id || paymentPayload.paymentId || 'unknown';
+        
+        paymentMetadata = {
+          paymentId: paymentId,
+          paymentCompleted: true,
+          paymentSignature: settlementResult.transaction,
+          serviceType: serviceType,
+          amountUsdc: amountUsdc,
+          timestamp: Date.now()
+        };
+        console.log('[Payment Metadata] Adding to message:', paymentMetadata);
+      } catch (e) {
+        console.error('[Payment Metadata] Failed to prepare metadata:', e);
+      }
+    }
+
     const savedMessage = await saveMessageToDatabase({
       threadId,
       sessionId,
@@ -1186,7 +1209,8 @@ async function handlePOST(request: NextRequest) {
       content,
       mentions: [agentId],
       isIntermediary: false,
-      userWallet
+      userWallet,
+      metadata: paymentMetadata
     });
 
     console.log(`[Send API] Message saved to database, returning success to client`);
@@ -1376,6 +1400,7 @@ async function saveMessageToDatabase(params: {
   mentions: string[];
   isIntermediary: boolean;
   userWallet?: string;
+  metadata?: any;
 }): Promise<any> {
   try {
     return await withRetry(async () => {
@@ -1450,7 +1475,8 @@ async function saveMessageToDatabase(params: {
           senderId: params.senderId,
           content: params.content,
           mentions: params.mentions,
-          isIntermediary: params.isIntermediary
+          isIntermediary: params.isIntermediary,
+          metadata: params.metadata || undefined
         }
       });
       

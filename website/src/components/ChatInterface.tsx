@@ -310,6 +310,29 @@ export default function ChatInterface({
       .trim();
   };
 
+  // Check if a payment has been completed by looking for payment metadata
+  const isPaymentCompleted = (paymentId: string | undefined, allMessages: any[]): boolean => {
+    if (!paymentId) return false;
+    
+    // First check structured metadata (preferred, server-authoritative)
+    for (const msg of allMessages) {
+      if (msg.metadata?.paymentId === paymentId && msg.metadata?.paymentCompleted === true) {
+        console.log(`[Payment Check] Found completed payment in metadata: ${paymentId}`);
+        return true;
+      }
+    }
+    
+    // Fallback: check content markers for backward compatibility with existing messages
+    for (const msg of allMessages) {
+      if (msg.content?.includes('[PREMIUM_SERVICE_PAYMENT_COMPLETED') && msg.content?.includes(paymentId)) {
+        console.log(`[Payment Check] Found completion marker in content for payment_id: ${paymentId}`);
+        return true;
+      }
+    }
+    
+    return false;
+  };
+
   // Extract x402 payment request from message content
   const extractPaymentRequest = (content: string): { request: PaymentRequest; cleanMessage: string } | null => {
     const match = content.match(/<x402_payment_request>([\s\S]*?)<\/x402_payment_request>/);
@@ -669,12 +692,18 @@ export default function ChatInterface({
                   
                   // Check if this is a new message we haven't processed yet
                   const alreadyProcessed = processedMessageIdsRef.current.has(m.id);
-                  if (!alreadyProcessed && publicKey && sessionId && threadId) {
+                  const paymentAlreadyCompleted = isPaymentCompleted(extracted.request.payment_id, data.messages);
+                  
+                  if (!alreadyProcessed && !paymentAlreadyCompleted && publicKey && sessionId && threadId) {
                     pendingPaymentRequest = { 
                       request: extracted.request, 
                       messageId: m.id 
                     };
                     console.log('[SSE] Detected new payment request:', extracted.request);
+                  } else if (paymentAlreadyCompleted) {
+                    console.log('[SSE] Skipping payment request - already completed:', extracted.request.payment_id);
+                    // Mark as processed to prevent future checks
+                    processedMessageIdsRef.current.add(m.id);
                   }
                 }
               }
@@ -1179,13 +1208,20 @@ export default function ChatInterface({
               console.log('[Payment Detection] Extracted payment request:', extracted.request);
               // Check if this is a new message we haven't processed yet
               const alreadyProcessed = processedMessageIdsRef.current.has(m.id);
+              const paymentAlreadyCompleted = isPaymentCompleted(extracted.request.payment_id, coralMessages);
               console.log('[Payment Detection] Already processed?', alreadyProcessed);
-              if (!alreadyProcessed) {
+              console.log('[Payment Detection] Payment completed?', paymentAlreadyCompleted);
+              
+              if (!alreadyProcessed && !paymentAlreadyCompleted) {
                 pendingPaymentRequest = { 
                   request: extracted.request, 
                   messageId: m.id 
                 };
                 console.log('[Payment Detection] Set pending payment request');
+              } else if (paymentAlreadyCompleted) {
+                console.log('[Payment Detection] Skipping payment request - already completed:', extracted.request.payment_id);
+                // Mark as processed to prevent future checks
+                processedMessageIdsRef.current.add(m.id);
               }
               // Clean content for display
               content = extracted.cleanMessage;
