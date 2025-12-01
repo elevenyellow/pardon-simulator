@@ -1167,45 +1167,17 @@ export default function ChatInterface({
       const initialMessageCount = messages.length;
       let hasNewMessages = false;
       
-      // Deduplicate and merge messages
+      // Deduplicate and merge messages  
       setMessages(prev => {
-        if (DEBUG_SSE) {
-          console.log('State IDs:', prev.map(m =>`${m.senderId}:${m.id.substring(0, 12)}`));
-        }
+        console.log('[Dedup] Poll results - Current state:', prev.length, 'messages, New from API:', allMessages.length);
         
-        // Build a content-based lookup for existing user messages
-        //  Strip debug markers for comparison to prevent duplicates
-        const existingUserMessageContents = new Set(
-          prev
-            .filter(m => m.senderId === USER_SENDER_ID)
-            .map(m => stripDebugMarkers(m.content).trim())
-        );
-        
+        // STEP 1: Deduplicate by ID (primary check)
         const existingIds = new Set(prev.map(m => m.id));
-        const existingHashes = new Set(prev.map(m => 
-          createMessageHash(m.senderId, m.content, m.timestamp.getTime())
-        ));
         
-        // Filter out messages that are already displayed
-        let newMessages = allMessages.filter(m => {
-          // Already have this exact message ID
-          if (existingIds.has(m.id)) return false;
-          
-          // For user messages, check if we have an optimistic version with same content
-          //  Strip debug markers from Coral message for comparison
-          if (m.senderId === USER_SENDER_ID) {
-            const strippedContent = stripDebugMarkers(m.content).trim();
-            if (existingUserMessageContents.has(strippedContent)) {
-              return false; // Don't add as"new"if we have optimistic version
-            }
-          }
-          
-          // Check hash-based deduplication for other messages
-          const messageHash = createMessageHash(m.senderId, m.content, m.timestamp.getTime());
-          return !existingHashes.has(messageHash);
-        });
+        let newMessages = allMessages.filter(m => !existingIds.has(m.id));
+        console.log('[Dedup] After ID filter:', newMessages.length, 'new messages');
         
-        // Handle payment confirmations: remove optimistic ones if real ones exist
+        // STEP 2: Handle optimistic user messages (replace with server versions)
         const hasRealPaymentConfirmation = allMessages.some(m =>
           m.senderId === USER_SENDER_ID && m.content.includes('Payment sent! Transaction signature:')
         );
@@ -1214,16 +1186,18 @@ export default function ChatInterface({
           ? prev.filter(m => !m.id.startsWith('payment-'))
           : prev;
         
-        // Replace optimistic messages IN-PLACE to avoid reordering
+        // STEP 3: Replace optimistic messages with server versions
+        const replacedOptimisticIds = new Set<string>();
         const updated = filteredPrev.map(prevMsg => {
           if (prevMsg.id.startsWith('optimistic-')) {
-            const serverVersion = allMessages.find(serverMsg => 
+            const serverVersion = newMessages.find(serverMsg => 
               serverMsg.senderId === USER_SENDER_ID &&
               stripDebugMarkers(serverMsg.content).trim() === stripDebugMarkers(prevMsg.content).trim()
             );
             
             if (serverVersion) {
-              // Replace in-place, preserving timestamp to maintain position
+              replacedOptimisticIds.add(serverVersion.id);
+              // Replace optimistic with server version, keeping optimistic timestamp
               return {
                 ...serverVersion,
                 timestamp: prevMsg.timestamp
@@ -1233,36 +1207,28 @@ export default function ChatInterface({
           return prevMsg;
         });
         
-        // Filter out server versions that were used for replacement
-        const replacedServerIds = new Set<string>();
-        filteredPrev.forEach(prevMsg => {
-          if (prevMsg.id.startsWith('optimistic-')) {
-            const serverVersion = allMessages.find(serverMsg => 
-              serverMsg.senderId === USER_SENDER_ID &&
-              stripDebugMarkers(serverMsg.content).trim() === stripDebugMarkers(prevMsg.content).trim()
-            );
-            if (serverVersion) {
-              replacedServerIds.add(serverVersion.id);
-            }
-          }
-        });
+        // STEP 4: Add only truly new messages (not used for optimistic replacement)
+        const trulyNew = newMessages.filter(m => !replacedOptimisticIds.has(m.id));
         
-        const trulyNew = newMessages.filter(m => !replacedServerIds.has(m.id));
+        console.log('[Dedup] Truly new (not optimistic replacements):', trulyNew.length);
         
         // Track if we got new messages (for auto-stop logic)
         hasNewMessages = trulyNew.length > 0;
         
-        // Add new messages and sort only when necessary
+        // STEP 5: Merge and sort
         const merged = [...updated, ...trulyNew];
         const sorted = merged.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
         
-        // Final deduplication pass to ensure no duplicate IDs (React key constraint)
-        const deduplicatedById = sorted.reduce((acc, msg) => {
-          if (!acc.some(m => m.id === msg.id)) {
-            acc.push(msg);
+        // STEP 6: FINAL safety deduplication by ID
+        const seen = new Set<string>();
+        const deduplicatedById = sorted.filter(msg => {
+          if (seen.has(msg.id)) {
+            console.log('[Dedup] ⚠️ FINAL DEDUP caught duplicate:', msg.id.substring(0, 12));
+            return false;
           }
-          return acc;
-        }, [] as Message[]);
+          seen.add(msg.id);
+          return true;
+        });
         
         // SMART CLEANUP: Only remove loading message if we received a NEW agent response
         // Check if there are any new agent messages (not in previous state)
