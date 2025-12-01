@@ -71,12 +71,11 @@ export async function GET(request: NextRequest) {
       console.warn('[Messages API] DB check failed, continuing to Coral:', dbError);
     }
 
-    // STRATEGY: Try database first (most reliable), then Coral for any new messages
-    // This ensures messages aren't lost even if Coral restarts or loses memory state
-    let dbMessages: any[] = [];
+    // STRATEGY: Fetch from database only (single source of truth)
+    // The SSE stream saves messages to DB in real-time, so DB is always current
+    // This is simpler and more reliable than querying Coral's flaky in-memory state
     
     try {
-      // Fetch messages from database
       const thread = await prisma.thread.findFirst({
         where: { coralThreadId: threadId },
         include: {
@@ -86,23 +85,49 @@ export async function GET(request: NextRequest) {
         }
       });
       
-      if (thread && thread.messages.length > 0) {
-        console.log(`[Messages API] Found ${thread.messages.length} messages in database for thread ${threadId}`);
-        dbMessages = thread.messages.map(msg => ({
-          id: msg.id,
-          threadId: threadId,
-          threadName: 'Pardon Simulator Chat',
-          senderId: msg.senderId,
-          content: msg.content,
-          timestamp: msg.createdAt.getTime(),
-          mentions: msg.mentions
-        }));
+      if (!thread) {
+        console.log(`[Messages API] Thread ${threadId} not found in database, returning empty`);
+        return NextResponse.json({ messages: [] });
       }
+      
+      console.log(`[Messages API] Found ${thread.messages.length} messages in database for thread ${threadId}`);
+      
+      const messages = thread.messages.map(msg => ({
+        id: msg.id,
+        threadId: threadId,
+        threadName: 'Pardon Simulator Chat',
+        senderId: msg.senderId,
+        content: msg.content,
+        timestamp: msg.createdAt.getTime(),
+        mentions: msg.mentions
+      }));
+      
+      // Filter out premium service payment confirmation echoes
+      const filteredMessages = messages.filter((msg: any) => {
+        const isUserMessage = msg.senderId === USER_SENDER_ID;
+        const hasPaymentMarker = msg.content?.includes('[PREMIUM_SERVICE_PAYMENT_COMPLETED]');
+        
+        if (isUserMessage && hasPaymentMarker) {
+          console.log(`[Messages API] Filtering premium service payment echo: ${msg.id}`);
+          return false;
+        }
+        return true;
+      });
+      
+      console.log(`[Messages API] Returning ${filteredMessages.length} messages from database`);
+      
+      return NextResponse.json({
+        messages: filteredMessages,
+      });
+      
     } catch (dbError) {
-      console.warn('[Messages API] Failed to fetch from database:', dbError);
+      console.error('[Messages API] Database error:', dbError);
+      
+      // Fallback to Coral only if DB completely fails
+      console.log('[Messages API] Database failed, falling back to Coral...');
     }
     
-    // Get messages from Coral Server (for any new messages not yet in DB)
+    // FALLBACK: Only query Coral if database fails
     let response = await fetch(
 `${CORAL_SERVER_URL}/api/v1/debug/thread/app/priv/${sessionId}/${threadId}/messages`    );
 
@@ -138,80 +163,32 @@ export async function GET(request: NextRequest) {
 `${CORAL_SERVER_URL}/api/v1/debug/thread/app/priv/${sessionId}/${threadId}/messages`            );
             
             if (!response.ok) {
-              console.log('[Messages API] Retry failed, returning DB messages only');
-              // Return DB messages if we have them, even if Coral failed
-              if (dbMessages.length > 0) {
-                console.log(`[Messages API] Coral failed but returning ${dbMessages.length} messages from DB`);
-                return NextResponse.json({ messages: dbMessages });
-              }
+              console.log('[Messages API] Retry failed after restoration, returning empty');
               return NextResponse.json({ messages: [] });
             }
           } else {
-            console.log('[Messages API] Restoration failed, returning DB messages if available');
-            // Return DB messages if we have them, even if restoration failed
-            if (dbMessages.length > 0) {
-              console.log(`[Messages API] Restoration failed but returning ${dbMessages.length} messages from DB`);
-              return NextResponse.json({ messages: dbMessages });
-            }
+            console.log('[Messages API] Restoration failed, returning empty');
             return NextResponse.json({ messages: [] });
           }
         } else {
-          // Other 404 - return DB messages if we have them
-          console.log('[Messages API] Coral 404, checking DB messages');
-          if (dbMessages.length > 0) {
-            console.log(`[Messages API] Coral 404 but returning ${dbMessages.length} messages from DB`);
-            return NextResponse.json({ messages: dbMessages });
-          }
+          console.log('[Messages API] Coral 404, returning empty');
           return NextResponse.json({ messages: [] });
         }
       } else {
         const errorText = await response.text();
-        console.error('Coral Server error:', errorText);
-        
-        // If we have DB messages, return those instead of throwing
-        if (dbMessages.length > 0) {
-          console.log(`[Messages API] Coral error but returning ${dbMessages.length} messages from DB`);
-          return NextResponse.json({ messages: dbMessages });
-        }
-        
+        console.error('[Messages API] Coral fallback failed:', errorText);
         throw new Error(`Failed to get messages: ${response.statusText}`);
       }
     }
 
+    // If we reach here, Coral fallback succeeded
     const data = await response.json();
     const coralMessages = data.messages || [];
     
-    // Merge DB messages with Coral messages
-    // DB messages are authoritative; only add Coral messages that aren't in DB
-    const dbMessageIds = new Set(dbMessages.map(m => m.id));
-    const newCoralMessages = coralMessages.filter((m: any) => !dbMessageIds.has(m.id));
-    
-    console.log(`[Messages API] Merging: ${dbMessages.length} from DB + ${newCoralMessages.length} new from Coral`);
-    
-    const allMessages = [...dbMessages, ...newCoralMessages];
-    
-    // Sort by timestamp to maintain chronological order
-    allMessages.sort((a, b) => a.timestamp - b.timestamp);
-    
-    // Filter out premium service payment confirmation echoes from user
-    // These are needed in the DB for agent-to-agent forwarding, but shouldn't show to user
-    const filteredMessages = allMessages.filter((msg: any) => {
-      const isUserMessage = msg.senderId === USER_SENDER_ID;
-      const hasPaymentMarker = msg.content?.includes('[PREMIUM_SERVICE_PAYMENT_COMPLETED]');
-      
-      // Keep agent messages, keep user messages without the marker
-      // Filter out user messages with the marker (they're already shown optimistically)
-      if (isUserMessage && hasPaymentMarker) {
-        console.log(`[Messages API] Filtering premium service payment echo: ${msg.id}`);
-        return false;
-      }
-      return true;
-    });
-    
-    console.log(`[Messages API] Returning ${filteredMessages.length} messages (${dbMessages.length} from DB, ${newCoralMessages.length} from Coral)`);
+    console.log(`[Messages API] Returning ${coralMessages.length} messages from Coral (fallback)`);
     
     return NextResponse.json({
-      messages: filteredMessages,
+      messages: coralMessages,
     });
 
   } catch (error: any) {
