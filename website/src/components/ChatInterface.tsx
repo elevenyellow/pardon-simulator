@@ -766,14 +766,68 @@ export default function ChatInterface({
         // Page became visible again - user returned to tab
         console.log('[Visibility] Page became visible - forcing message poll');
         
-        // Force immediate poll to catch any missed messages (silently)
+        // Force immediate poll to catch any missed messages
         try {
           const coralMessages = await apiClient.getMessages(sessionId, threadId, publicKey?.toString());
           const currentMessageCount = messages.length;
           
           if (coralMessages.length > currentMessageCount) {
-            console.log(`[Visibility] Found ${coralMessages.length - currentMessageCount} new message(s)`);
-            // Messages will be updated by the main SSE/polling logic
+            console.log(`[Visibility] Found ${coralMessages.length - currentMessageCount} new message(s) - updating immediately`);
+            
+            // CRITICAL FIX: Actually update the messages instead of waiting for SSE
+            const newMessages: Message[] = coralMessages.map((m: any) => {
+              const isFromUser = m.senderId === USER_SENDER_ID;
+              const mentionsUser = m.mentions?.includes(USER_SENDER_ID);
+              const isIntermediary = !isFromUser && !mentionsUser;
+              
+              // Clean payment request markers from agent messages
+              let content = m.content;
+              if (m.content?.includes('<x402_payment_request>') && !isFromUser) {
+                const extracted = extractPaymentRequest(m.content);
+                if (extracted) {
+                  content = extracted.cleanMessage;
+                }
+              }
+              
+              return {
+                id: m.id,
+                senderId: m.senderId,
+                sender: isFromUser ? 'You (SBF)' : formatAgentName(m.senderId),
+                content: stripDebugMarkers(content),
+                timestamp: new Date(m.timestamp),
+                isAgent: !isFromUser,
+                mentions: m.mentions || [],
+                isIntermediary
+              };
+            });
+            
+            // Update messages, removing duplicates and loading messages
+            setMessages(prev => {
+              const existingIds = new Set(prev.map(m => m.id));
+              const uniqueNew = newMessages.filter(m => !existingIds.has(m.id));
+              
+              // If we got new agent messages, remove loading message
+              const newAgentMessages = uniqueNew.filter(m => 
+                m.isAgent && 
+                m.senderId !== 'system' && 
+                !m.id.startsWith('loading-')
+              );
+              
+              let finalMessages = [...prev, ...uniqueNew];
+              if (newAgentMessages.length > 0) {
+                console.log('[Visibility] Received agent response, removing loading message');
+                finalMessages = finalMessages.filter(m => m.senderId !== 'system');
+                loadingMessageIdRef.current = null;
+                setLoading(false);
+              }
+              
+              return finalMessages;
+            });
+            
+            // Cache the updated conversation
+            if (publicKey) {
+              cacheConversation(publicKey.toString(), threadId, newMessages, selectedAgent);
+            }
           }
         } catch (error) {
           console.error('[Visibility] Error polling for messages:', error);
