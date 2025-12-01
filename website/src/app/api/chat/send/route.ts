@@ -869,7 +869,84 @@ async function handlePOST(request: NextRequest) {
           
           if (!settleResult.success) {
             console.error('CDP settlement failed:', settleResult.errorReason);
-            throw new Error(`CDP settlement failed: ${settleResult.errorReason}`);
+            
+            // CRITICAL: CDP might return success:false even if transaction succeeded on-chain
+            // Don't trust CDP's response - verify directly on-chain via Helius RPC
+            console.warn('[CDP] HTTP 200 but success:false - verifying on-chain via Helius RPC');
+            console.log('[CDP 200-Fallback] CDP error reason:', settleResult.errorReason);
+            
+            try {
+              let signature: string | null = null;
+              
+              // Query user's wallet for matching transaction via Helius RPC
+              // This is the ONLY reliable source of truth
+              console.log('[CDP 200-Fallback] Querying user wallet for matching transaction');
+              console.log(`[CDP 200-Fallback] Looking for: ${amountUsdc} USDC from ${frontendPayload.from} to ${to}`);
+              
+              const connection = new Connection(SOLANA_RPC_URL!, 'confirmed');
+              const { PublicKey } = require('@solana/web3.js');
+              const userPubkey = new PublicKey(frontendPayload.from);
+              
+              // Get recent signatures (last 20 transactions, roughly 2-3 minutes)
+              const signatures = await connection.getSignaturesForAddress(userPubkey, { limit: 20 });
+              console.log(`[CDP 200-Fallback] Found ${signatures.length} recent transactions`);
+              
+              // Check each transaction for matching USDC transfer
+              for (const sigInfo of signatures) {
+                // Skip if too old (more than 2 minutes)
+                const txTime = sigInfo.blockTime ? sigInfo.blockTime * 1000 : 0;
+                if (Date.now() - txTime > 120000) continue;
+                
+                try {
+                  const txDetails = await connection.getTransaction(sigInfo.signature, {
+                    maxSupportedTransactionVersion: 0,
+                    commitment: 'confirmed'
+                  });
+                  
+                  if (!txDetails || !txDetails.meta || txDetails.meta.err) continue;
+                  
+                  // Check for matching USDC transfer
+                  const preBalances = txDetails.meta.preTokenBalances || [];
+                  const postBalances = txDetails.meta.postTokenBalances || [];
+                  
+                  for (const postBal of postBalances) {
+                    const preBal = preBalances.find(p => p.accountIndex === postBal.accountIndex);
+                    if (preBal && postBal.owner === to) {
+                      const delta = postBal.uiTokenAmount.uiAmount! - preBal.uiTokenAmount.uiAmount!;
+                      if (Math.abs(delta - amountUsdc) < 0.000001) {
+                        signature = sigInfo.signature;
+                        console.log(`[CDP 200-Fallback] ✅ FOUND IT! Transaction succeeded on-chain despite CDP error`);
+                        console.log(`[CDP 200-Fallback] Signature: ${signature}`);
+                        console.log(`[CDP 200-Fallback] Amount: ${delta} USDC`);
+                        break;
+                      }
+                    }
+                  }
+                  
+                  if (signature) break;
+                } catch (txError: any) {
+                  console.error(`[CDP 200-Fallback] Error checking tx ${sigInfo.signature}:`, txError.message);
+                }
+              }
+              
+              if (signature) {
+                // Transaction succeeded on-chain! Use it despite CDP error
+                console.log('[CDP 200-Fallback] ✅ Transaction verified on-chain - CDP was wrong!');
+                console.log('[CDP 200-Fallback] Proceeding with verified signature:', signature);
+                
+                // Continue with this signature as if CDP succeeded
+                settleResult.success = true;
+                settleResult.transaction = signature;
+                // Fall through to normal success handling below
+              } else {
+                // No matching transaction found - CDP was right, it really failed
+                console.error('[CDP 200-Fallback] ❌ No matching transaction found on-chain');
+                throw new Error(`CDP settlement failed: ${settleResult.errorReason}`);
+              }
+            } catch (fallbackError: any) {
+              console.error('[CDP 200-Fallback] On-chain verification failed:', fallbackError.message);
+              throw new Error(`CDP settlement failed: ${settleResult.errorReason}`);
+            }
           }
           
           const txSignature = settleResult.transaction;

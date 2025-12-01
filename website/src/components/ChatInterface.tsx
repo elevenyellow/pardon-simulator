@@ -529,16 +529,29 @@ export default function ChatInterface({
               });
               console.log(`[Thread Load] Marked ${coralMessages.length} message IDs as seen to prevent duplicates`);
               
-              const formattedMessages = coralMessages.map((m: any) => ({
-                id: m.id || `msg-${m.timestamp}`,
-                senderId: m.senderId,
-                sender: formatAgentName(m.senderId),
-                content: stripDebugMarkers(m.content),
-                timestamp: new Date(m.timestamp),
-                isAgent: m.senderId !== USER_SENDER_ID,
-                mentions: m.mentions || [],
-                isIntermediary: m.isIntermediary || false
-              }));
+              const formattedMessages = coralMessages.map((m: any) => {
+                const isFromUser = m.senderId === USER_SENDER_ID;
+                
+                // Clean payment request markers from agent messages
+                let content = m.content;
+                if (m.content?.includes('<x402_payment_request>') && !isFromUser) {
+                  const extracted = extractPaymentRequest(m.content);
+                  if (extracted) {
+                    content = extracted.cleanMessage;
+                  }
+                }
+                
+                return {
+                  id: m.id || `msg-${m.timestamp}`,
+                  senderId: m.senderId,
+                  sender: formatAgentName(m.senderId),
+                  content: stripDebugMarkers(content),
+                  timestamp: new Date(m.timestamp),
+                  isAgent: m.senderId !== USER_SENDER_ID,
+                  mentions: m.mentions || [],
+                  isIntermediary: m.isIntermediary || false
+                };
+              });
               
               setMessages(formattedMessages);
             }
@@ -1543,16 +1556,29 @@ export default function ChatInterface({
                 console.warn(`[Safety Net] Found ${missedMessages.length} missed message(s)! Recovering...`);
                 
                 // Process missed messages same as SSE
-                const recoveredMessages: Message[] = missedMessages.map(m => ({
-                  id: m.id,
-                  senderId: m.senderId,
-                  sender: m.senderId === USER_SENDER_ID ? 'You (SBF)' : formatAgentName(m.senderId),
-                  content: m.content,
-                  timestamp: new Date(m.timestamp),
-                  isAgent: m.senderId !== USER_SENDER_ID,
-                  mentions: m.mentions || [],
-                  isIntermediary: false
-                }));
+                const recoveredMessages: Message[] = missedMessages.map(m => {
+                  const isFromUser = m.senderId === USER_SENDER_ID;
+                  
+                  // Clean payment request markers from agent messages
+                  let content = m.content;
+                  if (m.content?.includes('<x402_payment_request>') && !isFromUser) {
+                    const extracted = extractPaymentRequest(m.content);
+                    if (extracted) {
+                      content = extracted.cleanMessage;
+                    }
+                  }
+                  
+                  return {
+                    id: m.id,
+                    senderId: m.senderId,
+                    sender: isFromUser ? 'You (SBF)' : formatAgentName(m.senderId),
+                    content: content,
+                    timestamp: new Date(m.timestamp),
+                    isAgent: !isFromUser,
+                    mentions: m.mentions || [],
+                    isIntermediary: false
+                  };
+                });
                 
                 return [...prev, ...recoveredMessages];
               }
