@@ -7,7 +7,7 @@ import AgentSelector from'@/components/AgentSelector';
 import ChatInterface from'@/components/ChatInterface';
 import'@/lib/console-filter';  // Suppress excessive wallet SDK and CSS logging
 import bs58 from'bs58';
-import { getAPIClient } from'@/lib/api-client';
+import { apiClient } from'@/lib/api-client';
 
 //  Fix hydration error: Load wallet button only on client-side
 const WalletMultiButton = dynamic(
@@ -49,7 +49,6 @@ export default function Home() {
 
       try {
         console.log('[Thread Loading] Fetching existing threads for wallet...');
-        const apiClient = getAPIClient();
         const threads = await apiClient.getUserThreads(publicKey.toString());
         
         console.log('[Thread Loading] Loaded threads:', threads);
