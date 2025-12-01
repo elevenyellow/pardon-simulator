@@ -190,6 +190,7 @@ export default function ChatInterface({
   const [polling, setPolling] = useState(false);
   const [shouldPoll, setShouldPoll] = useState(false); // Control whether to actively poll for messages
   const [sseReconnectTrigger, setSseReconnectTrigger] = useState(0); // Force SSE reconnection
+  const lastReconnectTimeRef = useRef<number>(0); // Prevent rapid reconnections
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -525,55 +526,59 @@ export default function ChatInterface({
 
   // Replace polling with SSE
   useEffect(() => {
-    // Close any existing connection before creating a new one
-    if (eventSourceRef.current) {
-      console.log('[SSE] Closing existing connection before reconnect');
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-      
-      // Small delay to let server unregister the connection
-      // Prevents "connection_limit_exceeded" errors
-      const reconnectTimer = setTimeout(() => {
-        if (threadId && sessionId && shouldPoll) {
-          console.log('[SSE] Starting SSE connection after cleanup delay (trigger:', sseReconnectTrigger, ')');
-          const eventSource = new EventSource(
-            `/api/chat/stream?sessionId=${sessionId}&threadId=${threadId}`
-          );
-          eventSourceRef.current = eventSource;
-          setupEventSource(eventSource);
-        }
-      }, 500);
-      
-      return () => clearTimeout(reconnectTimer);
+    if (!threadId || !sessionId || !shouldPoll) {
+      console.log('[SSE] Skipping - missing requirements or polling disabled');
+      return;
     }
     
-    if (threadId && sessionId) {
-      // Smart polling: Only connect if we should be polling
-      const shouldStartPolling = shouldPoll;
+    let reconnectTimer: NodeJS.Timeout | null = null;
+    let isCancelled = false;
+    
+    const createConnection = () => {
+      if (isCancelled) return;
       
-      if (!shouldStartPolling) {
-        console.log('[SSE] Skipping polling - not requested');
-        return;
-      }
-      
-      console.log('[SSE] Starting SSE connection (trigger:', sseReconnectTrigger, ')');
+      console.log('[SSE] Creating new connection (trigger:', sseReconnectTrigger, ')');
       const eventSource = new EventSource(
         `/api/chat/stream?sessionId=${sessionId}&threadId=${threadId}`
       );
       eventSourceRef.current = eventSource;
       setupEventSource(eventSource);
+    };
+    
+    // If connection exists, close it and wait before reconnecting
+    if (eventSourceRef.current) {
+      console.log('[SSE] Closing existing connection before reconnect');
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+      
+      // Wait 1 second for server to cleanup (increased from 500ms)
+      reconnectTimer = setTimeout(createConnection, 1000);
+    } else {
+      // No existing connection, create immediately
+      createConnection();
     }
     
+    // Cleanup function
     return () => {
+      isCancelled = true;
+      
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+      }
+      
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
         eventSourceRef.current = null;
       }
+      
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
       }
+      
       if (autoStopTimerRef.current) {
         clearTimeout(autoStopTimerRef.current);
+        autoStopTimerRef.current = null;
       }
     };
     
@@ -868,8 +873,7 @@ export default function ChatInterface({
             // No new messages - ensure SSE is active for future messages
             if (!eventSourceRef.current && !shouldPoll) {
               console.log('[Visibility] No new messages, enabling SSE for future updates');
-              setShouldPoll(true);
-              setSseReconnectTrigger(prev => prev + 1);
+              triggerSSEReconnection();
             }
           }
         } catch (error) {
@@ -1048,6 +1052,23 @@ export default function ChatInterface({
     }
   };
 
+  // Helper to trigger SSE reconnection with rate limiting
+  const triggerSSEReconnection = () => {
+    const now = Date.now();
+    const timeSinceLastReconnect = now - lastReconnectTimeRef.current;
+    
+    // Prevent reconnections more frequent than once per 2 seconds
+    if (timeSinceLastReconnect < 2000) {
+      console.log('[SSE] Skipping reconnection - too soon since last attempt (', timeSinceLastReconnect, 'ms ago)');
+      return;
+    }
+    
+    console.log('[SSE] Triggering reconnection');
+    lastReconnectTimeRef.current = now;
+    setShouldPoll(true);
+    setSseReconnectTrigger(prev => prev + 1);
+  };
+  
   // Create a hash for message deduplication based on content and timing
   const createMessageHash = (senderId: string, content: string, timestamp: number) => {
     // Create hash from sender + content + timestamp (rounded to nearest 2 seconds for timing tolerance)
@@ -1367,9 +1388,8 @@ export default function ChatInterface({
     // Start polling to receive agent responses
     // CRITICAL FIX: Force SSE reconnection to ensure we catch the response
     // This prevents race conditions where the SSE might be in a bad state
-    console.log('[Polling] User sent message, forcing SSE reconnection');
-    setShouldPoll(true);
-    setSseReconnectTrigger(prev => prev + 1); // Force reconnection
+    console.log('[Polling] User sent message, ensuring SSE is active');
+    triggerSSEReconnection();
 
     // Stop polling while waiting for response
     if (pollIntervalRef.current) {
@@ -1751,9 +1771,7 @@ export default function ChatInterface({
       // CRITICAL FIX: If we didn't get the agent response yet, ensure SSE is active to receive it
       if (!receivedAgentResponse) {
         console.log('[Payment] Waiting for agent response via SSE');
-        console.log('[Payment] Forcing SSE reconnection to receive agent response');
-        setShouldPoll(true);
-        setSseReconnectTrigger(prev => prev + 1); // Force reconnection
+        triggerSSEReconnection();
       }
       } else {
         // SOL payments (not currently supported for CDP facilitator)
