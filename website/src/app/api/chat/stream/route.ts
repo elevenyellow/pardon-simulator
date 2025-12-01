@@ -107,6 +107,7 @@ export async function GET(request: NextRequest) {
                     saveAgentMessageToDatabase({
                       threadId,
                       sessionId,
+                      coralMessageId: msg.id, // Use Coral's UUID for deduplication
                       senderId: msg.senderId,
                       content: msg.content,
                       mentions: msg.mentions || [],
@@ -217,6 +218,7 @@ export async function GET(request: NextRequest) {
 async function saveAgentMessageToDatabase(params: {
   threadId: string;
   sessionId: string;
+  coralMessageId: string;
   senderId: string;
   content: string;
   mentions: string[];
@@ -234,31 +236,37 @@ async function saveAgentMessageToDatabase(params: {
       return;
     }
     
-    // Check if message already exists (prevent duplicates on reconnects)
+    // Check if message already exists by Coral message ID (prevent duplicates)
+    // Use metadata field to store and check Coral's UUID
     const existing = await prisma.message.findFirst({
       where: {
         threadId: thread.id,
-        senderId: params.senderId,
-        content: params.content,
-        createdAt: {
-          gte: new Date(Date.now() - 10000) // Within last 10 seconds
+        metadata: {
+          path: ['coralMessageId'],
+          equals: params.coralMessageId
         }
       }
     });
     
     if (existing) {
       // Message already saved, skip
+      if (DEBUG_SSE) {
+        console.log(`[SSE Poll] Message ${params.coralMessageId.substring(0, 8)}... already exists, skipping`);
+      }
       return;
     }
     
-    // Save agent message
+    // Save agent message with Coral's message ID in metadata
     await prisma.message.create({
       data: {
         threadId: thread.id,
         senderId: params.senderId,
         content: params.content,
         mentions: params.mentions,
-        isIntermediary: params.isIntermediary
+        isIntermediary: params.isIntermediary,
+        metadata: {
+          coralMessageId: params.coralMessageId
+        }
       }
     });
     
