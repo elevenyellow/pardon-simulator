@@ -189,6 +189,7 @@ export default function ChatInterface({
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [polling, setPolling] = useState(false);
   const [shouldPoll, setShouldPoll] = useState(false); // Control whether to actively poll for messages
+  const [sseReconnectTrigger, setSseReconnectTrigger] = useState(0); // Force SSE reconnection
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -199,6 +200,7 @@ export default function ChatInterface({
   const loadingMessageIdRef = useRef<string | null>(null); // Track loading message to remove when agent responds
   const phoneDialRef = useRef<HTMLAudioElement | null>(null); // Phone sound for payment confirmation
   const lastUserMessageRef = useRef<string | null>(null); // Store the last user message for premium service payments
+  const consecutiveEmptyPollsRef = useRef<number>(0); // Track empty polls to auto-stop interval polling
   
   // Score tracking state
   const [currentScore, setCurrentScore] = useState(0);
@@ -523,7 +525,14 @@ export default function ChatInterface({
 
   // Replace polling with SSE
   useEffect(() => {
-    if (threadId && sessionId && !eventSourceRef.current) {
+    // Close any existing connection before creating a new one
+    if (eventSourceRef.current) {
+      console.log('[SSE] Closing existing connection before reconnect');
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+    
+    if (threadId && sessionId) {
       // Smart polling: Only connect if we should be polling
       const shouldStartPolling = shouldPoll;
       
@@ -532,7 +541,7 @@ export default function ChatInterface({
         return;
       }
       
-      if (DEBUG_SSE) console.log('[SSE] Starting polling - conversation is active');
+      console.log('[SSE] Starting SSE connection (trigger:', sseReconnectTrigger, ')');
       const eventSource = new EventSource(
         `/api/chat/stream?sessionId=${sessionId}&threadId=${threadId}`
       );
@@ -731,12 +740,13 @@ export default function ChatInterface({
       };
       
       eventSource.onerror = (error) => {
-        console.error('[SSE] Connection error, falling back to polling');
+        console.error('[SSE] Connection error, falling back to interval polling');
         eventSource.close();
         eventSourceRef.current = null;
         setPolling(false);
         
         if (!pollIntervalRef.current) {
+          consecutiveEmptyPollsRef.current = 0; // Reset counter for new polling session
           pollIntervalRef.current = setInterval(pollMessages, 1000);
         }
       };
@@ -754,7 +764,7 @@ export default function ChatInterface({
         clearTimeout(autoStopTimerRef.current);
       }
     };
-  }, [threadId, sessionId, publicKey, selectedAgent, shouldPoll]);
+  }, [threadId, sessionId, publicKey, selectedAgent, shouldPoll, sseReconnectTrigger]);
 
   // 🔄 Page Visibility API: Handle browser focus loss and regain
   // This ensures messages aren't missed when user switches tabs/apps
@@ -828,16 +838,20 @@ export default function ChatInterface({
             if (publicKey) {
               cacheConversation(publicKey.toString(), threadId, newMessages, selectedAgent);
             }
+            
+            // Don't force SSE reconnection after successfully fetching messages
+            // The messages are already displayed, no need to reprocess via SSE
+            console.log('[Visibility] Messages updated directly, skipping SSE reconnection');
+          } else {
+            // No new messages - ensure SSE is active for future messages
+            if (!eventSourceRef.current && !shouldPoll) {
+              console.log('[Visibility] No new messages, enabling SSE for future updates');
+              setShouldPoll(true);
+              setSseReconnectTrigger(prev => prev + 1);
+            }
           }
         } catch (error) {
           console.error('[Visibility] Error polling for messages:', error);
-        }
-        
-        // CRITICAL FIX: Ensure polling is enabled without race condition
-        // Just set to true directly - no need for false→true toggle
-        if (!eventSourceRef.current) {
-          console.log('[Visibility] SSE not connected - enabling polling');
-          setShouldPoll(true);
         }
       } else {
         // Page became hidden - user switched away
@@ -1073,11 +1087,19 @@ export default function ChatInterface({
           };
         });
       
-      console.log('Message IDs:', allMessages.map(m =>`${m.senderId}:${m.id.substring(0, 8)}`));
+      if (DEBUG_SSE) {
+        console.log('Message IDs:', allMessages.map(m =>`${m.senderId}:${m.id.substring(0, 8)}`));
+      }
+      
+      // Track initial message count to detect if we got new messages
+      const initialMessageCount = messages.length;
+      let hasNewMessages = false;
       
       // Deduplicate and merge messages
       setMessages(prev => {
-        console.log('State IDs:', prev.map(m =>`${m.senderId}:${m.id.substring(0, 12)}`));
+        if (DEBUG_SSE) {
+          console.log('State IDs:', prev.map(m =>`${m.senderId}:${m.id.substring(0, 12)}`));
+        }
         
         // Build a content-based lookup for existing user messages
         //  Strip debug markers for comparison to prevent duplicates
@@ -1155,6 +1177,9 @@ export default function ChatInterface({
         
         const trulyNew = newMessages.filter(m => !replacedServerIds.has(m.id));
         
+        // Track if we got new messages (for auto-stop logic)
+        hasNewMessages = trulyNew.length > 0;
+        
         // Add new messages and sort only when necessary
         const merged = [...updated, ...trulyNew];
         const sorted = merged.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
@@ -1180,8 +1205,10 @@ export default function ChatInterface({
         let finalMessages = deduplicatedById;
         if (newAgentMessages.length > 0) {
           // We got a NEW agent response, so remove ONLY loading messages (not error messages)
-          console.log('[Polling] NEW agent response detected, removing loading messages');
-          console.log('[Polling] loadingMessageIdRef.current:', loadingMessageIdRef.current);
+          if (DEBUG_SSE) {
+            console.log('[Polling] NEW agent response detected, removing loading messages');
+            console.log('[Polling] loadingMessageIdRef.current:', loadingMessageIdRef.current);
+          }
           finalMessages = deduplicatedById.filter(m => 
             // Keep everything except:
             // 1. System loading messages (⏳)
@@ -1205,12 +1232,25 @@ export default function ChatInterface({
         return finalMessages;
       });
 
+      // Auto-stop interval polling if no new messages for a while
+      if (hasNewMessages) {
+        consecutiveEmptyPollsRef.current = 0; // Reset counter on new messages
+      } else {
+        consecutiveEmptyPollsRef.current++;
+        
+        // Auto-stop interval polling after 60 consecutive empty polls (1 minute)
+        if (consecutiveEmptyPollsRef.current >= 60 && pollIntervalRef.current) {
+          console.log('[Polling] No new messages for 60 polls, stopping interval polling');
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+      }
+      
       // If we found a new payment request, trigger the payment flow
-      console.log('[Payment Flow] Checking for pending payment request...');
-      console.log('[Payment Flow] pendingPaymentRequest:', pendingPaymentRequest);
-      console.log('[Payment Flow] publicKey:', publicKey?.toString());
-      console.log('[Payment Flow] sessionId:', sessionId);
-      console.log('[Payment Flow] threadId:', threadId);
+      if (DEBUG_SSE) {
+        console.log('[Payment Flow] Checking for pending payment request...');
+        console.log('[Payment Flow] pendingPaymentRequest:', pendingPaymentRequest);
+      }
       
       if (pendingPaymentRequest && publicKey && sessionId && threadId) {
         const { request, messageId }: { request: PaymentRequest; messageId: string } = pendingPaymentRequest;
@@ -1253,8 +1293,6 @@ export default function ChatInterface({
           showToast(error.message || 'Payment failed', 'error');
           setLoading(false); // Only clear loading on error
         }
-      } else {
-        console.log('[Payment Flow] Not triggering payment flow - missing requirements');
       }
     } catch (err: any) {
       // Check if this is a session not found error (server restart)
@@ -1307,13 +1345,9 @@ export default function ChatInterface({
     // Start polling to receive agent responses
     // CRITICAL FIX: Force SSE reconnection to ensure we catch the response
     // This prevents race conditions where the SSE might be in a bad state
-    if (eventSourceRef.current) {
-      console.log('[Polling] Forcing SSE reconnection before sending message');
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
+    console.log('[Polling] User sent message, forcing SSE reconnection');
     setShouldPoll(true);
-    console.log('[Polling] User sent message, enabling polling for responses');
+    setSseReconnectTrigger(prev => prev + 1); // Force reconnection
 
     // Stop polling while waiting for response
     if (pollIntervalRef.current) {
@@ -1695,16 +1729,9 @@ export default function ChatInterface({
       // CRITICAL FIX: If we didn't get the agent response yet, ensure SSE is active to receive it
       if (!receivedAgentResponse) {
         console.log('[Payment] Waiting for agent response via SSE');
-        
-        // Restart SSE if not already active
-        if (!eventSourceRef.current || !shouldPoll) {
-          console.log('[Payment] Restarting SSE to receive agent response');
-          if (eventSourceRef.current) {
-            eventSourceRef.current.close();
-            eventSourceRef.current = null;
-          }
-          setShouldPoll(true);
-        }
+        console.log('[Payment] Forcing SSE reconnection to receive agent response');
+        setShouldPoll(true);
+        setSseReconnectTrigger(prev => prev + 1); // Force reconnection
       }
       } else {
         // SOL payments (not currently supported for CDP facilitator)
