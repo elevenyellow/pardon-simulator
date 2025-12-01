@@ -1086,11 +1086,19 @@ async function handlePOST(request: NextRequest) {
           paymentId = paymentPayload.payment_id || paymentPayload.paymentId || 'unknown';
           
           // Fallback: extract service_type from payment_id if missing
-          // payment_id format: wht-{agent}-{service_type}-{target}-{timestamp}
+          // payment_id format: wht-{agent_normalized}-{service_type}-{timestamp}
+          //   OR for connection_intro: wht-{agent_normalized}-{service_type}-{target_normalized}-{timestamp}
+          // Note: agent names use underscores in payment_id (trump_donald, not trump-donald)
+          // This makes parsing unambiguous since we use "-" as delimiter
           if (serviceType === 'unknown' && paymentId !== 'unknown') {
-            const paymentIdMatch = paymentId.match(/wht-[^-]+-([^-]+)-/);
-            if (paymentIdMatch) {
-              serviceType = paymentIdMatch[1];
+            // Split on "-" and extract service_type (always 3rd element, index 2)
+            // Example: wht-trump_donald-strategy_advice-1764590430
+            // Parts: ["wht", "trump_donald", "strategy_advice", "1764590430"]
+            // Or: wht-trump_donald-connection_intro-trump_barron-1764590430
+            // Parts: ["wht", "trump_donald", "connection_intro", "trump_barron", "1764590430"]
+            const parts = paymentId.split('-');
+            if (parts.length >= 4 && parts[0] === 'wht') {
+              serviceType = parts[2];
               console.log(`[Premium Service] Extracted service_type from payment_id: ${serviceType}`);
             }
           }

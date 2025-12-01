@@ -322,11 +322,19 @@ export default function ChatInterface({
         let service_type = parsed.service_type || parsed.metadata?.service || 'premium_service';
         
         // Fallback: extract from payment_id if missing
-        // payment_id format: wht-{agent}-{service_type}-{target}-{timestamp}
+        // payment_id format: wht-{agent_normalized}-{service_type}-{timestamp}
+        //   OR for connection_intro: wht-{agent_normalized}-{service_type}-{target_normalized}-{timestamp}
+        // Note: agent names use underscores in payment_id (trump_donald, not trump-donald)
+        // This makes parsing unambiguous since we use "-" as delimiter
         if (service_type === 'premium_service' && parsed.payment_id) {
-          const paymentIdMatch = parsed.payment_id.match(/wht-[^-]+-([^-]+)-/);
-          if (paymentIdMatch) {
-            service_type = paymentIdMatch[1];
+          // Split on "-" and extract service_type (always 3rd element, index 2)
+          // Example: wht-trump_donald-strategy_advice-1764590430
+          // Parts: ["wht", "trump_donald", "strategy_advice", "1764590430"]
+          // Or: wht-trump_donald-connection_intro-trump_barron-1764590430
+          // Parts: ["wht", "trump_donald", "connection_intro", "trump_barron", "1764590430"]
+          const parts = parsed.payment_id.split('-');
+          if (parts.length >= 4 && parts[0] === 'wht') {
+            service_type = parts[2];
             console.log(`[Payment Request] Extracted service_type from payment_id: ${service_type}`);
           }
         }

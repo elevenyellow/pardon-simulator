@@ -80,15 +80,22 @@ class X402SolanaAdapter:
             x402-compliant payment request dictionary
         """
         # Enhanced payment_id with agent context
+        # CRITICAL: Normalize agent names to use underscores instead of dashes
+        # This makes payment_id parsing unambiguous since we use "-" as delimiter
+        # Example: trump-donald → trump_donald in payment_id
         if service_type == "connection_intro" and target_agent and provider_agent:
             # Include target agent for connection_intro
-            payment_id = f"wht-{provider_agent}-{service_type}-{target_agent}-{int(time.time())}"
+            provider_normalized = provider_agent.replace("-", "_")
+            target_normalized = target_agent.replace("-", "_")
+            payment_id = f"wht-{provider_normalized}-{service_type}-{target_normalized}-{int(time.time())}"
         elif provider_agent:
             # Include provider agent for all other services
-            payment_id = f"wht-{provider_agent}-{service_type}-{int(time.time())}"
+            provider_normalized = provider_agent.replace("-", "_")
+            payment_id = f"wht-{provider_normalized}-{service_type}-{int(time.time())}"
         else:
             # Fallback to old format for backward compatibility
-            payment_id = f"{recipient_id}-{service_type}-{int(time.time())}"
+            recipient_normalized = recipient_id.replace("-", "_")
+            payment_id = f"{recipient_normalized}-{service_type}-{int(time.time())}"
         
         return {
             # Core x402 protocol fields
