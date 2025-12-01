@@ -20,6 +20,26 @@ interface AvailabilityRequest {
 
 export async function POST(request: NextRequest) {
   try {
+    // SECURITY: Require agent API key authentication
+    const agentApiKey = request.headers.get('X-Agent-API-Key');
+    const expectedAgentKey = process.env.AGENT_API_KEY || process.env.CORAL_AGENT_API_KEY;
+    
+    if (!expectedAgentKey) {
+      console.error('[Premium Service API] AGENT_API_KEY not configured');
+      return NextResponse.json(
+        { error: 'Agent authentication not configured' },
+        { status: 500 }
+      );
+    }
+    
+    if (agentApiKey !== expectedAgentKey) {
+      console.warn('[Premium Service API] Invalid agent API key');
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+    
     const body: AvailabilityRequest = await request.json();
     
     // Validate required fields

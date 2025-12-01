@@ -10,6 +10,26 @@ export async function PATCH(
   { params }: { params: Promise<{ signature: string }> }
 ) {
   try {
+    // SECURITY: Require agent API key authentication
+    const agentApiKey = request.headers.get('X-Agent-API-Key');
+    const expectedAgentKey = process.env.AGENT_API_KEY || process.env.CORAL_AGENT_API_KEY;
+    
+    if (!expectedAgentKey) {
+      console.error('[Payment x402 API] AGENT_API_KEY not configured');
+      return NextResponse.json(
+        { error: 'Agent authentication not configured' },
+        { status: 500 }
+      );
+    }
+    
+    if (agentApiKey !== expectedAgentKey) {
+      console.warn('[Payment x402 API] Invalid agent API key');
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+    
     const { signature } = await params;
     const data = await request.json();
     

@@ -204,6 +204,11 @@ async def request_premium_service(
         try:
             # Get user wallet from context (should be passed in message metadata)
             # For now, we'll extract it from the request context
+            agent_api_key = os.getenv('AGENT_API_KEY') or os.getenv('CORAL_AGENT_API_KEY')
+            headers = {'Content-Type': 'application/json'}
+            if agent_api_key:
+                headers['X-Agent-API-Key'] = agent_api_key
+            
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     f"{backend_url}/api/premium-services/check-availability",
@@ -212,6 +217,7 @@ async def request_premium_service(
                         "serviceType": service_type,
                         "agentId": to_agent,
                     },
+                    headers=headers,
                     timeout=aiohttp.ClientTimeout(total=5)
                 ) as resp:
                     if resp.status == 200:
@@ -2140,11 +2146,16 @@ async def store_payment_in_database(
 ) -> bool:
     """Store payment in database via API"""
     try:
-        api_url = os.getenv('BACKEND_API_URL', 'http://localhost:3000')
+        api_url = os.getenv('BACKEND_URL', 'http://localhost:3000')
+        agent_api_key = os.getenv('AGENT_API_KEY') or os.getenv('CORAL_AGENT_API_KEY')
+        headers = {'Content-Type': 'application/json'}
+        if agent_api_key:
+            headers['X-Agent-API-Key'] = agent_api_key
         
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 f'{api_url}/api/payments/store',
+                headers=headers,
                 json={
                     'signature': signature,
                     'fromWallet': from_wallet,
@@ -2172,11 +2183,16 @@ async def update_payment_x402_data(
 ) -> bool:
     """Update payment with x402scan data"""
     try:
-        api_url = os.getenv('BACKEND_API_URL', 'http://localhost:3000')
+        api_url = os.getenv('BACKEND_URL', 'http://localhost:3000')
+        agent_api_key = os.getenv('AGENT_API_KEY') or os.getenv('CORAL_AGENT_API_KEY')
+        headers = {'Content-Type': 'application/json'}
+        if agent_api_key:
+            headers['X-Agent-API-Key'] = agent_api_key
         
         async with aiohttp.ClientSession() as session:
             async with session.patch(
                 f'{api_url}/api/payments/{signature}/x402',
+                headers=headers,
                 json={
                     'x402ScanUrl': x402_scan_url,
                     'x402ScanId': x402_scan_id,

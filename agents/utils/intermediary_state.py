@@ -55,11 +55,17 @@ async def set_intermediary_state(
     
     # Persist to backend (non-blocking, best-effort)
     try:
-        api_url = os.getenv('BACKEND_API_URL', 'http://localhost:3000')
+        api_url = os.getenv('BACKEND_URL', 'http://localhost:3000')
+        agent_api_key = os.getenv('AGENT_API_KEY') or os.getenv('CORAL_AGENT_API_KEY')
+        headers = {'Content-Type': 'application/json'}
+        if agent_api_key:
+            headers['X-Agent-API-Key'] = agent_api_key
+        
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 f'{api_url}/api/agent/intermediary-state',
                 json=state,
+                headers=headers,
                 timeout=aiohttp.ClientTimeout(total=3)
             ) as resp:
                 if resp.status in (200, 201):
@@ -95,10 +101,16 @@ async def check_intermediary_state(
     # This prevents stale in-memory cache from causing out-of-context responses
     backend_checked = False
     try:
-        api_url = os.getenv('BACKEND_API_URL', 'http://localhost:3000')
+        api_url = os.getenv('BACKEND_URL', 'http://localhost:3000')
+        agent_api_key = os.getenv('AGENT_API_KEY') or os.getenv('CORAL_AGENT_API_KEY')
+        headers = {}
+        if agent_api_key:
+            headers['X-Agent-API-Key'] = agent_api_key
+        
         async with aiohttp.ClientSession() as session:
             async with session.get(
                 f'{api_url}/api/agent/intermediary-state/{agent_id}/{thread_id}',
+                headers=headers,
                 timeout=aiohttp.ClientTimeout(total=2)
             ) as resp:
                 backend_checked = True
@@ -164,10 +176,16 @@ async def clear_intermediary_state(agent_id: str, thread_id: str) -> bool:
     
     # Clear from backend (best-effort)
     try:
-        api_url = os.getenv('BACKEND_API_URL', 'http://localhost:3000')
+        api_url = os.getenv('BACKEND_URL', 'http://localhost:3000')
+        agent_api_key = os.getenv('AGENT_API_KEY') or os.getenv('CORAL_AGENT_API_KEY')
+        headers = {}
+        if agent_api_key:
+            headers['X-Agent-API-Key'] = agent_api_key
+        
         async with aiohttp.ClientSession() as session:
             async with session.delete(
                 f'{api_url}/api/agent/intermediary-state/{agent_id}/{thread_id}',
+                headers=headers,
                 timeout=aiohttp.ClientTimeout(total=2)
             ) as resp:
                 return resp.status in (200, 204)
