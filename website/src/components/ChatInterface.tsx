@@ -486,16 +486,21 @@ export default function ChatInterface({
       }
       setPolling(false);
       
-      // CRITICAL: Clear payment-related state when switching agents
-      // This prevents stale payment requests from being processed for the wrong agent
+      // CRITICAL: Clear ALL state when switching agents
+      // This prevents stale payment requests and duplicate messages across agents
       processedMessageIdsRef.current.clear();
+      seenMessageIdsRef.current.clear();  // ← Clear message dedup tracker
       lastUserMessageRef.current = null;
-      console.log('[Agent Switch] Cleared payment state (processed IDs + last message) to prevent mixed requests');
+      console.log('[Agent Switch] Cleared all state (payment IDs, seen message IDs, last message) for fresh agent session');
       
       // Check if we already have a threadId for this agent
       if (threadId) {
         // Thread already exists, ALWAYS fetch from server (no cache to avoid race conditions)
         console.log('[Thread Load] Fetching conversation history from server...');
+        
+        // CRITICAL: Disable polling during initial load to prevent race condition
+        // SSE might deliver same messages before API fetch completes → duplicates
+        setShouldPoll(false);
         
         // Show loading state
         setLoading(true);
@@ -515,6 +520,15 @@ export default function ChatInterface({
           .then(coralMessages => {
             if (coralMessages.length > 0) {
               console.log(`[Thread Load] Loaded ${coralMessages.length} messages from server`);
+              
+              // CRITICAL: Mark ALL message IDs as seen IMMEDIATELY to prevent race with SSE/polling
+              // This must happen BEFORE any formatting or state updates
+              coralMessages.forEach((m: any) => {
+                const id = m.id || `msg-${m.timestamp}`;
+                seenMessageIdsRef.current.add(id);
+              });
+              console.log(`[Thread Load] Marked ${coralMessages.length} message IDs as seen to prevent duplicates`);
+              
               const formattedMessages = coralMessages.map((m: any) => ({
                 id: m.id || `msg-${m.timestamp}`,
                 senderId: m.senderId,
@@ -525,15 +539,23 @@ export default function ChatInterface({
                 mentions: m.mentions || [],
                 isIntermediary: m.isIntermediary || false
               }));
+              
               setMessages(formattedMessages);
-              // Mark all loaded messages as seen in global deduplication
-              formattedMessages.forEach(m => seenMessageIdsRef.current.add(m.id));
             }
             setLoading(false);
+            
+            // Re-enable polling after initial load completes
+            // Small delay to ensure state is settled
+            setTimeout(() => {
+              console.log('[Thread Load] Initial load complete, re-enabling SSE/polling');
+              setShouldPoll(true);
+            }, 100);
           })
           .catch(error => {
             console.error('[Thread Load] Error fetching conversation history:', error);
             setLoading(false);
+            // Re-enable polling even on error
+            setShouldPoll(true);
             // Keep welcome message on error
           });
       } else {
@@ -872,6 +894,9 @@ export default function ChatInterface({
         try {
           const coralMessages = await apiClient.getMessages(sessionId, threadId, publicKey?.toString());
           
+          // CRITICAL: Mark ALL as seen IMMEDIATELY to prevent race with SSE/polling
+          coralMessages.forEach((m: any) => seenMessageIdsRef.current.add(m.id));
+          
           // Check for truly new messages by ID using functional setState to avoid stale closure
           setMessages(prev => {
             const existingIds = new Set(prev.map(m => m.id));
@@ -884,25 +909,8 @@ export default function ChatInterface({
             
             console.log(`[Visibility] Found ${newCoralMessages.length} new message(s) - updating immediately`);
             
-            // GLOBAL DEDUPLICATION: Filter messages we've already seen
-            const unseenMessages = newCoralMessages.filter((m: any) => {
-              if (seenMessageIdsRef.current.has(m.id)) {
-                console.log('[Visibility Global Dedup] Skipping already seen:', m.id.substring(0, 12));
-                return false;
-              }
-              return true;
-            });
-            
-            if (unseenMessages.length === 0) {
-              console.log('[Visibility] All messages already seen, skipping update');
-              return prev; // No changes
-            }
-            
-            // Mark as seen
-            unseenMessages.forEach((m: any) => seenMessageIdsRef.current.add(m.id));
-            
             // CRITICAL FIX: Actually update the messages instead of waiting for SSE
-            const newMessages: Message[] = unseenMessages.map((m: any) => {
+            const newMessages: Message[] = newCoralMessages.map((m: any) => {
               const isFromUser = m.senderId === USER_SENDER_ID;
               const mentionsUser = m.mentions?.includes(USER_SENDER_ID);
               const isIntermediary = !isFromUser && !mentionsUser;
@@ -1174,6 +1182,9 @@ export default function ChatInterface({
     try {
       const coralMessages = await apiClient.getMessages(sessionId, threadId, publicKey?.toString());
       
+      // CRITICAL: Mark ALL as seen IMMEDIATELY (before any processing) to prevent race with other polling/SSE
+      coralMessages.forEach((m: any) => seenMessageIdsRef.current.add(m.id));
+      
       // Track if we found a new payment request that needs to be processed
       let pendingPaymentRequest: { request: PaymentRequest; messageId: string } | null = null;
       
@@ -1234,34 +1245,19 @@ export default function ChatInterface({
       const initialMessageCount = messages.length;
       let hasNewMessages = false;
       
-      // GLOBAL DEDUPLICATION: Filter out messages we've already seen (prevents race conditions)
-      const unseenMessages = allMessages.filter(m => {
-        if (seenMessageIdsRef.current.has(m.id)) {
-          console.log('[Global Dedup] ✋ Already seen message:', m.id.substring(0, 12), '-', m.senderId);
-          return false;
-        }
-        return true;
-      });
-      
-      // Mark these messages as seen
-      unseenMessages.forEach(m => seenMessageIdsRef.current.add(m.id));
-      
-      if (unseenMessages.length === 0) {
-        console.log('[Polling] No new messages (all already seen globally)');
-        return; // Nothing new, skip state update
-      }
-      
-      console.log('[Polling] Processing', unseenMessages.length, 'truly new messages');
-      
-      // Deduplicate and merge messages  
+      // Use functional setState to get CURRENT state and avoid stale closure
       setMessages(prev => {
-        console.log('[Dedup] Current state:', prev.length, 'messages, Adding:', unseenMessages.length, 'new');
-        
-        // STEP 1: Deduplicate by ID (safety check - should already be filtered by global ref)
+        // Check which messages are truly new (not in CURRENT state)
+        // Note: All messages were already marked as seen to prevent race conditions with SSE
         const existingIds = new Set(prev.map(m => m.id));
+        const newMessages = allMessages.filter(m => !existingIds.has(m.id));
         
-        let newMessages = unseenMessages.filter(m => !existingIds.has(m.id));
-        console.log('[Dedup] After ID filter:', newMessages.length, 'new messages');
+        if (newMessages.length === 0) {
+          console.log('[Polling] No new messages (all already in state)');
+          return prev; // No changes
+        }
+        
+        console.log('[Polling] Processing', newMessages.length, 'truly new messages');
         
         // STEP 2: Handle optimistic user messages (replace with server versions)
         const hasRealPaymentConfirmation = allMessages.some(m =>
