@@ -86,3 +86,10 @@ This file tracks when agent configurations are uploaded to S3. It's updated auto
 - Backup: `backups/2025-11-29_20-40-10/`
 - Changed files (1):
   - `website/src/lib/premium-services/service-limits.json`
+
+### 2025-12-01 09:03:39
+- Configurations uploaded to S3
+- Backup: `backups/2025-12-01_09-03-37/`
+- Changed files (2):
+  - `agents/trump-barron/operational-private.txt`
+  - `agents/shared/operational-template.txt`
