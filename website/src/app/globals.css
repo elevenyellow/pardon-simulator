@@ -142,6 +142,27 @@ button, a, .clickable, [role="button"] {
   }
 }
 
+/* Emoji shake animation - vertical blink */
+@keyframes emojiShake {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  25% {
+    transform: translateY(-3px);
+  }
+  50% {
+    transform: translateY(0);
+  }
+  75% {
+    transform: translateY(3px);
+  }
+}
+
+.emoji-shake {
+  display: inline-block;
+  animation: emojiShake 0.5s ease-in-out infinite;
+}
+
 /* Press Start 2P font utility class */
 .font-pixel {
   font-family: 'Press Start 2P', monospace;

@@ -105,6 +105,25 @@ const MessageItem = memo(({
   // Regular user/agent messages
   const cleanContent = stripDebugMarkers(message.content);
   
+  // Check if this is a system loading message that needs a shaking emoji
+  const isProcessingPayment = cleanContent.includes('Processing payment...');
+  const isPrisonPhone = cleanContent.includes('The prison phone is transmitting');
+  const hasShakingEmoji = isProcessingPayment || isPrisonPhone;
+  
+  // Extract emoji and text for shaking messages
+  let emojiToShake = '';
+  let textWithoutEmoji = cleanContent;
+  
+  if (hasShakingEmoji) {
+    if (isProcessingPayment) {
+      emojiToShake = '⏳';
+      textWithoutEmoji = cleanContent.replace('⏳', '').trim();
+    } else if (isPrisonPhone) {
+      emojiToShake = '📞';
+      textWithoutEmoji = cleanContent.replace('📞', '').trim();
+    }
+  }
+  
   return (
     <div
       className={`flex ${message.isAgent ?'justify-start':'justify-end'}`}
@@ -116,25 +135,31 @@ const MessageItem = memo(({
       >
         <div className="font-pixel text-[12px] sm:text-[14px] mb-1 opacity-70">{message.sender}</div>
         <div className="font-pixel text-[13px] sm:text-[15px] break-words leading-relaxed markdown-content">
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            components={{
-              strong: ({children}) => <span className="font-bold text-yellow-300">{children}</span>,
-              em: ({children}) => <span className="italic opacity-90">{children}</span>,
-              h1: ({children}) => <h1 className="text-[17px] font-bold my-2 text-yellow-300">{children}</h1>,
-              h2: ({children}) => <h2 className="text-[16px] font-bold my-1 text-yellow-300">{children}</h2>,
-              h3: ({children}) => <h3 className="text-[15px] font-bold my-1">{children}</h3>,
-              ol: ({children}) => <ol className="list-decimal ml-5 my-2 space-y-1">{children}</ol>,
-              ul: ({children}) => <ul className="list-disc ml-5 my-2 space-y-1">{children}</ul>,
-              li: ({children}) => <li className="ml-1">{children}</li>,
-              p: ({children}) => <p className="my-1">{children}</p>,
-              a: ({children, href}) => <a href={href} className="text-[#66b680] underline hover:text-[#7ac694]" target="_blank" rel="noopener noreferrer">{children}</a>,
-              code: ({children}) => <code className="bg-black/40 px-1 py-0.5 rounded text-[#7ac694]">{children}</code>,
-              pre: ({children}) => <pre className="bg-black/40 p-2 rounded my-2 overflow-x-auto">{children}</pre>,
-            }}
-          >
-            {cleanContent}
-          </ReactMarkdown>
+          {hasShakingEmoji ? (
+            <div className="my-1">
+              <span className="emoji-shake">{emojiToShake}</span> {textWithoutEmoji}
+            </div>
+          ) : (
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                strong: ({children}) => <span className="font-bold text-yellow-300">{children}</span>,
+                em: ({children}) => <span className="italic opacity-90">{children}</span>,
+                h1: ({children}) => <h1 className="text-[17px] font-bold my-2 text-yellow-300">{children}</h1>,
+                h2: ({children}) => <h2 className="text-[16px] font-bold my-1 text-yellow-300">{children}</h2>,
+                h3: ({children}) => <h3 className="text-[15px] font-bold my-1">{children}</h3>,
+                ol: ({children}) => <ol className="list-decimal ml-5 my-2 space-y-1">{children}</ol>,
+                ul: ({children}) => <ul className="list-disc ml-5 my-2 space-y-1">{children}</ul>,
+                li: ({children}) => <li className="ml-1">{children}</li>,
+                p: ({children}) => <p className="my-1">{children}</p>,
+                a: ({children, href}) => <a href={href} className="text-[#66b680] underline hover:text-[#7ac694]" target="_blank" rel="noopener noreferrer">{children}</a>,
+                code: ({children}) => <code className="bg-black/40 px-1 py-0.5 rounded text-[#7ac694]">{children}</code>,
+                pre: ({children}) => <pre className="bg-black/40 p-2 rounded my-2 overflow-x-auto">{children}</pre>,
+              }}
+            >
+              {cleanContent}
+            </ReactMarkdown>
+          )}
         </div>
         <div className="font-pixel text-[10px] sm:text-[12px] opacity-50 mt-1">
           {message.timestamp.toLocaleTimeString()}
@@ -1539,7 +1564,7 @@ export default function ChatInterface({
       // Update loading message to "The prison phone is transmitting the message..." and play phone sound
       setMessages(prev => prev.map(m => 
         m.id === loadingMessageId 
-          ? { ...m, content: '⏳ The prison phone is transmitting the message...' }
+          ? { ...m, content: '📞 The prison phone is transmitting the message...' }
           : m
       ));
 
