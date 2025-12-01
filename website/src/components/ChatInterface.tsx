@@ -1,16 +1,11 @@
 'use client';
 
-import { useState, useEffect, useRef, memo, useCallback } from'react';
+import { useState, useEffect, useRef, memo, useCallback, useMemo } from'react';
 import { useWallet, useConnection } from'@solana/wallet-adapter-react';
 import { Send, Loader2 } from'lucide-react';
 import { PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } from'@solana/web3.js';
 import { apiClient, PaymentRequest } from'@/lib/api-client';
 import { Toast, ToastContainer, ToastType } from'./Toast';
-import { 
-  cacheConversation, 
-  loadCachedConversation, 
-  clearWalletCache 
-} from'@/lib/conversationCache';
 import ReactMarkdown from'react-markdown';
 import remarkGfm from'remark-gfm';
 import { USER_SENDER_ID, USER_SENDER_DISPLAY_NAME } from'@/lib/constants';
@@ -499,59 +494,48 @@ export default function ChatInterface({
       
       // Check if we already have a threadId for this agent
       if (threadId) {
-        // Thread already exists, load message history
-        const walletAddress = publicKey.toString();
+        // Thread already exists, ALWAYS fetch from server (no cache to avoid race conditions)
+        console.log('[Thread Load] Fetching conversation history from server...');
         
-        // Try loading from localStorage cache first (fast)
-        const cached = loadCachedConversation(walletAddress, threadId);
+        // Show loading state
+        setLoading(true);
+        setMessages([{
+          id:`welcome-${selectedAgent}`,
+          senderId: selectedAgent,
+          sender: formatAgentName(selectedAgent),
+          content: getWelcomeMessage(selectedAgent),
+          timestamp: new Date(),
+          isAgent: true,
+          mentions: [],
+          isIntermediary: false
+        }]);
         
-        if (cached && cached.length > 0) {
-          console.log(`[Thread Load] Loaded ${cached.length} messages from cache`);
-          setMessages(cached);
-          // Mark all cached messages as seen in global deduplication
-          cached.forEach(m => seenMessageIdsRef.current.add(m.id));
-        } else {
-          // No cache - fetch from server (database + Coral)
-          console.log('[Thread Load] No cache, fetching conversation history from server...');
-          setMessages([{
-            id:`welcome-${selectedAgent}`,
-            senderId: selectedAgent,
-            sender: formatAgentName(selectedAgent),
-            content: getWelcomeMessage(selectedAgent),
-            timestamp: new Date(),
-            isAgent: true,
-            mentions: [],
-            isIntermediary: false
-          }]);
-          
-          // Fetch message history from server (with wallet auth)
-          apiClient.getMessages(sessionId, threadId, publicKey?.toString())
-            .then(coralMessages => {
-              if (coralMessages.length > 0) {
-                console.log(`[Thread Load] Loaded ${coralMessages.length} messages from server`);
-                const formattedMessages = coralMessages.map((m: any) => ({
-                  id: m.id || `msg-${m.timestamp}`,
-                  senderId: m.senderId,
-                  sender: formatAgentName(m.senderId),
-                  content: stripDebugMarkers(m.content),
-                  timestamp: new Date(m.timestamp),
-                  isAgent: m.senderId !== USER_SENDER_ID,
-                  mentions: m.mentions || [],
-                  isIntermediary: m.isIntermediary || false
-                }));
-                setMessages(formattedMessages);
-                // Mark all loaded messages as seen in global deduplication
-                formattedMessages.forEach(m => seenMessageIdsRef.current.add(m.id));
-                
-                // Update cache for next time
-                cacheConversation(walletAddress, threadId, formattedMessages, selectedAgent);
-              }
-            })
-            .catch(error => {
-              console.error('[Thread Load] Error fetching conversation history:', error);
-              // Keep welcome message on error
-            });
-        }
+        // Fetch message history from server (with wallet auth)
+        apiClient.getMessages(sessionId, threadId, publicKey?.toString())
+          .then(coralMessages => {
+            if (coralMessages.length > 0) {
+              console.log(`[Thread Load] Loaded ${coralMessages.length} messages from server`);
+              const formattedMessages = coralMessages.map((m: any) => ({
+                id: m.id || `msg-${m.timestamp}`,
+                senderId: m.senderId,
+                sender: formatAgentName(m.senderId),
+                content: stripDebugMarkers(m.content),
+                timestamp: new Date(m.timestamp),
+                isAgent: m.senderId !== USER_SENDER_ID,
+                mentions: m.mentions || [],
+                isIntermediary: m.isIntermediary || false
+              }));
+              setMessages(formattedMessages);
+              // Mark all loaded messages as seen in global deduplication
+              formattedMessages.forEach(m => seenMessageIdsRef.current.add(m.id));
+            }
+            setLoading(false);
+          })
+          .catch(error => {
+            console.error('[Thread Load] Error fetching conversation history:', error);
+            setLoading(false);
+            // Keep welcome message on error
+          });
       } else {
         // No thread yet, create a new one
         setMessages([]);
@@ -786,10 +770,6 @@ export default function ChatInterface({
                 setLoading(false);
               }
               
-              if (publicKey && threadId && trulyNew.length > 0) {
-                cacheConversation(publicKey.toString(), threadId, finalMessages, selectedAgent);
-              }
-              
               return finalMessages;
             });
             
@@ -966,11 +946,6 @@ export default function ChatInterface({
               setLoading(false);
             }
             
-            // Cache the COMPLETE conversation inside the setState callback
-            if (publicKey && threadId) {
-              cacheConversation(publicKey.toString(), threadId, finalMessages, selectedAgent);
-            }
-            
             console.log('[Visibility] Messages updated directly, skipping SSE reconnection');
             return finalMessages;
           });
@@ -992,9 +967,27 @@ export default function ChatInterface({
     };
   }, [threadId, sessionId, shouldPoll, messages.length]);
 
+  // **FINAL DEDUPLICATION SAFETY NET**: Ensure no duplicate message IDs ever reach the render
+  // This catches any edge cases from race conditions between SSE, polling, visibility handlers, etc.
+  const dedupedMessages = useMemo(() => {
+    const seen = new Set<string>();
+    const unique: Message[] = [];
+    
+    for (const msg of messages) {
+      if (!seen.has(msg.id)) {
+        seen.add(msg.id);
+        unique.push(msg);
+      } else {
+        console.warn('[FINAL DEDUP] Caught duplicate message at render:', msg.id.substring(0, 16), '- preventing UI duplicate');
+      }
+    }
+    
+    return unique;
+  }, [messages]);
+
   // Auto-scroll only when new messages are added
   useEffect(() => {
-    const currentMessageCount = messages.length;
+    const currentMessageCount = dedupedMessages.length;
     
     // Only scroll if message count increased (new messages added)
     if (currentMessageCount > previousMessageCountRef.current) {
@@ -1006,7 +999,7 @@ export default function ChatInterface({
     
     // Update the previous count
     previousMessageCountRef.current = currentMessageCount;
-  }, [messages.length]); // Only depend on length, not the entire array
+  }, [dedupedMessages.length]); // Only depend on length, not the entire array
 
   // Fetch initial score when wallet connected
   useEffect(() => {
@@ -1014,9 +1007,8 @@ export default function ChatInterface({
       const currentWallet = publicKey.toString();
       const previousWallet = previousWalletRef.current;
       
-      // If wallet changed (not just initial connection), clear the old wallet's cache
+      // If wallet changed (not just initial connection), clear messages
       if (previousWallet && previousWallet !== currentWallet) {
-        clearWalletCache(previousWallet);
         setMessages([]); // Clear displayed messages immediately
         
         // CRITICAL FIX: Reset session when wallet changes
@@ -1031,9 +1023,8 @@ export default function ChatInterface({
       processedMessageIdsRef.current.clear(); // Clear processed messages on wallet change
       fetchCurrentScore();
     } else {
-      // Wallet disconnected - clear the cache for security
+      // Wallet disconnected
       if (previousWalletRef.current) {
-        clearWalletCache(previousWalletRef.current);
         previousWalletRef.current = null;
       }
       
@@ -1357,11 +1348,6 @@ export default function ChatInterface({
           setLoading(false);
         }
         
-        //  Cache the updated conversation if any new messages were added
-        if (trulyNew.length > 0 && publicKey && threadId) {
-          cacheConversation(publicKey.toString(), threadId, finalMessages, selectedAgent);
-        }
-        
         return finalMessages;
       });
 
@@ -1443,11 +1429,6 @@ export default function ChatInterface({
         setSessionId(null);
         setMessages([]);
         sessionInitializedRef.current = false;
-        
-        // Clear cache for current wallet
-        if (publicKey) {
-          clearWalletCache(publicKey.toString());
-        }
         
         // Show user notification
         showToast('Server restarted. Reconnecting...', 'info');
@@ -1540,11 +1521,6 @@ export default function ChatInterface({
 
       setMessages(prev => {
         const updated = [...prev, userMessage];
-        
-        //  Cache the optimistic update
-        if (publicKey && threadId) {
-          cacheConversation(publicKey.toString(), threadId, updated, selectedAgent);
-        }
         
         return updated;
       });
@@ -2054,7 +2030,7 @@ export default function ChatInterface({
         <div className="flex flex-col flex-1 min-w-0">
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-2">
-          {messages.map((message) => (
+          {dedupedMessages.map((message: Message) => (
             <MessageItem 
               key={message.id} 
               message={message} 
