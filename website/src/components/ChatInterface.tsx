@@ -532,6 +532,7 @@ export default function ChatInterface({
     }
     
     let reconnectTimer: NodeJS.Timeout | null = null;
+    let fallbackTimer: NodeJS.Timeout | null = null;
     let isCancelled = false;
     
     const createConnection = () => {
@@ -543,6 +544,17 @@ export default function ChatInterface({
       );
       eventSourceRef.current = eventSource;
       setupEventSource(eventSource);
+      
+      // SAFETY NET: If SSE doesn't connect within 5 seconds, start interval polling
+      fallbackTimer = setTimeout(() => {
+        if (!eventSourceRef.current || eventSourceRef.current.readyState !== EventSource.OPEN) {
+          console.log('[SSE] Connection timeout - starting interval polling as fallback');
+          if (!pollIntervalRef.current) {
+            consecutiveEmptyPollsRef.current = 0;
+            pollIntervalRef.current = setInterval(pollMessages, 1000);
+          }
+        }
+      }, 5000);
     };
     
     // If connection exists, close it and wait before reconnecting
@@ -566,6 +578,10 @@ export default function ChatInterface({
         clearTimeout(reconnectTimer);
       }
       
+      if (fallbackTimer) {
+        clearTimeout(fallbackTimer);
+      }
+      
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
         eventSourceRef.current = null;
@@ -587,6 +603,19 @@ export default function ChatInterface({
       eventSource.onopen = () => {
         if (DEBUG_SSE) console.log('[SSE] Connected to message stream');
         setPolling(true);
+        
+        // Clear fallback timer since SSE connected successfully
+        if (fallbackTimer) {
+          clearTimeout(fallbackTimer);
+          fallbackTimer = null;
+        }
+        
+        // Stop interval polling since SSE is now active
+        if (pollIntervalRef.current) {
+          console.log('[SSE] Connected - stopping interval polling fallback');
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
       };
       
       eventSource.onmessage = (event) => {
@@ -1385,17 +1414,19 @@ export default function ChatInterface({
     setInput('');
     setLoading(true);
     
-    // Start polling to receive agent responses
-    // CRITICAL FIX: Force SSE reconnection to ensure we catch the response
-    // This prevents race conditions where the SSE might be in a bad state
-    console.log('[Polling] User sent message, ensuring SSE is active');
-    triggerSSEReconnection();
-
-    // Stop polling while waiting for response
-    if (pollIntervalRef.current) {
-      clearInterval(pollIntervalRef.current);
-      pollIntervalRef.current = null;
+    // CRITICAL: We just sent a message, so we MUST poll for the reply
+    // Start polling immediately - don't wait for SSE or rate limiting
+    console.log('[Polling] Message sent - starting polling to receive reply');
+    
+    // Start interval polling immediately as safety net
+    if (!pollIntervalRef.current) {
+      console.log('[Polling] Starting interval polling immediately');
+      consecutiveEmptyPollsRef.current = 0;
+      pollIntervalRef.current = setInterval(pollMessages, 1000);
     }
+    
+    // ALSO try to connect SSE (preferred, but interval polling is already running)
+    triggerSSEReconnection();
 
     try {
       
@@ -1768,9 +1799,18 @@ export default function ChatInterface({
         }
       }
       
-      // CRITICAL FIX: If we didn't get the agent response yet, ensure SSE is active to receive it
+      // CRITICAL: If we didn't get the agent response yet, we MUST poll for it
       if (!receivedAgentResponse) {
-        console.log('[Payment] Waiting for agent response via SSE');
+        console.log('[Payment] Waiting for agent response - starting polling');
+        
+        // Start interval polling immediately to ensure we get the response
+        if (!pollIntervalRef.current) {
+          console.log('[Payment] Starting interval polling immediately');
+          consecutiveEmptyPollsRef.current = 0;
+          pollIntervalRef.current = setInterval(pollMessages, 1000);
+        }
+        
+        // Also try SSE (preferred, but interval polling is already running)
         triggerSSEReconnection();
       }
       } else {
