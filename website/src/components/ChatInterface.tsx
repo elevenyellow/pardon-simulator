@@ -464,14 +464,18 @@ export default function ChatInterface({
       
       // Check if we already have a threadId for this agent
       if (threadId) {
-        // Thread already exists, just load cached messages if available
+        // Thread already exists, load message history
         const walletAddress = publicKey.toString();
+        
+        // Try loading from localStorage cache first (fast)
         const cached = loadCachedConversation(walletAddress, threadId);
         
         if (cached && cached.length > 0) {
+          console.log(`[Thread Load] Loaded ${cached.length} messages from cache`);
           setMessages(cached);
         } else {
-          // No cache, clear messages and let polling fetch from server
+          // No cache - fetch from server (database + Coral)
+          console.log('[Thread Load] No cache, fetching conversation history from server...');
           setMessages([{
             id:`welcome-${selectedAgent}`,
             senderId: selectedAgent,
@@ -482,6 +486,32 @@ export default function ChatInterface({
             mentions: [],
             isIntermediary: false
           }]);
+          
+          // Fetch message history from server (with wallet auth)
+          apiClient.getMessages(sessionId, threadId, publicKey?.toString())
+            .then(coralMessages => {
+              if (coralMessages.length > 0) {
+                console.log(`[Thread Load] Loaded ${coralMessages.length} messages from server`);
+                const formattedMessages = coralMessages.map((m: any) => ({
+                  id: m.id || `msg-${m.timestamp}`,
+                  senderId: m.senderId,
+                  sender: formatAgentName(m.senderId),
+                  content: stripDebugMarkers(m.content),
+                  timestamp: new Date(m.timestamp),
+                  isAgent: m.senderId !== USER_SENDER_ID,
+                  mentions: m.mentions || [],
+                  isIntermediary: m.isIntermediary || false
+                }));
+                setMessages(formattedMessages);
+                
+                // Update cache for next time
+                cacheConversation(walletAddress, threadId, formattedMessages, selectedAgent);
+              }
+            })
+            .catch(error => {
+              console.error('[Thread Load] Error fetching conversation history:', error);
+              // Keep welcome message on error
+            });
         }
       } else {
         // No thread yet, create a new one
@@ -738,7 +768,7 @@ export default function ChatInterface({
         
         // Force immediate poll to catch any missed messages (silently)
         try {
-          const coralMessages = await apiClient.getMessages(sessionId, threadId);
+          const coralMessages = await apiClient.getMessages(sessionId, threadId, publicKey?.toString());
           const currentMessageCount = messages.length;
           
           if (coralMessages.length > currentMessageCount) {
@@ -749,12 +779,11 @@ export default function ChatInterface({
           console.error('[Visibility] Error polling for messages:', error);
         }
         
-        // If SSE was closed, signal that it should reconnect
-        if (!eventSourceRef.current && shouldPoll) {
-          console.log('[Visibility] SSE connection lost - will reconnect via main SSE effect');
-          // The main SSE effect will handle reconnection
-          setShouldPoll(false);
-          setTimeout(() => setShouldPoll(true), 100);
+        // CRITICAL FIX: Ensure polling is enabled without race condition
+        // Just set to true directly - no need for false→true toggle
+        if (!eventSourceRef.current) {
+          console.log('[Visibility] SSE not connected - enabling polling');
+          setShouldPoll(true);
         }
       } else {
         // Page became hidden - user switched away
@@ -943,7 +972,7 @@ export default function ChatInterface({
     if (!threadId || !sessionId) return;
     
     try {
-      const coralMessages = await apiClient.getMessages(sessionId, threadId);
+      const coralMessages = await apiClient.getMessages(sessionId, threadId, publicKey?.toString());
       
       // Track if we found a new payment request that needs to be processed
       let pendingPaymentRequest: { request: PaymentRequest; messageId: string } | null = null;
@@ -1301,11 +1330,12 @@ export default function ChatInterface({
       // This handles race conditions during SSE reconnection
       const currentThreadId = threadId;
       const currentSessionId = sessionId;
+      const currentWallet = publicKey?.toString();
       setTimeout(async () => {
         if (currentSessionId && currentThreadId) {
           console.log('[Safety Net] Polling for any missed messages after 5s');
           try {
-            const coralMessages = await apiClient.getMessages(currentSessionId, currentThreadId);
+            const coralMessages = await apiClient.getMessages(currentSessionId, currentThreadId, currentWallet);
             
             // Use setMessages with prev to get current state
             setMessages(prev => {

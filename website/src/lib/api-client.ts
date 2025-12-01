@@ -290,9 +290,21 @@ class APIClient {
   /**
    * Get message history for a thread
    */
-  async getMessages(sessionId: string, threadId: string): Promise<CoralMessage[]> {
+  async getMessages(
+    sessionId: string, 
+    threadId: string, 
+    userWallet?: string
+  ): Promise<CoralMessage[]> {
+    // 🔒 SECURITY: Include wallet address for ownership verification
+    const params = new URLSearchParams({
+      sessionId,
+      threadId,
+      ...(userWallet && { userWallet })
+    });
+    
     const response = await fetch(
-`${this.baseUrl}/chat/messages?sessionId=${sessionId}&threadId=${threadId}`    );
+      `${this.baseUrl}/chat/messages?${params.toString()}`
+    );
 
     if (!response.ok) {
       // 410 Gone = session no longer exists or thread/session mismatch
@@ -303,6 +315,11 @@ class APIClient {
         error.code = data.error?.toUpperCase() || 'SESSION_NOT_FOUND';
         error.status = 410;
         throw error;
+      }
+      // 403 Forbidden = wallet doesn't own this thread
+      if (response.status === 403) {
+        const data = await response.json();
+        throw new Error(data.error || 'Unauthorized access to conversation');
       }
       throw new Error(`Failed to get messages: ${response.statusText}`);
     }

@@ -7,14 +7,16 @@ import { prisma } from '@/lib/prisma';
 const CORAL_SERVER_URL = process.env.CORAL_SERVER_URL ||'http://localhost:5555';
 
 /**
- * GET /api/chat/messages?sessionId=xxx&threadId=yyy
+ * GET /api/chat/messages?sessionId=xxx&threadId=yyy&userWallet=zzz
  * Get message history for a thread
+ * 🔒 SECURITY: Validates user owns the thread before returning messages
  */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const sessionId = searchParams.get('sessionId');
     const threadId = searchParams.get('threadId');
+    const userWallet = searchParams.get('userWallet');
 
     if (!sessionId || !threadId) {
       return NextResponse.json(
@@ -23,26 +25,46 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // 🔧 FIX: Validate thread belongs to session BEFORE hitting Coral
-    // This prevents 404 spam when frontend has stale thread ID after session recreation
+    // 🔒 SECURITY: Validate thread ownership BEFORE returning messages
+    // This prevents users from accessing other users' conversations
     try {
       const thread = await prisma.thread.findFirst({
         where: { coralThreadId: threadId },
-        include: { session: true }
+        include: { 
+          session: {
+            include: { user: true }
+          }
+        }
       });
 
-      // If thread exists but belongs to different session, it's stale
-      if (thread && thread.session.coralSessionId !== sessionId) {
-        console.log(
-          `[Messages API] Thread ${threadId} belongs to session ${thread.session.coralSessionId}, not ${sessionId}. Signaling frontend to reset.`
-        );
-        return NextResponse.json(
-          {
-            error: 'thread_session_mismatch',
-            message: 'Thread belongs to a different session. Please create a new thread.',
-          },
-          { status: 410 } // 410 Gone - tells frontend to reset
-        );
+      // If thread doesn't exist in database, allow Coral to handle (might be new thread)
+      if (thread) {
+        // Validate thread belongs to the correct session
+        if (thread.session.coralSessionId !== sessionId) {
+          console.log(
+            `[Messages API] Thread ${threadId} belongs to session ${thread.session.coralSessionId}, not ${sessionId}. Signaling frontend to reset.`
+          );
+          return NextResponse.json(
+            {
+              error: 'thread_session_mismatch',
+              message: 'Thread belongs to a different session. Please create a new thread.',
+            },
+            { status: 410 } // 410 Gone - tells frontend to reset
+          );
+        }
+
+        // 🔒 CRITICAL: Validate user owns this thread
+        // Only allow access if wallet matches thread owner
+        if (userWallet && thread.session.user.walletAddress !== userWallet) {
+          console.warn(
+            `[SECURITY] Unauthorized access attempt to thread ${threadId}: ` +
+            `expected wallet ${thread.session.user.walletAddress}, got ${userWallet}`
+          );
+          return NextResponse.json(
+            { error: 'Unauthorized: This conversation belongs to a different wallet' },
+            { status: 403 }
+          );
+        }
       }
     } catch (dbError) {
       // DB error, log but continue - Coral is source of truth
