@@ -1197,6 +1197,13 @@ export default function ChatInterface({
     setLoading(true);
     
     // Start polling to receive agent responses
+    // CRITICAL FIX: Force SSE reconnection to ensure we catch the response
+    // This prevents race conditions where the SSE might be in a bad state
+    if (eventSourceRef.current) {
+      console.log('[Polling] Forcing SSE reconnection before sending message');
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
     setShouldPoll(true);
     console.log('[Polling] User sent message, enabling polling for responses');
 
@@ -1264,6 +1271,47 @@ export default function ChatInterface({
       });
       
       // Keep loading true - will be set to false when agent responds via SSE/polling
+      
+      // SAFETY NET: Poll for messages after 5 seconds to catch any that SSE might have missed
+      // This handles race conditions during SSE reconnection
+      const currentThreadId = threadId;
+      const currentSessionId = sessionId;
+      setTimeout(async () => {
+        if (currentSessionId && currentThreadId) {
+          console.log('[Safety Net] Polling for any missed messages after 5s');
+          try {
+            const coralMessages = await apiClient.getMessages(currentSessionId, currentThreadId);
+            
+            // Use setMessages with prev to get current state
+            setMessages(prev => {
+              const currentMessageIds = new Set(prev.map(m => m.id));
+              const missedMessages = coralMessages.filter(m => !currentMessageIds.has(m.id));
+              
+              if (missedMessages.length > 0) {
+                console.warn(`[Safety Net] Found ${missedMessages.length} missed message(s)! Recovering...`);
+                
+                // Process missed messages same as SSE
+                const recoveredMessages: Message[] = missedMessages.map(m => ({
+                  id: m.id,
+                  senderId: m.senderId,
+                  sender: m.senderId === USER_SENDER_ID ? 'You (SBF)' : formatAgentName(m.senderId),
+                  content: m.content,
+                  timestamp: new Date(m.timestamp),
+                  isAgent: m.senderId !== USER_SENDER_ID,
+                  mentions: m.mentions || [],
+                  isIntermediary: false
+                }));
+                
+                return [...prev, ...recoveredMessages];
+              }
+              
+              return prev;
+            });
+          } catch (error) {
+            console.error('[Safety Net] Failed to poll for missed messages:', error);
+          }
+        }
+      }, 5000);
       
     } catch (err: any) {
       console.error('Send message error:', err);
@@ -1504,6 +1552,8 @@ export default function ChatInterface({
       }
 
       // Update messages with agent response if provided (otherwise SSE will handle it)
+      let receivedAgentResponse = false;
+      
       if (retryResult.messages) {
         // Process agent messages
         const newAgentMessages = retryResult.messages
@@ -1529,14 +1579,23 @@ export default function ChatInterface({
           
           loadingMessageIdRef.current = null; // Clear the ref
           setLoading(false); // Stop loading now that we have the response
-        } else {
-          // No agent messages yet - keep loading message and wait for SSE to deliver the response
-          console.log('[Payment] No agent messages in backend response, waiting for SSE');
+          receivedAgentResponse = true;
         }
-      } else {
-        // No messages in response (normal since backend returns immediately)
-        // Loading message will be removed when SSE delivers the agent response
-        console.log('[Payment] Backend returned successfully, waiting for agent response via SSE');
+      }
+      
+      // CRITICAL FIX: If we didn't get the agent response yet, ensure SSE is active to receive it
+      if (!receivedAgentResponse) {
+        console.log('[Payment] Waiting for agent response via SSE');
+        
+        // Restart SSE if not already active
+        if (!eventSourceRef.current || !shouldPoll) {
+          console.log('[Payment] Restarting SSE to receive agent response');
+          if (eventSourceRef.current) {
+            eventSourceRef.current.close();
+            eventSourceRef.current = null;
+          }
+          setShouldPoll(true);
+        }
       }
       } else {
         // SOL payments (not currently supported for CDP facilitator)

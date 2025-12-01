@@ -124,23 +124,28 @@ export async function GET(request: NextRequest) {
                 return !(isUserMessage && hasPaymentMarker);
               });
               
-              if (filteredMessages.length > 0) {
-                lastMessageCount = messages.length;
-                
-                controller.enqueue(
-                  encoder.encode(`data: ${JSON.stringify({ 
-                    type: 'messages', 
-                    messages: filteredMessages 
-                  })}\n\n`)
-                );
-                
-                // Reset to faster polling when new messages arrive
-                pollInterval = 500;
-                consecutiveEmptyPolls = 0;
-              } else {
-                // All filtered out, but update count
-                lastMessageCount = messages.length;
+            // CRITICAL FIX: Always update lastMessageCount and send ALL new messages
+            // even if some are filtered, to prevent silent message loss
+            lastMessageCount = messages.length;
+            
+            if (filteredMessages.length > 0) {
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ 
+                  type: 'messages', 
+                  messages: filteredMessages 
+                })}\n\n`)
+              );
+              
+              // Reset to faster polling when new messages arrive
+              pollInterval = 500;
+              consecutiveEmptyPolls = 0;
+            } else {
+              // All filtered out, still update count (moved above)
+              // Log for debugging to track when messages are filtered
+              if (DEBUG_SSE) {
+                console.log(`[SSE Poll] All ${newMessages.length} new message(s) were filtered out`);
               }
+            }
             } else {
               // No new messages - back off polling
               consecutiveEmptyPolls++;
