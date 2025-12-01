@@ -414,13 +414,13 @@ export default function ChatInterface({
     };
   }, []);
 
-  // Initialize session
+  // Initialize session (runs when wallet connects or changes)
   useEffect(() => {
-    if (!sessionId && !sessionInitializedRef.current) {
+    if (!sessionId && !sessionInitializedRef.current && publicKey) {
       sessionInitializedRef.current = true;
       initializeSession();
     }
-  }, []);
+  }, [sessionId, publicKey]);
 
   // Create thread when agent selected
   useEffect(() => {
@@ -772,6 +772,12 @@ export default function ChatInterface({
       if (previousWallet && previousWallet !== currentWallet) {
         clearWalletCache(previousWallet);
         setMessages([]); // Clear displayed messages immediately
+        
+        // CRITICAL FIX: Reset session when wallet changes
+        // The old session belongs to the previous wallet, so we need a new one
+        setSessionId(null);
+        sessionInitializedRef.current = false; // Allow re-initialization
+        console.log('[Wallet Change] Wallet changed, session will be recreated for new wallet');
       }
       
       previousWalletRef.current = currentWallet;
@@ -788,6 +794,8 @@ export default function ChatInterface({
       setCurrentScore(0);
       lastScoreFetchRef.current = 0;
       setMessages([]); // Clear messages
+      setSessionId(null); // Clear session
+      sessionInitializedRef.current = false; // Allow re-initialization
       processedMessageIdsRef.current.clear(); // Clear processed messages on disconnect
     }
   }, [publicKey]);

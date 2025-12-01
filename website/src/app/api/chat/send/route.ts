@@ -162,24 +162,27 @@ async function handlePOST(request: NextRequest) {
       );
     }
     
-    // SECURITY: Verify wallet matches session owner
+    // SECURITY: Verify wallet matches thread/session owner
     // This prevents session hijacking attacks
-    const session = await prisma.session.findFirst({
-      where: { 
-        OR: [
-          { coralSessionId: sessionId },
-          { id: sessionId }
-        ]
-      },
-      include: { user: true }
+    // NOTE: In production, coralSessionId is shared (e.g., 'production-main'), 
+    // so we MUST look up by threadId (which is user-specific) instead of sessionId
+    const thread = await prisma.thread.findFirst({
+      where: { coralThreadId: threadId },
+      include: { 
+        session: {
+          include: { user: true }
+        }
+      }
     });
 
-    if (session && session.user.walletAddress !== userWallet) {
-      console.warn(`[SECURITY] Wallet mismatch for session ${sessionId}: expected ${session.user.walletAddress}, got ${userWallet}`);
+    // Only check wallet mismatch if thread already exists in DB
+    // If thread is new, it will be created with the correct wallet in saveMessageToDatabase()
+    if (thread && thread.session && thread.session.user.walletAddress !== userWallet) {
+      console.warn(`[SECURITY] Wallet mismatch for thread ${threadId}: expected ${thread.session.user.walletAddress}, got ${userWallet}`);
       logInjectionAttempt(
         getClientIP(request.headers),
         '/api/chat/send',
-        `wallet_mismatch: session=${sessionId}, wallet=${userWallet}`,
+        `wallet_mismatch: thread=${threadId}, wallet=${userWallet}`,
         'session_hijacking'
       );
       return NextResponse.json(
@@ -829,10 +832,10 @@ async function handlePOST(request: NextRequest) {
                       select: { id: true }
                     });
                     
-                    if (user && session) {
+                    if (user && thread && thread.session) {
                       await serviceUsageRepository.recordServiceUsage(
                         user.id,
-                        session.id,
+                        thread.session.id,
                         getCurrentWeekId(),
                         serviceType,
                         agentId,
@@ -945,10 +948,10 @@ async function handlePOST(request: NextRequest) {
                     select: { id: true }
                   });
                   
-                  if (user && session) {
+                  if (user && thread && thread.session) {
                     await serviceUsageRepository.recordServiceUsage(
                       user.id,
-                      session.id,
+                      thread.session.id,
                       getCurrentWeekId(),
                       serviceType,
                       agentId,
@@ -1181,17 +1184,17 @@ async function handlePOST(request: NextRequest) {
     console.log(`[Send API] Message saved to database, returning success to client`);
     
     // 🎮 Update service cooldown counters (messages) - DEFENSIVE: never fails main flow
-    if (session && session.user) {
+    if (thread && thread.session && thread.session.user) {
       try {
         const weekId = getCurrentWeekId();
         await serviceUsageRepository.updateCooldowns(
-          session.user.id,
-          session.id,
+          thread.session.user.id,
+          thread.session.id,
           weekId,
           1, // messageIncrement
           0  // pointsIncrement (handled separately in scoring)
         );
-        console.log(`[Service Cooldowns] Incremented message counter for user ${session.user.id}`);
+        console.log(`[Service Cooldowns] Incremented message counter for user ${thread.session.user.id}`);
       } catch (cooldownError) {
         // CRITICAL: Don't fail message sending if cooldown update fails
         console.error('[Service Cooldowns] Failed to update message counter (non-fatal):', cooldownError);
