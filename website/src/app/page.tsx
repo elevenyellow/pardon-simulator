@@ -7,6 +7,7 @@ import AgentSelector from'@/components/AgentSelector';
 import ChatInterface from'@/components/ChatInterface';
 import'@/lib/console-filter';  // Suppress excessive wallet SDK and CSS logging
 import bs58 from'bs58';
+import { getAPIClient } from'@/lib/api-client';
 
 //  Fix hydration error: Load wallet button only on client-side
 const WalletMultiButton = dynamic(
@@ -35,12 +36,33 @@ export default function Home() {
   const [walletVerified, setWalletVerified] = useState(false);
   const [verifyingWallet, setVerifyingWallet] = useState(false);
 
-  // Clear threads when wallet changes
+  // Load existing threads when wallet connects
   useEffect(() => {
-    setAgentThreads({});
-    setSelectedAgent(null);
-    setThreadId(null);
-  }, [publicKey]);
+    const loadUserThreads = async () => {
+      if (!publicKey || !connected) {
+        // Clear state when wallet disconnects
+        setAgentThreads({});
+        setSelectedAgent(null);
+        setThreadId(null);
+        return;
+      }
+
+      try {
+        console.log('[Thread Loading] Fetching existing threads for wallet...');
+        const apiClient = getAPIClient();
+        const threads = await apiClient.getUserThreads(publicKey.toString());
+        
+        console.log('[Thread Loading] Loaded threads:', threads);
+        setAgentThreads(threads);
+      } catch (error) {
+        console.error('[Thread Loading] Error loading threads:', error);
+        // Don't block - user can create new threads
+        setAgentThreads({});
+      }
+    };
+
+    loadUserThreads();
+  }, [publicKey, connected]);
 
   // Initialize audio on mount
   useEffect(() => {

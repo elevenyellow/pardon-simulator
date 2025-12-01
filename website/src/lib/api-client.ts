@@ -329,6 +329,32 @@ class APIClient {
   }
 
   /**
+   * Get all threads for a user
+   * Returns mapping of agentId → threadId
+   */
+  async getUserThreads(
+    userWallet: string,
+    sessionId?: string
+  ): Promise<Record<string, string>> {
+    const params = new URLSearchParams({ userWallet });
+    if (sessionId) {
+      params.append('sessionId', sessionId);
+    }
+
+    const response = await fetch(
+      `${this.baseUrl}/chat/threads?${params.toString()}`
+    );
+
+    if (!response.ok) {
+      console.error('Failed to get user threads:', response.statusText);
+      return {}; // Return empty on error - will create new threads
+    }
+
+    const data = await response.json();
+    return data.threads || {};
+  }
+
+  /**
    * Verify a payment transaction on Solana blockchain
    */
   async verifyPayment(request: VerifyPaymentRequest): Promise<VerifyPaymentResponse> {
