@@ -892,11 +892,16 @@ export default function ChatInterface({
         try {
           const coralMessages = await apiClient.getMessages(sessionId, threadId, publicKey?.toString());
           
-          // Check for truly new messages by ID, not just count
-          const existingIds = new Set(messages.map(m => m.id));
-          const newCoralMessages = coralMessages.filter((m: any) => !existingIds.has(m.id));
-          
-          if (newCoralMessages.length > 0) {
+          // Check for truly new messages by ID using functional setState to avoid stale closure
+          setMessages(prev => {
+            const existingIds = new Set(prev.map(m => m.id));
+            const newCoralMessages = coralMessages.filter((m: any) => !existingIds.has(m.id));
+            
+            if (newCoralMessages.length === 0) {
+              console.log('[Visibility] No new messages found');
+              return prev; // No changes
+            }
+            
             console.log(`[Visibility] Found ${newCoralMessages.length} new message(s) - updating immediately`);
             
             // GLOBAL DEDUPLICATION: Filter messages we've already seen
@@ -910,7 +915,7 @@ export default function ChatInterface({
             
             if (unseenMessages.length === 0) {
               console.log('[Visibility] All messages already seen, skipping update');
-              return;
+              return prev; // No changes
             }
             
             // Mark as seen
@@ -943,44 +948,32 @@ export default function ChatInterface({
               };
             });
             
-            // Update messages, removing duplicates and loading messages
-            setMessages(prev => {
-              const existingIds = new Set(prev.map(m => m.id));
-              const uniqueNew = newMessages.filter(m => !existingIds.has(m.id));
-              
-              // If we got new agent messages, remove loading message
-              const newAgentMessages = uniqueNew.filter(m => 
-                m.isAgent && 
-                m.senderId !== 'system' && 
-                !m.id.startsWith('loading-')
-              );
-              
-              let finalMessages = [...prev, ...uniqueNew];
-              if (newAgentMessages.length > 0) {
-                console.log('[Visibility] Received agent response, removing loading message');
-                finalMessages = finalMessages.filter(m => m.senderId !== 'system');
-                loadingMessageIdRef.current = null;
-                setLoading(false);
-              }
-              
-              return finalMessages;
-            });
+            // Build final messages
+            const uniqueNew = newMessages.filter(m => !existingIds.has(m.id));
             
-            // Cache the updated conversation
-            if (publicKey) {
-              cacheConversation(publicKey.toString(), threadId, newMessages, selectedAgent);
+            // If we got new agent messages, remove loading message
+            const newAgentMessages = uniqueNew.filter(m => 
+              m.isAgent && 
+              m.senderId !== 'system' && 
+              !m.id.startsWith('loading-')
+            );
+            
+            let finalMessages = [...prev, ...uniqueNew];
+            if (newAgentMessages.length > 0) {
+              console.log('[Visibility] Received agent response, removing loading message');
+              finalMessages = finalMessages.filter(m => m.senderId !== 'system');
+              loadingMessageIdRef.current = null;
+              setLoading(false);
             }
             
-            // Don't force SSE reconnection after successfully fetching messages
-            // The messages are already displayed, no need to reprocess via SSE
+            // Cache the COMPLETE conversation inside the setState callback
+            if (publicKey && threadId) {
+              cacheConversation(publicKey.toString(), threadId, finalMessages, selectedAgent);
+            }
+            
             console.log('[Visibility] Messages updated directly, skipping SSE reconnection');
-          } else {
-            // No new messages - ensure SSE is active for future messages
-            if (!eventSourceRef.current && !shouldPoll) {
-              console.log('[Visibility] No new messages, enabling SSE for future updates');
-              triggerSSEReconnection();
-            }
-          }
+            return finalMessages;
+          });
         } catch (error) {
           console.error('[Visibility] Error polling for messages:', error);
         }
