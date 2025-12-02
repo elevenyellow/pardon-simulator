@@ -1171,13 +1171,9 @@ Only after payment verified should you call contact_agent()!
                                 send_message_called = True
                                 print(f"[DEBUG] ✅ coral_send_message was detected in intermediate_steps")
                 
-                # FIX #1: Suppress LLM output if contact_agent was called
-                # contact_agent already sends its own confirmation message
-                if contact_agent_called and isinstance(response, dict):
-                    print(f"[OutputSuppression] contact_agent called - suppressing LLM's final output")
-                    print(f"[OutputSuppression] Original output: {response.get('output', '')[:100]}")
-                    response['output'] = ""
-                    print(f"[OutputSuppression] Output suppressed to prevent duplicate confirmation")
+                # NOTE: We used to suppress LLM output if contact_agent was called because
+                # contact_agent sent its own confirmation. Now contact_agent does NOT send
+                # a confirmation - the LLM handles it via coral_send_message. So no suppression needed.
                 
                 # FIX #2: Fallback - if LLM generated output but didn't call coral_send_message, send it automatically
                 # This prevents silent failures where agent thinks but doesn't speak
@@ -1648,13 +1644,9 @@ Only after payment verified should you call contact_agent()!
                                 send_message_called = True
                                 print(f"[{pool_name}] ✅ coral_send_message was detected in intermediate_steps")
                 
-                # FIX #1: Suppress LLM output if contact_agent was called
-                # contact_agent already sends its own confirmation message
-                if contact_agent_called and isinstance(response, dict):
-                    print(f"[{pool_name}] [OutputSuppression] contact_agent called - suppressing LLM's final output")
-                    print(f"[{pool_name}] [OutputSuppression] Original output: {response.get('output', '')[:100]}")
-                    response['output'] = ""
-                    print(f"[{pool_name}] [OutputSuppression] Output suppressed to prevent duplicate confirmation")
+                # NOTE: We used to suppress LLM output if contact_agent was called because
+                # contact_agent sent its own confirmation. Now contact_agent does NOT send
+                # a confirmation - the LLM handles it via coral_send_message. So no suppression needed.
                 
                 # FIX #2: Fallback - if LLM generated output but didn't call coral_send_message, send it automatically
                 # This prevents silent failures where agent thinks but doesn't speak

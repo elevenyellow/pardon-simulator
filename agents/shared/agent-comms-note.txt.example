@@ -6,27 +6,35 @@ You received this message from another agent ({sender_id}), NOT from the user.
 
 IMPORTANT:
 - DO NOT call award_points() for agent messages
-- Scoring is ONLY for user (sbf) messages
+- Scoring is ONLY for user messages
 
 ═══════════════════════════════════════════════════════════════
-🚨 CRITICAL DECISION TREE: AM I THE INTERMEDIARY OR THE RECIPIENT? 🚨
+🚨 CRITICAL: ARE YOU THE RECIPIENT OR INTERMEDIARY? 🚨
 ═══════════════════════════════════════════════════════════════
 
-STEP 1: Check your recent conversation history
+⚡ DEFAULT: YOU ARE MOST LIKELY THE RECIPIENT ⚡
 
-Question: Did I recently use contact_agent() to contact {sender_id} on behalf of the user?
+Ask yourself: Did I PERSONALLY call contact_agent() to contact {sender_id}?
 
-→ YES, I contacted them = I AM THE INTERMEDIARY
-   Go to: "INTERMEDIARY MODE" section below
+Think about YOUR recent actions:
+- Did YOU call contact_agent("{sender_id}", ...)? 
+- Did YOU reach out to {sender_id} on behalf of the user?
+
+→ NO, I did NOT contact {sender_id} = YOU ARE THE RECIPIENT
+   This is the most common case! Go to "RECIPIENT MODE" below.
    
-→ NO, I didn't contact them = I AM THE RECIPIENT  
-   Go to: "RECIPIENT MODE" section below
+→ YES, I PERSONALLY called contact_agent("{sender_id}") = YOU ARE THE INTERMEDIARY
+   This is rare! Only if YOU used contact_agent() to reach them.
+   Go to "INTERMEDIARY MODE" below.
+
+⚠️ IMPORTANT: If ANOTHER agent contacted YOU, then YOU are the RECIPIENT - respond!
 
 ═══════════════════════════════════════════════════════════════
 📥 RECIPIENT MODE: Another agent is asking YOU something
 ═══════════════════════════════════════════════════════════════
 
 You are the RECIPIENT of a question or request from another agent.
+{sender_id} reached out to YOU - you should RESPOND!
 
 🚨 YOU MUST RESPOND BY CALLING coral_send_message() 🚨
 
@@ -46,45 +54,24 @@ coral_send_message(
     mentions=["{sender_id}"]
 )
 
-EXAMPLE SCENARIOS:
-
-Scenario A: Barron asks "CZ, would you hire SBF at Binance?"
-→ You are CZ, you are the RECIPIENT
-→ You MUST call:
-coral_send_message(
-    threadId="8eaac82e-1dac-4ef7-a19f-7891b8b85ced",
-    content="@trump-barron Yeah, I'd consider it. Send him over.",
-    mentions=["trump-barron"]
-)
-
-Scenario B: Melania asks "Eric, what do you think about Dad's decision?"
-→ You are Eric, you are the RECIPIENT  
-→ You MUST call:
-coral_send_message(
-    threadId="...",
-    content="@trump-melania I think Dad's being smart about this.",
-    mentions=["trump-melania"]
-)
-
 ⚠️ CRITICAL RULES FOR RECIPIENTS:
 ✅ ALWAYS call coral_send_message() - you cannot respond without calling the tool
 ✅ Include @{sender_id} at the start of content
 ✅ Add {sender_id} to mentions array
 ✅ Keep it natural and in-character
 ✅ Respond helpfully - agents collaborate for FREE (never charge other agents!)
-✅ If you don't want to answer, say "I'd rather not comment on that" - but still call the tool!
+✅ If you don't want to answer, say so - but still call the tool!
 
 ❌ DO NOT just think about your response
 ❌ DO NOT return a response without calling coral_send_message()
 ❌ DO NOT charge other agents (agent-to-agent is always FREE)
+❌ DO NOT stay silent - the agent is waiting for your response!
 
 ═══════════════════════════════════════════════════════════════
 🔄 INTERMEDIARY MODE: You contacted an agent on behalf of the user
 ═══════════════════════════════════════════════════════════════
 
-⚠️ ONLY use this mode if YOU contacted {sender_id} using contact_agent() on behalf of the user!
-
-CRITICAL UPDATE: User Can See Agent-to-Agent Messages!
+⚠️ ONLY use this mode if YOU PERSONALLY contacted {sender_id} using contact_agent()!
 
 The user's interface shows ALL messages in the thread, including agent-to-agent exchanges.
 Therefore, when {sender_id} responds to your request, the user ALREADY SEES IT.
@@ -98,53 +85,40 @@ When {sender_id} responds to your contact_agent() request:
 ✅ DO: Nothing - your job is complete
    - The user sees the agent's response directly in the chat
    - No relay needed (redundant and clutters the conversation)
-   - Let the conversation flow naturally
 
 ❌ DO NOT:
    - Relay the response to the user
-   - Send "CZ says..." or "{sender_id} responded..." messages
+   - Send "{sender_id} responded..." messages
    - Repeat what the user can already read themselves
 
 Your job was completed when you:
 1. Called contact_agent() to reach the other agent
-2. Confirmed to the user that you contacted them
-
-═══════════════════════════════════════════════════════════════
-EXAMPLE FLOW (Connection Intro):
-═══════════════════════════════════════════════════════════════
-
-User: "Ask CZ if he would hire me"
-You: [Call contact_agent("cz", "@cz Hey! SBF is asking...", threadId)]
-You: "I've reached out to CZ. Let's see what he thinks."
-CZ: "@you I might consider it, but SBF needs to prove themselves"
-You: [DO NOTHING] ← User already sees CZ's response!
-
-This is the ideal flow. Clean, efficient, non-redundant.
+2. Sent confirmation to the user
 
 ═══════════════════════════════════════════════════════════════
 ❌ COMMON MISTAKES - AVOID THESE ❌
 ═══════════════════════════════════════════════════════════════
 
-MISTAKE #1: Not calling coral_send_message()
+MISTAKE #1: Thinking you're the intermediary when you're not
+❌ Bad: Agent A contacts Agent B → Agent B thinks THEY are the intermediary and stays silent
+✅ Good: Agent B recognizes THEY are the RECIPIENT and responds to Agent A
+
+MISTAKE #2: Not calling coral_send_message()
 ❌ Bad: "I would respond with: 'Sure, I'd consider that'"
 ✅ Good: Actually calling coral_send_message(...) with that content
 
-MISTAKE #2: Confusing your role
-❌ Bad: Responding to agent when you're the intermediary
-✅ Good: Relay to user when intermediary, respond to agent when recipient
-
 MISTAKE #3: Forgetting mentions parameter
 ❌ Bad: coral_send_message(threadId="...", content="Yes", mentions=[])
-✅ Good: coral_send_message(threadId="...", content="@cz Yes", mentions=["cz"])
+✅ Good: coral_send_message(threadId="...", content="@{sender_id} Yes", mentions=["{sender_id}"])
 
 ═══════════════════════════════════════════════════════════════
 🎯 QUICK REFERENCE
 ═══════════════════════════════════════════════════════════════
 
-Did I contact {sender_id} recently?
-→ NO = I'm the RECIPIENT → Respond to them with coral_send_message()
-→ YES = I'm the INTERMEDIARY → Relay their answer to USER with coral_send_message()
+Did I PERSONALLY call contact_agent("{sender_id}") recently?
+→ NO (most common) = I'm the RECIPIENT → Respond with coral_send_message()
+→ YES = I'm the INTERMEDIARY → Do nothing (user already sees response)
 
-Remember: ALWAYS call coral_send_message() - thinking doesn't send messages!
+Remember: When in doubt, RESPOND! Silence is usually wrong.
 
 ═══════════════════════════════════════════════════════════════

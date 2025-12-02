@@ -1218,10 +1218,9 @@ def create_contact_agent_tool(coral_send_message_tool, coral_add_participant_too
     async def contact_agent(agent_to_contact: str, message: str, current_thread_id: str) -> str:
         """
         🎯 USE THIS TOOL to contact another agent on behalf of the user.
-        This tool automatically:
+        This tool:
         1. Adds the agent to the thread
         2. Sends your message to them
-        3. Confirms to the user that you've reached out (in the correct order!)
 
         Parameters:
         - agent_to_contact: Agent's name (e.g., "trump-barron", "trump-donald", "cz")
@@ -1230,7 +1229,8 @@ def create_contact_agent_tool(coral_send_message_tool, coral_add_participant_too
 
         Example: contact_agent("trump-barron", "@trump-barron What's your favorite food?", "thread-id-123")
 
-        After calling this tool, DO NOT send a separate confirmation message - it's automatic!
+        After this tool returns, send a confirmation to the user with coral_send_message.
+        Example: "I've reached out to Barron about [topic]. Let's see what they say."
         """
         print(f"\n🎯 contact_agent called: {agent_to_contact}, message: {message[:50]}...")
 
@@ -1251,24 +1251,7 @@ def create_contact_agent_tool(coral_send_message_tool, coral_add_participant_too
         })
         print(f"✅ Message sent to {agent_to_contact}")
 
-        # STEP 3: Send confirmation to user (CRITICAL: This must happen AFTER step 2)
-        agent_display_name = agent_to_contact.replace('trump-', '').replace('-', ' ').title()
-        if agent_display_name.lower() == 'sbf':
-            agent_display_name = 'SBF'
-        elif agent_display_name.lower() == 'cz':
-            agent_display_name = 'CZ'
-        
-        confirmation_message = f"I've reached out to {agent_display_name}. Let's see what they say."
-        print(f"📨 Sending confirmation to user (sbf)...")
-        
-        await _send_message_tool.ainvoke({
-            "threadId": current_thread_id,
-            "content": confirmation_message,
-            "mentions": ["sbf"]
-        })
-        print(f"✅ User confirmation sent")
-
-        # STEP 4: Store intermediary state (for Issue #2 fix)
+        # STEP 3: Store intermediary state
         # This tells the system: "I'm waiting for a response from agent_to_contact, don't invoke me"
         await set_intermediary_state(
             agent_id=agent_id,
@@ -1276,8 +1259,20 @@ def create_contact_agent_tool(coral_send_message_tool, coral_add_participant_too
             target_agent=agent_to_contact,
             purpose="connection_intro"
         )
+        print(f"✅ Intermediary state stored")
 
-        return f"✅ Successfully contacted {agent_to_contact}. User has been notified."
+        # NOTE: We removed the automatic user confirmation here.
+        # The LLM should send a confirmation to the user via coral_send_message after this tool returns.
+        # This prevents duplicate confirmation messages (the LLM was already calling coral_send_message).
+        
+        # Format display name for the return message
+        agent_display_name = agent_to_contact.replace('trump-', '').replace('-', ' ').title()
+        if agent_display_name.lower() == 'sbf':
+            agent_display_name = 'SBF'
+        elif agent_display_name.lower() == 'cz':
+            agent_display_name = 'CZ'
+
+        return f"✅ Successfully contacted {agent_display_name}. Now send a confirmation to the user with coral_send_message."
 
     return contact_agent
 
@@ -1967,12 +1962,16 @@ IMMEDIATELY call contact_agent() tool ONCE:
    Format: "@<agent> Hey! The user is asking [paraphrase their question in a natural way]"
    DO NOT use hardcoded examples - compose based on the actual conversation context above!
 
-🎯 What contact_agent() does automatically (you don't need to do anything else):
-   1. Sends your message to the target agent
-   2. Automatically sends confirmation to user: "I've reached out to [agent]. Let's see what they say."
+🎯 What contact_agent() does:
+   1. Adds the target agent to the thread
+   2. Sends your message to them
    
-🔒 After calling contact_agent(), you enter LOCK MODE:
-   - When the agent responds to you → DO NOTHING
+After contact_agent() returns, YOU must send a confirmation to the user:
+   - Use coral_send_message to tell the user you've reached out
+   - Example: "I've reached out to [agent] about [topic]. Let's see what they say."
+   
+🔒 After sending your confirmation, you enter LOCK MODE:
+   - When the contacted agent responds to you → DO NOTHING
    - Do NOT reply to them
    - Do NOT relay their response to the user
    - The user can already see all agent-to-agent messages
@@ -1983,7 +1982,6 @@ DO NOT:
 ❌ Just acknowledge payment and do nothing
 ❌ Ask "who do you want me to contact?" (you already know from context!)
 ❌ Say "I'll contact them" without actually calling the tool
-❌ Send a separate confirmation message (contact_agent does this automatically!)
 ❌ Respond when the contacted agent replies to you
 ❌ Relay the agent's response back to the user (redundant!)
 
