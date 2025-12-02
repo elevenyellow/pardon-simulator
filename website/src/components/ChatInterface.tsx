@@ -679,6 +679,7 @@ export default function ChatInterface({
             let pendingPaymentRequest: { request: PaymentRequest; messageId: string } | null = null;
             
             // GLOBAL DEDUPLICATION: Filter messages we've already seen
+            // NOTE: SSE now streams from PostgreSQL (single source of truth), so sync issues are eliminated
             console.log('[SSE] Checking', data.messages.length, 'messages against', seenMessageIdsRef.current.size, 'seen IDs');
             const unseenMessages = data.messages.filter((m: any) => {
               const isSeen = seenMessageIdsRef.current.has(m.id);
@@ -1195,7 +1196,7 @@ export default function ChatInterface({
     try {
       const coralMessages = await apiClient.getMessages(sessionId, threadId, publicKey?.toString());
       
-      // CRITICAL: Mark ALL as seen IMMEDIATELY (before any processing) to prevent race with other polling/SSE
+      // Mark ALL as seen (PostgreSQL is now single source of truth)
       coralMessages.forEach((m: any) => seenMessageIdsRef.current.add(m.id));
       
       // Track if we found a new payment request that needs to be processed
