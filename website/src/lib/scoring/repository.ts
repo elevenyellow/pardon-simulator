@@ -303,21 +303,21 @@ export class ScoringRepository {
   
   /**
    * Calculate premium service bonus points based on payment amount
-   * Linear interpolation from 1 point (min) to 5 points (max)
-   * Reduced from 2-10 for better game balance
+   * Linear interpolation from 2 points (min) to 10 points (max)
+   * Updated for new pricing: $1-$10 range (10x from original)
    */
   private calculatePremiumBonus(paymentUsdc: number): number {
-    // Map from premium_services.json prices
-    const MIN_PAYMENT = 0.0005;  // insider_info = 1 pt (was 2)
-    const MAX_PAYMENT = 0.01;     // pardon_recommendation = 5 pts (was 10)
+    // Updated for new pricing: $1-$10 range (10x from original)
+    const MIN_PAYMENT = 1.0;    // insider_info = 2 pts
+    const MAX_PAYMENT = 10.0;   // pardon_recommendation = 10 pts
     
     if (paymentUsdc <= 0) return 0;
-    if (paymentUsdc <= MIN_PAYMENT) return 1;  // was 2
-    if (paymentUsdc >= MAX_PAYMENT) return 5;  // was 10
+    if (paymentUsdc <= MIN_PAYMENT) return 2;
+    if (paymentUsdc >= MAX_PAYMENT) return 10;
     
-    // Linear interpolation between 1 and 5 points (was 2-10)
+    // Linear interpolation between 2 and 10 points
     const ratio = (paymentUsdc - MIN_PAYMENT) / (MAX_PAYMENT - MIN_PAYMENT);
-    return Math.round(1 + (ratio * 4)); // 1-5 point range (was 2-10)
+    return Math.round(2 + (ratio * 8)); // 2-10 point range
   }
   
   /**

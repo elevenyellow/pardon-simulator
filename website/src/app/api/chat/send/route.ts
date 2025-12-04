@@ -1292,21 +1292,48 @@ async function handlePOST(request: NextRequest) {
 
     console.log(`[Send API] Message saved to database, returning success to client`);
     
+    // Get thread/session info for stats update (may need to fetch if this was first message)
+    let sessionForStats = thread?.session;
+    if (!sessionForStats && savedMessage) {
+      // First message in new thread - look up the newly created session
+      try {
+        const newThread = await prisma.thread.findFirst({
+          where: { coralThreadId: threadId },
+          include: { session: { include: { user: true } } }
+        });
+        sessionForStats = newThread?.session;
+      } catch (lookupError) {
+        console.error('[Session Stats] Failed to lookup new thread session (non-fatal):', lookupError);
+      }
+    }
+    
     // 🎮 Update service cooldown counters (messages) - DEFENSIVE: never fails main flow
-    if (thread && thread.session && thread.session.user) {
+    if (sessionForStats && sessionForStats.user) {
       try {
         const weekId = getCurrentWeekId();
         await serviceUsageRepository.updateCooldowns(
-          thread.session.user.id,
-          thread.session.id,
+          sessionForStats.user.id,
+          sessionForStats.id,
           weekId,
           1, // messageIncrement
           0  // pointsIncrement (handled separately in scoring)
         );
-        console.log(`[Service Cooldowns] Incremented message counter for user ${thread.session.user.id}`);
+        console.log(`[Service Cooldowns] Incremented message counter for user ${sessionForStats.user.id}`);
       } catch (cooldownError) {
         // CRITICAL: Don't fail message sending if cooldown update fails
         console.error('[Service Cooldowns] Failed to update message counter (non-fatal):', cooldownError);
+      }
+      
+      // 📊 Increment session messageCount for final evaluation efficiency calculation
+      try {
+        await prisma.session.update({
+          where: { id: sessionForStats.id },
+          data: { messageCount: { increment: 1 } }
+        });
+        console.log(`[Session Stats] Incremented messageCount for session ${sessionForStats.id}`);
+      } catch (messageCountError) {
+        // CRITICAL: Don't fail message sending if messageCount update fails
+        console.error('[Session Stats] Failed to update messageCount (non-fatal):', messageCountError);
       }
     }
 

@@ -104,3 +104,21 @@ This file tracks when agent configurations are uploaded to S3. It's updated auto
 - Configurations uploaded to S3
 - Backup: `backups/2025-12-02_13-40-50/`
 - No changes detected (identical to backup 2025-12-02_13-35-34)
+
+### 2025-12-04 19:03:36
+- Configurations uploaded to S3
+- Backup: `backups/2025-12-04_19-03-35/`
+- Changed files (13):
+  - `agents/cz/personality-public.txt`
+  - `agents/cz/tool-definitions.json`
+  - `agents/sbf/tool-definitions.json`
+  - `agents/trump-donald/personality-public.txt`
+  - `agents/trump-donald/tool-definitions.json`
+  - `agents/trump-melania/personality-public.txt`
+  - `agents/trump-melania/tool-definitions.json`
+  - `agents/trump-eric/personality-public.txt`
+  - `agents/trump-eric/tool-definitions.json`
+  - `agents/trump-donjr/tool-definitions.json`
+  - `agents/trump-barron/personality-public.txt`
+  - `agents/trump-barron/tool-definitions.json`
+  - `agents/premium_services.json`

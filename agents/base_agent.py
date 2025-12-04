@@ -848,14 +848,14 @@ DO NOT just acknowledge payment - DELIVER THE SERVICE NOW!
         
         return None
     
-    def fetch_thread_history(self, thread_id: str, limit: int = 10) -> str:
+    def fetch_thread_history(self, thread_id: str, limit: int = 25) -> str:
         """
         Fetch recent thread history for conversation context.
         Returns formatted conversation history (last N messages).
         
         Args:
             thread_id: Thread ID to fetch messages from
-            limit: Number of recent messages to include (default: 10)
+            limit: Number of recent messages to include (default: 25)
         
         Returns:
             Formatted conversation history as a string
@@ -926,6 +926,107 @@ DO NOT just acknowledge payment - DELIVER THE SERVICE NOW!
         
         except Exception as e:
             print(f"[Context] Failed to fetch thread history: {e}", flush=True)
+            return ""
+    
+    def fetch_cross_thread_summary(self, user_wallet: str) -> str:
+        """
+        Fetch brief summary of user's activity in OTHER threads (cross-thread awareness).
+        Keeps it concise to avoid token bloat - just key points from other conversations.
+        
+        Args:
+            user_wallet: User's wallet address to identify their threads
+        
+        Returns:
+            Brief formatted summary of activity in other threads, or empty string
+        """
+        try:
+            # Get session ID from environment
+            session_id = self.extract_session_id_from_url()
+            if not session_id or not user_wallet:
+                return ""
+            
+            coral_server_url = os.getenv('CORAL_SERVER_URL', 'http://localhost:5555')
+            
+            # Get all threads in this session
+            sessions_url = f"{coral_server_url}/api/v1/sessions"
+            response = requests.get(sessions_url, timeout=2)
+            
+            if not response.ok:
+                return ""
+            
+            # Find all threads for this session
+            sessions_data = response.json()
+            target_session = None
+            for sess in sessions_data:
+                if sess.get('id') == session_id:
+                    target_session = sess
+                    break
+            
+            if not target_session:
+                return ""
+            
+            threads = target_session.get('threads', [])
+            
+            # Collect brief summaries from other threads
+            other_threads_summary = []
+            for thread in threads[:6]:  # Limit to 6 threads max to control tokens
+                thread_id = thread.get('id')
+                if not thread_id:
+                    continue
+                
+                # Skip current agent's thread (we already have that context)
+                participants = thread.get('participants', [])
+                if self.agent_id in participants:
+                    continue  # This is our thread, skip it
+                
+                # Get last 3 messages from this thread for quick summary
+                messages_url = f"{coral_server_url}/api/v1/debug/thread/app/priv/{session_id}/{thread_id}/messages"
+                msg_response = requests.get(messages_url, timeout=1)
+                
+                if msg_response.ok:
+                    msg_data = msg_response.json()
+                    messages = msg_data.get('messages', [])
+                    
+                    if messages:
+                        # Get last 3 messages
+                        recent = messages[-3:] if len(messages) > 3 else messages
+                        
+                        # Find the agent in this thread (not 'sbf')
+                        other_agent = None
+                        for participant in participants:
+                            if participant != 'sbf' and participant != self.agent_id:
+                                other_agent = participant
+                                break
+                        
+                        if other_agent and recent:
+                            agent_name = other_agent.replace('trump-', '').replace('-', ' ').title()
+                            
+                            # Summarize: just user's last message to that agent
+                            user_msgs = [m for m in recent if m.get('senderId') == 'sbf' or user_wallet in m.get('senderId', '')]
+                            if user_msgs:
+                                last_user_msg = user_msgs[-1].get('content', '')
+                                # Clean markers
+                                last_user_msg = re.sub(r'\[USER_WALLET:[^\]]+\]', '', last_user_msg).strip()
+                                last_user_msg = re.sub(r'\[PREMIUM_SERVICE_PAYMENT_COMPLETED\]', '', last_user_msg).strip()
+                                last_user_msg = re.sub(r'@[\w-]+\s*', '', last_user_msg).strip()  # Remove mentions
+                                
+                                if last_user_msg and len(last_user_msg) > 10:
+                                    # Keep it brief - first 100 chars
+                                    preview = last_user_msg[:100]
+                                    other_threads_summary.append(f"- With {agent_name}: \"{preview}...\"")
+            
+            if not other_threads_summary:
+                return ""
+            
+            # Format as brief context note
+            summary_text = "\n".join(other_threads_summary[:4])  # Max 4 threads shown
+            return f"""
+📊 Quick Context: User's recent activity with other agents:
+{summary_text}
+"""
+        
+        except Exception as e:
+            print(f"[Context] Failed to fetch cross-thread summary: {e}", flush=True)
             return ""
     
     async def process_message(
@@ -1059,12 +1160,17 @@ Only after payment verified should you call contact_agent()!
                 
                 if thread_id != "unknown":
                     print(f"[Context] Fetching thread history for context (thread: {thread_id[:8]}...)", flush=True)
-                    history_text = self.fetch_thread_history(thread_id, limit=10)
+                    history_text = self.fetch_thread_history(thread_id, limit=25)
+                    
+                    # Also fetch cross-thread summary for broader context
+                    cross_thread_summary = ""
+                    if user_wallet:
+                        cross_thread_summary = self.fetch_cross_thread_summary(user_wallet)
                     
                     if history_text:
                         conversation_history = f"""
 ═══════════════════════════════════════════════════════════════
-📜 RECENT CONVERSATION HISTORY (Last 10 messages)
+📜 RECENT CONVERSATION HISTORY (Last 25 messages)
 ═══════════════════════════════════════════════════════════════
 
 {history_text}
@@ -1077,6 +1183,11 @@ Only after payment verified should you call contact_agent()!
                         print(f"[Context] Added {len(history_text.split(chr(10)))} messages of context", flush=True)
                     else:
                         print(f"[Context] No history available (new conversation)", flush=True)
+                    
+                    # Add cross-thread context if available
+                    if cross_thread_summary:
+                        conversation_history = cross_thread_summary + "\n" + conversation_history
+                        print(f"[Context] Added cross-thread awareness", flush=True)
                 
                 # Build full input with scoring
                 scoring_mandate = dynamic_content['scoring_mandate']
@@ -1102,12 +1213,12 @@ Only after payment verified should you call contact_agent()!
             
             if thread_id != "unknown":
                 print(f"[Context] Fetching thread history for agent-to-agent context (thread: {thread_id[:8]}...)", flush=True)
-                history_text = self.fetch_thread_history(thread_id, limit=10)
+                history_text = self.fetch_thread_history(thread_id, limit=25)
                 
                 if history_text:
                     conversation_history = f"""
 ═══════════════════════════════════════════════════════════════
-📜 RECENT CONVERSATION HISTORY (Last 10 messages)
+📜 RECENT CONVERSATION HISTORY (Last 25 messages)
 ═══════════════════════════════════════════════════════════════
 
 {history_text}
@@ -1546,7 +1657,7 @@ Only after payment verified should you call contact_agent()!
                 if history_text:
                     conversation_history = f"""
 ═══════════════════════════════════════════════════════════════
-📜 RECENT CONVERSATION HISTORY (Last 10 messages)
+📜 RECENT CONVERSATION HISTORY (Last 25 messages)
 ═══════════════════════════════════════════════════════════════
 
 {history_text}
@@ -1581,7 +1692,7 @@ Only after payment verified should you call contact_agent()!
                 if history_text:
                     conversation_history = f"""
 ═══════════════════════════════════════════════════════════════
-📜 RECENT CONVERSATION HISTORY (Last 10 messages)
+📜 RECENT CONVERSATION HISTORY (Last 25 messages)
 ═══════════════════════════════════════════════════════════════
 
 {history_text}
