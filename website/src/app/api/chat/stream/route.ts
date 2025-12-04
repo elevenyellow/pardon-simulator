@@ -105,18 +105,23 @@ export async function GET(request: NextRequest) {
                   console.log(`[SSE Bridge] Saving ${agentMessages.length} agent message(s) from Coral to PostgreSQL`);
                 }
                 await Promise.allSettled(
-                  agentMessages.map((msg: any) => 
-                    saveAgentMessageToDatabase({
+                  agentMessages.map((msg: any) => {
+                    // Compute isIntermediary: true if message is agent-to-agent (not involving user)
+                    const isFromUser = msg.senderId === USER_SENDER_ID;
+                    const mentionsUser = msg.mentions?.includes(USER_SENDER_ID);
+                    const isIntermediary = !isFromUser && !mentionsUser;
+                    
+                    return saveAgentMessageToDatabase({
                       threadId,
                       sessionId,
                       coralMessageId: msg.id,
                       senderId: msg.senderId,
                       content: msg.content,
                       mentions: msg.mentions || [],
-                      isIntermediary: msg.isIntermediary || false,
+                      isIntermediary,
                       timestamp: msg.timestamp
-                    })
-                  )
+                    });
+                  })
                 );
               }
             }
