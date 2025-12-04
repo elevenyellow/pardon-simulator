@@ -165,13 +165,20 @@ export default function LeaderboardPage() {
         )}
 
         {leaderboard && leaderboard.entries.length === 0 && (
-          <div className="text-center py-12">
-            <Trophy className="w-16 h-16 text-gray-600 mx-auto mb-4"/>
-            <p className="text-gray-400 text-lg">No players yet this week</p>
-            <p className="text-gray-500 text-sm mt-2">Be the first to compete!</p>
+          <div className="text-center py-16">
+            <Trophy className="w-20 h-20 text-gray-600 mx-auto mb-6"/>
+            <h2 className="text-2xl font-semibold text-gray-300 mb-3">
+              No Pardons Granted Yet
+            </h2>
+            <p className="text-gray-500 max-w-md mx-auto">
+              Presidential pardons have not yet been awarded this week. 
+              The competition is open for eligible participants.
+            </p>
             <Link
-              href="/"              className="mt-6 inline-block px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors"            >
-              Start Playing
+              href="/"
+              className="mt-8 inline-block px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors"
+            >
+              Enter the Competition
             </Link>
           </div>
         )}
