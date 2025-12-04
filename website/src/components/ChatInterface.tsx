@@ -374,7 +374,11 @@ export default function ChatInterface({
         };
         
         // Remove payment request XML from message, keep the surrounding text
-        const cleanMessage = content.replace(/<x402_payment_request>[\s\S]*?<\/x402_payment_request>/g, '').trim();
+        // Also remove surrounding <pre> tags if present
+        const cleanMessage = content
+          .replace(/<pre>\s*<x402_payment_request>[\s\S]*?<\/x402_payment_request>\s*<\/pre>/g, '')
+          .replace(/<x402_payment_request>[\s\S]*?<\/x402_payment_request>/g, '')
+          .trim();
         
         return { request: paymentRequest, cleanMessage };
       } catch (e) {
