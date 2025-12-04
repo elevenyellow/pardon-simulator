@@ -98,10 +98,11 @@ export async function GET(request: NextRequest) {
         threadName: 'Pardon Simulator Chat',
         senderId: msg.senderId,
         content: msg.content,
-        timestamp: msg.createdAt.getTime(),
-        mentions: msg.mentions,
-        metadata: msg.metadata
-      }));
+          timestamp: msg.createdAt.getTime(),
+          mentions: msg.mentions,
+          metadata: msg.metadata,
+          isIntermediary: msg.isIntermediary
+        }));
       
       // Filter out premium service payment confirmation echoes
       const filteredMessages = messages.filter((msg: any) => {
