@@ -296,41 +296,32 @@ async function saveAgentMessageToDatabase(params: {
       return;
     }
     
-    // Check if message already exists by Coral message ID (prevent duplicates)
-    // Use metadata field to store and check Coral's UUID
-    const existing = await prisma.message.findFirst({
+    // Use upsert with unique constraint on (threadId, coralMessageId) to prevent duplicates
+    // This is atomic and race-condition safe
+    await prisma.message.upsert({
       where: {
-        threadId: thread.id,
-        metadata: {
-          path: ['coralMessageId'],
-          equals: params.coralMessageId
+        threadId_coralMessageId: {
+          threadId: thread.id,
+          coralMessageId: params.coralMessageId
         }
-      }
-    });
-    
-    if (existing) {
-      // Message already saved, skip
-      if (DEBUG_SSE) {
-        console.log(`[SSE Poll] Message ${params.coralMessageId.substring(0, 8)}... already exists, skipping`);
-      }
-      return;
-    }
-    
-    // Save agent message with Coral's message ID in metadata
-    await prisma.message.create({
-      data: {
+      },
+      create: {
         threadId: thread.id,
         senderId: params.senderId,
         content: params.content,
         mentions: params.mentions,
         isIntermediary: params.isIntermediary,
+        coralMessageId: params.coralMessageId,
         metadata: {
-          coralMessageId: params.coralMessageId
+          coralMessageId: params.coralMessageId // Keep for backwards compatibility
         }
-      }
+      },
+      update: {} // No update needed, just skip if exists
     });
     
-    console.log(`[SSE Poll] ✅ Saved agent message from ${params.senderId} to database`);
+    if (DEBUG_SSE) {
+      console.log(`[SSE Poll] ✅ Saved agent message from ${params.senderId} to database`);
+    }
   }, { maxRetries: 3, initialDelay: 500 });
 }
 

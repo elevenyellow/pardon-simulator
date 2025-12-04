@@ -76,11 +76,13 @@ model Message {
   timestamp       DateTime  @default(now())
   mentions        String[]  // Array of agent IDs
   isIntermediary  Boolean   @default(false)
+  coralMessageId  String?   // Coral's UUID for agent messages (null for user messages)
   metadata        Json?     // For fallback messages and other metadata
   
   thread          Thread    @relation(fields: [threadId], references: [id])
   createdAt       DateTime  @default(now())
   
+  @@unique([threadId, coralMessageId]) // Prevent duplicate agent messages
   @@index([threadId, timestamp])
   @@index([threadId, createdAt])
   @@index([senderId])
