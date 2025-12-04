@@ -57,11 +57,35 @@ export class ScoringRepository {
       // Fetch session data first (needed by other calculations)
       const session = await tx.session.findUnique({
         where: { id: sessionId },
-        select: { currentScore: true, startTime: true, weekId: true },
+        select: { currentScore: true, startTime: true, weekId: true, finalScore: true, messageCount: true },
       });
       
       if (!session) {
         throw new Error('Session not found');
+      }
+      
+      // Check if score is already locked (user has crossed 90 threshold)
+      if (session.finalScore !== null) {
+        console.log(`[Scoring] User score locked at ${session.finalScore} - no further changes allowed`);
+        // Return the locked score without making any changes
+        const lockedScoreRecord = {
+          id: 'locked',
+          delta: 0,
+          currentScore: session.finalScore,
+          reason: 'Score locked at prize-eligible level',
+          category: category,
+          subcategory: null,
+          agentId: agentId || null,
+          messageId: messageId || null,
+          timestamp: new Date(),
+        };
+        return { 
+          scoreRecord: lockedScoreRecord, 
+          newScore: session.finalScore, 
+          premiumBonusApplied: 0, 
+          weekId: session.weekId,
+          isLocked: true
+        };
       }
       
       // Parallel calculation of multipliers (now that we have session data)
@@ -111,8 +135,36 @@ export class ScoringRepository {
         }
       }
       
-      // Calculate new score (capped at 0-100, prize eligibility at 90+)
-      const newScore = Math.max(0, Math.min(100, session.currentScore + finalDelta));
+      // Calculate preliminary new score
+      const preliminaryScore = session.currentScore + finalDelta;
+      
+      // Check if user is crossing the 90-point threshold
+      const crossingThreshold = session.currentScore < 90 && preliminaryScore >= 90;
+      
+      let newScore: number;
+      let isFinalEvaluation = false;
+      let sessionUpdateData: any = {};
+      
+      if (crossingThreshold) {
+        // User is crossing 90 points - apply final evaluation and lock score
+        const finalBonus = await this.calculateFinalEvaluation(sessionId, userId, session.weekId, tx);
+        newScore = Math.round((90 + finalBonus) * 100) / 100; // Round to 2 decimal places
+        isFinalEvaluation = true;
+        finalReason = `PARDON GRANTED! Final score: ${newScore.toFixed(2)} points`;
+        
+        // Set the locked final score and timestamp
+        sessionUpdateData = { 
+          currentScore: newScore,
+          finalScore: newScore,
+          finalScoreAt: new Date()
+        };
+        
+        console.log(`[Final Evaluation] User ${userId} crossed 90: ${session.currentScore.toFixed(2)} -> ${newScore.toFixed(2)}`);
+      } else {
+        // Normal scoring - cap at 89.99 to prevent reaching threshold without evaluation
+        newScore = Math.max(0, Math.min(89.99, preliminaryScore));
+        sessionUpdateData = { currentScore: newScore };
+      }
       
       // Parallel: create score record, update session, and update user totalScore
       const [scoreRecord] = await Promise.all([
@@ -121,30 +173,30 @@ export class ScoringRepository {
             userId,
             sessionId,
             threadId,
-            delta: finalDelta,
+            delta: isFinalEvaluation ? (newScore - session.currentScore) : finalDelta,
             currentScore: newScore,
             reason: finalReason,
-            category,
-            subcategory: subcategory || null,
+            category: isFinalEvaluation ? 'milestone' : category,
+            subcategory: isFinalEvaluation ? 'pardon_granted' : (subcategory || null),
             agentId: agentId || null,
             messageId: messageId || null,
           },
         }),
         tx.session.update({
           where: { id: sessionId },
-          data: { currentScore: newScore },
+          data: sessionUpdateData,
         }),
         // Update user's totalScore by incrementing with the delta
         tx.user.update({
           where: { id: userId },
           data: { 
-            totalScore: { increment: finalDelta },
+            totalScore: { increment: isFinalEvaluation ? (newScore - session.currentScore) : finalDelta },
             lastActiveAt: new Date()
           },
         })
       ]);
       
-      return { scoreRecord, newScore, premiumBonusApplied, weekId: session.weekId };
+      return { scoreRecord, newScore, premiumBonusApplied, weekId: session.weekId, crossedThreshold: crossingThreshold };
     }, {
       timeout: 20000, // 20 seconds (increased from default 5s for test environments)
     });
@@ -348,6 +400,89 @@ export class ScoringRepository {
     }
     
     return { modifier: 1.0, canProgress: true };
+  }
+  
+  /**
+   * Calculate final evaluation when user crosses 90 points
+   * Distributes users in 90-99.99 range based on gameplay quality
+   * 
+   * Factors:
+   * - Speed (30%): How fast they completed the game
+   * - Diversity (25%): How many unique agents they interacted with
+   * - Premium (25%): How many premium services they used
+   * - Efficiency (20%): Points per message ratio
+   */
+  private async calculateFinalEvaluation(
+    sessionId: string,
+    userId: string,
+    weekId: string,
+    tx: any
+  ): Promise<number> {
+    // Fetch session data for speed calculation
+    const session = await tx.session.findUnique({
+      where: { id: sessionId },
+      select: { startTime: true, messageCount: true }
+    });
+    
+    if (!session) {
+      console.warn('[Final Evaluation] Session not found, returning minimum bonus');
+      return 0;
+    }
+    
+    // 1. Speed Factor (0.0 - 1.0): How fast did they complete?
+    // Best: <2 hours = 1.0, Worst: >24 hours = 0.0
+    const sessionDuration = Date.now() - session.startTime.getTime();
+    const hoursPlayed = sessionDuration / (1000 * 60 * 60);
+    const speedFactor = Math.max(0, Math.min(1, 1 - (hoursPlayed - 2) / 22));
+    
+    // 2. Agent Diversity Factor (0.0 - 1.0): How many unique agents?
+    // Best: 5+ agents = 1.0, Minimum: 3 agents = 0.33
+    const uniqueAgents = await tx.score.groupBy({
+      by: ['agentId'],
+      where: { sessionId, agentId: { not: null } },
+      _count: { agentId: true }
+    });
+    const agentCount = uniqueAgents.length;
+    const diversityFactor = Math.max(0, Math.min(1, (agentCount - 2) / 3));
+    
+    // 3. Premium Service Factor (0.0 - 1.0): How many premium services used?
+    // Best: 10+ services = 1.0
+    const premiumUsage = await tx.serviceUsage.count({
+      where: { userId, weekId }
+    });
+    const premiumFactor = Math.min(1, premiumUsage / 10);
+    
+    // 4. Message Efficiency Factor (0.0 - 1.0): Points per message ratio
+    // Best: >2 points/msg = 1.0, Worst: <0.5 points/msg = 0.0
+    const totalMessages = session.messageCount || 1;
+    const pointsPerMessage = 90 / totalMessages;
+    const efficiencyFactor = Math.max(0, Math.min(1, (pointsPerMessage - 0.5) / 1.5));
+    
+    // Weighted combination
+    const weights = {
+      speed: 0.30,
+      diversity: 0.25,
+      premium: 0.25,
+      efficiency: 0.20
+    };
+    
+    const finalRatio = 
+      speedFactor * weights.speed +
+      diversityFactor * weights.diversity +
+      premiumFactor * weights.premium +
+      efficiencyFactor * weights.efficiency;
+    
+    // Calculate final bonus: 0 to 9.99 (never exactly 10 to leave room)
+    const finalBonus = Math.min(9.99, finalRatio * 9.99);
+    
+    console.log(`[Final Evaluation] User ${userId}: ` +
+      `speed=${speedFactor.toFixed(2)} (${hoursPlayed.toFixed(1)}h), ` +
+      `diversity=${diversityFactor.toFixed(2)} (${agentCount} agents), ` +
+      `premium=${premiumFactor.toFixed(2)} (${premiumUsage} services), ` +
+      `efficiency=${efficiencyFactor.toFixed(2)} (${pointsPerMessage.toFixed(2)} pts/msg) ` +
+      `=> bonus=${finalBonus.toFixed(2)}`);
+    
+    return finalBonus;
   }
   
   /**

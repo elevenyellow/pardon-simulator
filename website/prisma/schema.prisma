@@ -42,6 +42,11 @@ model Session {
   walletVerifiedAt  DateTime?
   walletSignature   String?   // Store signature for audit trail
   
+  // Milestone tracking (90+ points)
+  milestoneShown    Boolean   @default(false)  // Has user seen the pardon popup this week?
+  finalScore        Float?    // Locked final score (90-99.99) after crossing threshold
+  finalScoreAt      DateTime? // When final evaluation was calculated
+  
   user            User      @relation(fields: [userId], references: [id])
   threads         Thread[]
   scores          Score[]

@@ -6,6 +6,7 @@ import { strictRateLimiter } from'@/lib/middleware/rate-limit';
 import { sanitizeScoringRequest } from'@/lib/security/sanitize';
 import { getClientIP, logSuspiciousActivity } from'@/lib/security/monitoring';
 import { verifyWalletSignature } from'@/lib/wallet-verification';
+import { prisma } from'@/lib/prisma';
 
 async function handlePOST(request: NextRequest) {
   try {
@@ -253,6 +254,15 @@ async function handleGET(request: NextRequest) {
       { maxRetries: 3, initialDelay: 300 }
     );
     
+    // Fetch session's milestone flag
+    const session = await withRetry(
+      () => prisma.session.findUnique({
+        where: { id: sessionId },
+        select: { milestoneShown: true, finalScore: true }
+      }),
+      { maxRetries: 2, initialDelay: 200 }
+    );
+    
     const rank = await withRetry(
       () => scoringRepository.getUserRank(userId, weekId),
       { maxRetries: 2, initialDelay: 200 }
@@ -262,12 +272,17 @@ async function handleGET(request: NextRequest) {
       { maxRetries: 2, initialDelay: 200 }
     );
     
+    // Use finalScore if locked, otherwise currentScore
+    const displayScore = session?.finalScore ?? currentScore;
+    
     return NextResponse.json({
       success: true,
-      currentScore,
+      currentScore: displayScore,
       rank,
       weekId,
       scoreHistory: scoreHistory.slice(0, 10), // Last 10 changes
+      milestoneShown: session?.milestoneShown ?? false,
+      isPardonGranted: session?.finalScore !== null,
     });
     
   } catch (error: any) {
@@ -282,6 +297,8 @@ async function handleGET(request: NextRequest) {
         rank: null,
         weekId: getCurrentWeekId(),
         scoreHistory: [],
+        milestoneShown: false,
+        isPardonGranted: false,
         warning:'Database temporarily unavailable - score may not be up to date'      });
     }
     

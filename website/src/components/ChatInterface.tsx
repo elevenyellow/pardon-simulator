@@ -206,6 +206,10 @@ export default function ChatInterface({
   const lastScoreFetchRef = useRef<number>(0); // Track last fetched score to detect changes
   const isFetchingScoreRef = useRef<boolean>(false); // Prevent concurrent score fetches
   const processedMessageIdsRef = useRef<Set<string>>(new Set()); // Track processed messages to prevent duplicate toasts
+  
+  // Milestone popup state (90+ points pardon)
+  const [showMilestonePopup, setShowMilestonePopup] = useState(false);
+  const [milestoneChecked, setMilestoneChecked] = useState(false);
 
   // Toast helper function
   const showToast = useCallback((message: string, type: ToastType ='info') => {
@@ -438,6 +442,13 @@ export default function ChatInterface({
             // Show toast for score change with reason
             const deltaText = delta > 0 ?`+${delta.toFixed(1)}`: delta.toFixed(1);
             showToast(`${deltaText} points: ${reason}`, delta > 0 ?'success':'error');
+          }
+          
+          // Check if we should show milestone popup (90+ points pardon)
+          // Only show if: score >= 90, not already shown in DB, and we haven't checked yet this session
+          if (newScore >= 90 && !data.milestoneShown && !milestoneChecked) {
+            setShowMilestonePopup(true);
+            setMilestoneChecked(true);
           }
           
           // Force a small delay to ensure state has propagated
@@ -2034,6 +2045,24 @@ export default function ChatInterface({
     return colors[agentId] ||'bg-gray-800 border-gray-700';
   };
 
+  // Handle milestone popup close - marks as shown in database
+  const handleMilestonePopupClose = async () => {
+    setShowMilestonePopup(false);
+    
+    if (publicKey) {
+      try {
+        await fetch('/api/scoring/milestone-shown', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userWallet: publicKey.toString() }),
+        });
+        console.log('[Milestone] Popup marked as shown');
+      } catch (err) {
+        console.error('[Milestone] Failed to mark popup as shown:', err);
+      }
+    }
+  };
+
   return (
     <>
       {/* Toast Notifications */}
@@ -2105,6 +2134,81 @@ export default function ChatInterface({
       </div>
         </div>
       </div>
+      
+      {/* Presidential Pardon Milestone Popup */}
+      {showMilestonePopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
+          {/* Official Document Style */}
+          <div className="relative bg-[#f5f0e1] border-8 border-double border-[#8B7355] rounded-sm p-8 max-w-xl mx-4 text-center shadow-[0_0_50px_rgba(0,0,0,0.5)]">
+            
+            {/* Presidential Seal */}
+            <div className="text-6xl mb-2">🦅</div>
+            
+            {/* Official Header */}
+            <div className="border-b-2 border-[#8B7355] pb-4 mb-6">
+              <h1 className="font-serif text-[12px] tracking-[0.3em] text-[#1a1a2e] uppercase mb-1">
+                The White House
+              </h1>
+              <h2 className="font-serif text-[10px] tracking-[0.2em] text-[#666] uppercase">
+                Washington, D.C.
+              </h2>
+            </div>
+            
+            {/* Document Title */}
+            <h2 
+              className="font-serif text-[24px] text-[#1a1a2e] mb-6 font-bold tracking-wide"
+              style={{ fontVariant: 'small-caps' }}
+            >
+              Executive Grant of Clemency
+            </h2>
+            
+            {/* Letter Body */}
+            <div className="text-left font-serif text-[14px] text-[#333] leading-relaxed mb-6 space-y-4">
+              <p>
+                To whom it may concern,
+              </p>
+              <p>
+                After careful consideration of your case and the merits presented before this office, 
+                I, <span className="font-bold">Donald J. Trump</span>, President of the United States 
+                of America, do hereby grant you a <span className="font-bold text-[#8B4513]">Full and Unconditional Pardon</span>.
+              </p>
+              <p>
+                Your sentence has been commuted effective immediately. In recognition of your time served 
+                and the injustices you have endured, you shall receive appropriate compensation as 
+                determined by the Treasury Department.
+              </p>
+              <p>
+                May this pardon restore to you the rights and dignity of a free citizen.
+              </p>
+            </div>
+            
+            {/* Signature */}
+            <div className="text-right mt-8 mb-6">
+              <div className="inline-block text-left">
+                <p className="text-[28px] text-[#1a1a2e] mb-1" style={{ fontFamily: 'cursive' }}>
+                  Donald J. Trump
+                </p>
+                <p className="font-serif text-[11px] text-[#666] tracking-wide uppercase">
+                  45th & 47th President of the United States
+                </p>
+              </div>
+            </div>
+            
+            {/* Official Seal Watermark Effect */}
+            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-[150px] opacity-[0.03] pointer-events-none">
+              🦅
+            </div>
+            
+            {/* Dismiss Button */}
+            <button
+              onClick={handleMilestonePopupClose}
+              className="font-serif text-[14px] px-8 py-3 bg-[#1a1a2e] text-[#f5f0e1] rounded hover:bg-[#2a2a4e] transition-colors tracking-wide uppercase"
+            >
+              I Accept This Pardon
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }
