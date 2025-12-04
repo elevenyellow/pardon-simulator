@@ -684,6 +684,21 @@ function LeaderboardOverlay({ onClose }: { onClose: () => void }) {
             <div className="flex items-center justify-center h-full">
               <span className="font-pixel text-white text-sm">Loading...</span>
             </div>
+          ) : leaderboardData?.entries?.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full p-8">
+              <div 
+                className="font-pixel text-[#FFD700] text-lg mb-4 text-center"
+                style={{ textShadow: '0 0 10px #FFD700, 0 0 20px #FFD700' }}
+              >
+                NO PARDONS GRANTED YET
+              </div>
+              <p 
+                className="font-pixel text-[#aaa] text-[10px] text-center max-w-md"
+                style={{ textShadow: '1px 1px 2px rgba(0, 0, 0, 0.8)' }}
+              >
+                Presidential pardons have not yet been awarded this week. The competition is open for eligible participants.
+              </p>
+            </div>
           ) : (
             <table className="w-full border-collapse font-pixel text-[10px]">
               <thead className="sticky top-0 z-10">
