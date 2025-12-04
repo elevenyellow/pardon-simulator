@@ -26,7 +26,7 @@ const PAYMENT_CONFIG = {
 
 // Route pricing configuration
 const ROUTE_PRICING: Record<string, number> = {
-'/api/chat/send': 1.00, // $1.00 USDC per message
+'/api/chat/send': 0.01, // $0.01 USDC per message (testing price)
 };
 
 /**
