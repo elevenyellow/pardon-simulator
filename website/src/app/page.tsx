@@ -24,6 +24,7 @@ export default function Home() {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [agentThreads, setAgentThreads] = useState<Record<string, string>>({});
   const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [isChatFullscreen, setIsChatFullscreen] = useState(false);
   
   // Audio refs
   const bgMusicRef = useRef<HTMLAudioElement | null>(null);
@@ -519,8 +520,8 @@ export default function Home() {
   // Game Screen
   return (
     <div className="relative min-h-screen overflow-hidden crt-effect vignette">
-      <MuteButton />
-      {currentScreen ==='game'&& <LeaderboardButton />}
+      {!isChatFullscreen && <MuteButton />}
+      {currentScreen ==='game' && !isChatFullscreen && <LeaderboardButton />}
       
       {/* Background */}
       <div 
@@ -533,22 +534,26 @@ export default function Home() {
       {/* Game Layout */}
       <div className="relative z-10 min-h-screen flex flex-col items-center p-5 pt-[calc(20px+10vh)]">
         {/* Top Logo */}
-        <div className="fixed top-5 left-1/2 transform -translate-x-1/2 z-[10000]">
-          <img 
-            src="/assets/logo.png"            alt="Logo"            className="w-[200px] h-auto pixel-art"            style={{
-              filter:'drop-shadow(0 0 10px rgba(102, 182, 128, 0.6)) drop-shadow(0 0 20px rgba(102, 182, 128, 0.4))'            }}
-          />
-        </div>
+        {!isChatFullscreen && (
+          <div className="fixed top-5 left-1/2 transform -translate-x-1/2 z-[10000]">
+            <img 
+              src="/assets/logo.png"              alt="Logo"              className="w-[200px] h-auto pixel-art"              style={{
+                filter:'drop-shadow(0 0 10px rgba(102, 182, 128, 0.6)) drop-shadow(0 0 20px rgba(102, 182, 128, 0.4))'              }}
+            />
+          </div>
+        )}
 
         {/* Logout Button */}
-        <button
-          onClick={handleLogout}
-          className="fixed top-5 right-5 px-6 font-pixel text-[10px] text-white bg-[#ff6b6b] border-[3px] border-[#ff4444] uppercase tracking-wide transition-all hover:bg-[#ff8888] active:translate-y-0.5 z-[10000] pixel-art h-[44px]"          style={{
-            boxShadow:'0 4px 0 #cc0000, 0 4px 10px rgba(0, 0, 0, 0.5), 0 0 15px rgba(255, 107, 107, 0.4)',
-            textShadow:'1px 1px 0 #cc0000, 0 0 8px rgba(255, 107, 107, 0.8)'          }}
-        >
-          Log Out
-        </button>
+        {!isChatFullscreen && (
+          <button
+            onClick={handleLogout}
+            className="fixed top-5 right-5 px-6 font-pixel text-[10px] text-white bg-[#ff6b6b] border-[3px] border-[#ff4444] uppercase tracking-wide transition-all hover:bg-[#ff8888] active:translate-y-0.5 z-[10000] pixel-art h-[44px]"            style={{
+              boxShadow:'0 4px 0 #cc0000, 0 4px 10px rgba(0, 0, 0, 0.5), 0 0 15px rgba(255, 107, 107, 0.4)',
+              textShadow:'1px 1px 0 #cc0000, 0 0 8px rgba(255, 107, 107, 0.8)'            }}
+          >
+            Log Out
+          </button>
+        )}
 
         {!connected ? (
           /* Wallet Connect Screen */
@@ -597,6 +602,21 @@ export default function Home() {
                       [selectedAgent]: newThreadId
                     }));
                   }}
+                  onSelectAgent={(agent) => {
+                    playPhoneDialSound();
+                    setSelectedAgent(agent);
+                    const existingThreadId = agentThreads[agent];
+                    if (existingThreadId) {
+                      setThreadId(existingThreadId);
+                    } else {
+                      setThreadId(null);
+                    }
+                  }}
+                  isMuted={isMuted}
+                  onToggleMute={toggleMute}
+                  onShowLeaderboard={() => setShowLeaderboard(true)}
+                  onLogout={handleLogout}
+                  onFullscreenChange={setIsChatFullscreen}
                 />
               </div>
             )}

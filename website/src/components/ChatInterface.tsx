@@ -169,11 +169,23 @@ MessageItem.displayName = 'MessageItem';
 export default function ChatInterface({ 
   selectedAgent, 
   threadId, 
-  onThreadCreated 
+  onThreadCreated,
+  onSelectAgent,
+  isMuted,
+  onToggleMute,
+  onShowLeaderboard,
+  onLogout,
+  onFullscreenChange
 }: { 
   selectedAgent: string;
   threadId: string | null;
   onThreadCreated: (threadId: string) => void;
+  onSelectAgent?: (agentId: string) => void;
+  isMuted?: boolean;
+  onToggleMute?: () => void;
+  onShowLeaderboard?: () => void;
+  onLogout?: () => void;
+  onFullscreenChange?: (isFullscreen: boolean) => void;
 }) {
   const { publicKey, sendTransaction, signTransaction, connected, signMessage } = useWallet();
   const { connection } = useConnection();
@@ -210,6 +222,9 @@ export default function ChatInterface({
   // Milestone popup state (90+ points pardon)
   const [showMilestonePopup, setShowMilestonePopup] = useState(false);
   const [milestoneChecked, setMilestoneChecked] = useState(false);
+  
+  // Fullscreen state
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Toast helper function
   const showToast = useCallback((message: string, type: ToastType ='info') => {
@@ -2063,6 +2078,307 @@ export default function ChatInterface({
     }
   };
 
+  // All agents for fullscreen mode
+  const allAgents = [
+    { id: 'trump-donald', name: 'DONALD TRUMP', image: '/assets/trump-donald.jpg' },
+    { id: 'trump-barron', name: 'BARRON TRUMP', image: '/assets/trump-barron.jpg' },
+    { id: 'cz', name: 'CZ', image: '/assets/cz.jpg' },
+    { id: 'trump-donjr', name: 'DONALD JR', image: '/assets/trump-donjr.jpg' },
+    { id: 'trump-eric', name: 'ERIC TRUMP', image: '/assets/trump-eric.jpg' },
+    { id: 'trump-melania', name: 'MELANIA TRUMP', image: '/assets/trump-melania.jpg' },
+  ];
+
+  // Toggle fullscreen mode
+  const toggleFullscreen = () => {
+    const newFullscreenState = !isFullscreen;
+    setIsFullscreen(newFullscreenState);
+    onFullscreenChange?.(newFullscreenState);
+  };
+
+  // Render fullscreen mode
+  if (isFullscreen) {
+    return (
+      <>
+        {/* Toast Notifications */}
+        <ToastContainer>
+          {toasts.map((toast) => (
+            <Toast
+              key={toast.id}
+              id={toast.id}
+              message={toast.message}
+              type={toast.type}
+              onClose={removeToast}
+              duration={5000}
+            />
+          ))}
+        </ToastContainer>
+
+        <div className="fixed inset-0 z-[9999] bg-cover bg-center crt-effect vignette" style={{ backgroundImage: "url('/assets/jail_bg.jpg')" }}>
+          {/* Scanlines */}
+          <div className="fixed inset-0 scanlines pointer-events-none"/>
+
+          {/* Top Menu Bar */}
+          <div className="absolute top-0 left-0 right-0 h-20 bg-black/80 border-b-4 border-[#66b680] flex items-center justify-between px-5 z-[10000]">
+            {/* Logo - Left */}
+            <div className="flex items-center">
+              <img 
+                src="/assets/logo.png" 
+                alt="Logo" 
+                className="h-14 pixel-art"
+                style={{
+                  filter: 'drop-shadow(0 0 10px rgba(102, 182, 128, 0.6)) drop-shadow(0 0 20px rgba(102, 182, 128, 0.4))'
+                }}
+              />
+            </div>
+
+            {/* Agent Selector - Center */}
+            <div className="flex items-center gap-3">
+              {allAgents.map((agent) => {
+                const isSelected = selectedAgent === agent.id;
+                return (
+                  <button
+                    key={agent.id}
+                    onClick={() => onSelectAgent?.(agent.id)}
+                    className={`
+                      w-12 h-12 rounded-lg border-2 overflow-hidden transition-all
+                      ${isSelected 
+                        ? 'border-[#FFD700] shadow-[0_0_15px_rgba(255,215,0,0.6)]' 
+                        : 'border-white/30 hover:border-[#FFD700]/50'
+                      }
+                    `}
+                    title={agent.name}
+                  >
+                    <img
+                      src={agent.image}
+                      alt={agent.name}
+                      className={`w-full h-full object-cover pixel-art ${isSelected ? 'filter-none' : 'grayscale brightness-[0.5] hover:brightness-[0.7]'}`}
+                    />
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Icons - Right */}
+            <div className="flex items-center gap-3">
+              {/* Mute Button */}
+              <button
+                onClick={onToggleMute}
+                className="w-11 h-11 bg-black/60 border-2 border-white/30 rounded-md flex items-center justify-center transition-all hover:bg-black/80 hover:scale-105 active:scale-95"
+                aria-label="Mute/Unmute"
+              >
+                <div className={`w-6 h-6 relative ${isMuted ? 'opacity-50' : ''}`}>
+                  {isMuted ? (
+                    <>
+                      <div className="absolute inset-0 bg-gray-600" style={{
+                        background: 'linear-gradient(to right, transparent 0%, transparent 12.5%, #666 12.5%, #666 87.5%, transparent 87.5%)',
+                        backgroundSize: '100% 25%',
+                        backgroundPosition: '0 37.5%',
+                        backgroundRepeat: 'no-repeat'
+                      }} />
+                      <div className="absolute top-1/2 left-0 w-full h-0.5 bg-red-500 transform -translate-y-1/2 rotate-[-45deg]"/>
+                    </>
+                  ) : (
+                    <div className="w-full h-full" style={{
+                      background: `
+                        linear-gradient(to right, transparent 0%, transparent 12.5%, #ff6b6b 12.5%, #ff6b6b 87.5%, transparent 87.5%),
+                        linear-gradient(to right, transparent 0%, transparent 25%, #ff6b6b 25%, #ff6b6b 75%, transparent 75%),
+                        linear-gradient(to right, transparent 0%, transparent 37.5%, #ff6b6b 37.5%, #ff6b6b 62.5%, transparent 62.5%)
+                      `,
+                      backgroundSize: '100% 25%, 100% 25%, 100% 50%',
+                      backgroundPosition: '0 0, 0 25%, 0 50%',
+                      backgroundRepeat: 'no-repeat'
+                    }} />
+                  )}
+                </div>
+              </button>
+
+              {/* Leaderboard Button */}
+              <button
+                onClick={onShowLeaderboard}
+                className="w-11 h-11 bg-black/60 border-2 border-white/30 rounded-md flex items-center justify-center transition-all hover:bg-black/80 hover:scale-105 active:scale-95"
+                aria-label="Open Leaderboard"
+              >
+                <div className="w-6 h-6 relative" style={{
+                  background: `
+                    linear-gradient(to right, transparent 25%, #FFD700 25%, #FFD700 75%, transparent 75%),
+                    linear-gradient(to right, transparent 20%, #FFD700 20%, #FFD700 80%, transparent 80%),
+                    linear-gradient(to right, transparent 20%, #FFD700 20%, #FFD700 80%, transparent 80%),
+                    linear-gradient(to right, transparent 20%, #FFD700 20%, #FFD700 80%, transparent 80%),
+                    linear-gradient(to right, transparent 25%, #FFD700 25%, #FFD700 75%, transparent 75%),
+                    linear-gradient(to right, transparent 40%, #FFD700 40%, #FFD700 60%, transparent 60%),
+                    linear-gradient(to right, transparent 20%, #FFD700 20%, #FFD700 80%, transparent 80%)
+                  `,
+                  backgroundSize: '100% 12.5%, 100% 12.5%, 100% 12.5%, 100% 12.5%, 100% 12.5%, 100% 12.5%, 100% 12.5%',
+                  backgroundPosition: '0 0, 0 12.5%, 0 25%, 0 37.5%, 0 50%, 0 62.5%, 0 75%',
+                  backgroundRepeat: 'no-repeat'
+                }} />
+              </button>
+
+              {/* Sign Out Button */}
+              <button
+                onClick={onLogout}
+                className="w-11 h-11 bg-[#ff6b6b] border-2 border-[#ff4444] rounded-md flex items-center justify-center transition-all hover:bg-[#ff8888] hover:scale-105 active:scale-95 pixel-art"
+                style={{
+                  boxShadow: '0 4px 0 #cc0000, 0 4px 10px rgba(0, 0, 0, 0.5), 0 0 15px rgba(255, 107, 107, 0.4)'
+                }}
+                aria-label="Log Out"
+              >
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+              </button>
+
+              {/* Exit Fullscreen Button */}
+              <button
+                onClick={toggleFullscreen}
+                className="w-11 h-11 bg-black/60 border-2 border-white/30 rounded-md flex items-center justify-center transition-all hover:bg-black/80 hover:scale-105 active:scale-95"
+                aria-label="Exit Fullscreen"
+              >
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Chat Area */}
+          <div className="absolute top-20 left-0 right-0 bottom-0 flex items-center justify-center p-8">
+            <div className="w-full max-w-[1400px] h-full border-[3px] border-white/30 rounded-xl bg-black/80 backdrop-blur-sm pixel-art flex flex-col"
+              style={{
+                boxShadow: '0 0 20px rgba(102, 182, 128, 0.3), inset 0 0 30px rgba(0, 0, 0, 0.5)'
+              }}
+            >
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                {dedupedMessages.map((message: Message) => (
+                  <MessageItem 
+                    key={message.id} 
+                    message={message} 
+                    formatAgentName={formatAgentName}
+                    stripDebugMarkers={stripDebugMarkers}
+                  />
+                ))}
+                <div ref={messagesEndRef} />
+              </div>
+
+              {/* Input */}
+              <div className="p-3 border-t border-white/20">
+                {!connected && (
+                  <div className="mb-2 p-2 bg-yellow-900/20 border border-yellow-500/50 rounded font-pixel text-yellow-400 text-[9px]">
+                    Connect wallet for payments
+                  </div>
+                )}
+                
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && !loading && sendUserMessage()}
+                    placeholder={loading ? "⏳ Agent is thinking..." : "Message..."}
+                    disabled={loading || !sessionId || !threadId}
+                    className="flex-1 bg-black/50 border-2 border-white/20 rounded px-3 py-2 text-white font-pixel text-[15px] placeholder-gray-500 focus:outline-none focus:border-[#66b680] disabled:opacity-50"
+                  />
+                  <button
+                    onClick={sendUserMessage}
+                    disabled={loading || !input.trim() || !sessionId || !threadId}
+                    className="bg-[#66b680] hover:bg-[#7ac694] text-white font-pixel text-[15px] py-2 px-4 border-2 border-[#4a8c60] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 pixel-art"
+                    style={{
+                      boxShadow: '0 3px 0 #3a6c48',
+                      textShadow: '1px 1px 0 #3a6c48'
+                    }}
+                  >
+                    {loading ? (
+                      <Loader2 className="w-4 h-4 animate-spin"/>
+                    ) : (
+                      <Send className="w-4 h-4"/>
+                    )}
+                    <span>SEND</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Presidential Pardon Milestone Popup */}
+        {showMilestonePopup && (
+          <div className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
+            {/* Official Document Style */}
+            <div className="relative bg-[#f5f0e1] border-8 border-double border-[#8B7355] rounded-sm p-8 max-w-xl mx-4 text-center shadow-[0_0_50px_rgba(0,0,0,0.5)]">
+              
+              {/* Presidential Seal */}
+              <div className="text-6xl mb-2">🦅</div>
+              
+              {/* Official Header */}
+              <div className="border-b-2 border-[#8B7355] pb-4 mb-6">
+                <h1 className="font-serif text-[12px] tracking-[0.3em] text-[#1a1a2e] uppercase mb-1">
+                  The White House
+                </h1>
+                <h2 className="font-serif text-[10px] tracking-[0.2em] text-[#666] uppercase">
+                  Washington, D.C.
+                </h2>
+              </div>
+              
+              {/* Document Title */}
+              <h2 
+                className="font-serif text-[24px] text-[#1a1a2e] mb-6 font-bold tracking-wide"
+                style={{ fontVariant: 'small-caps' }}
+              >
+                Executive Grant of Clemency
+              </h2>
+              
+              {/* Letter Body */}
+              <div className="text-left font-serif text-[14px] text-[#333] leading-relaxed mb-6 space-y-4">
+                <p>
+                  To whom it may concern,
+                </p>
+                <p>
+                  After careful consideration of your case and the merits presented before this office, 
+                  I, <span className="font-bold">Donald J. Trump</span>, President of the United States 
+                  of America, do hereby grant you a <span className="font-bold text-[#8B4513]">Full and Unconditional Pardon</span>.
+                </p>
+                <p>
+                  Your sentence has been commuted effective immediately. In recognition of your time served 
+                  and the injustices you have endured, you shall receive appropriate compensation as 
+                  determined by the Treasury Department.
+                </p>
+                <p>
+                  May this pardon restore to you the rights and dignity of a free citizen.
+                </p>
+              </div>
+              
+              {/* Signature */}
+              <div className="text-right mt-8 mb-6">
+                <div className="inline-block text-left">
+                  <p className="text-[28px] text-[#1a1a2e] mb-1" style={{ fontFamily: 'cursive' }}>
+                    Donald J. Trump
+                  </p>
+                  <p className="font-serif text-[11px] text-[#666] tracking-wide uppercase">
+                    45th & 47th President of the United States
+                  </p>
+                </div>
+              </div>
+              
+              {/* Official Seal Watermark Effect */}
+              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-[150px] opacity-[0.03] pointer-events-none">
+                🦅
+              </div>
+              
+              {/* Dismiss Button */}
+              <button
+                onClick={handleMilestonePopupClose}
+                className="font-serif text-[14px] px-8 py-3 bg-[#1a1a2e] text-[#f5f0e1] rounded hover:bg-[#2a2a4e] transition-colors tracking-wide uppercase"
+              >
+                I Accept This Pardon
+              </button>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
+
   return (
     <>
       {/* Toast Notifications */}
@@ -2082,6 +2398,18 @@ export default function ChatInterface({
       <div className="flex w-full max-h-[400px] md:max-h-[450px] border-[3px] border-white/30 rounded-xl bg-black/80 backdrop-blur-sm relative mt-6 pixel-art"        style={{
           boxShadow:'0 0 20px rgba(102, 182, 128, 0.3), inset 0 0 30px rgba(0, 0, 0, 0.5)'        }}
       >
+        {/* Expand Button - Upper Right Corner */}
+        <button
+          onClick={toggleFullscreen}
+          className="absolute top-2 right-2 w-8 h-8 bg-black/60 border-2 border-white/30 rounded-md flex items-center justify-center transition-all hover:bg-black/80 hover:scale-110 active:scale-95 z-10"
+          aria-label="Expand to Fullscreen"
+          title="Expand to Fullscreen"
+        >
+          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+          </svg>
+        </button>
+
         {/* Main Chat Area */}
         <div className="flex flex-col flex-1 min-w-0">
         {/* Messages */}
