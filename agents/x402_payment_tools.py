@@ -18,7 +18,7 @@ import certifi
 from contextvars import ContextVar
 from solana.rpc.async_api import AsyncClient
 from solders.signature import Signature
-from x402_solana_adapter import get_x402_adapter
+from x402_solana_adapter import get_x402_adapter, PAYMENT_TOKEN_NAME
 from x402_solana_payload import (
     create_x402_solana_payment_payload,
     get_recent_blockhash_for_network,
@@ -262,7 +262,6 @@ async def request_premium_service(
     # Handle variable-amount services (new dict format with min_amount)
     if isinstance(service_config, dict) and service_config.get("type") == "variable":
         min_amount = service_config.get("min_amount", 0.001)
-        from x402_solana_adapter import PAYMENT_TOKEN_NAME
         currency = service_config.get("currency", PAYMENT_TOKEN_NAME)
         
         if not custom_amount or custom_amount <= 0:
