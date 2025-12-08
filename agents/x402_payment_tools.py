@@ -15,6 +15,7 @@ import aiohttp
 import httpx
 import ssl
 import certifi
+from contextvars import ContextVar
 from solana.rpc.async_api import AsyncClient
 from solders.signature import Signature
 from x402_solana_adapter import get_x402_adapter
@@ -23,6 +24,18 @@ from x402_solana_payload import (
     get_recent_blockhash_for_network,
     create_payment_requirements
 )
+
+# Context variable to pass thread ID to tools
+# This allows tools to access the current thread context for wallet resolution
+_current_thread_id: ContextVar[Optional[str]] = ContextVar('current_thread_id', default=None)
+
+def set_thread_context(thread_id: Optional[str]):
+    """Set the current thread ID context for tools to access"""
+    _current_thread_id.set(thread_id)
+
+def get_thread_context() -> Optional[str]:
+    """Get the current thread ID from context"""
+    return _current_thread_id.get()
 
 # Load agent wallet addresses from environment variables
 def load_agent_wallets(suppress_warning: bool = False) -> Dict[str, str]:
@@ -202,21 +215,29 @@ async def request_premium_service(
     if from_agent == "sbf":
         backend_url = get_backend_url()
         try:
-            # Get user wallet from context (should be passed in message metadata)
-            # For now, we'll extract it from the request context
+            # Get thread ID from context - backend will use this to resolve wallet
+            thread_id = get_thread_context()
+            
             agent_api_key = os.getenv('AGENT_API_KEY') or os.getenv('CORAL_AGENT_API_KEY')
             headers = {'Content-Type': 'application/json'}
             if agent_api_key:
                 headers['X-Agent-API-Key'] = agent_api_key
             
+            # Build request body with thread ID for wallet resolution
+            request_body = {
+                "userWallet": from_agent,  # Backend will resolve "sbf" using thread_id
+                "serviceType": service_type,
+                "agentId": to_agent,
+            }
+            
+            # Pass thread ID if available - backend will use it to lookup wallet
+            if thread_id:
+                request_body["coralThreadId"] = thread_id
+            
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     f"{backend_url}/api/premium-services/check-availability",
-                    json={
-                        "userWallet": from_agent,  # Will be replaced with actual wallet in backend
-                        "serviceType": service_type,
-                        "agentId": to_agent,
-                    },
+                    json=request_body,
                     headers=headers,
                     timeout=aiohttp.ClientTimeout(total=5)
                 ) as resp:

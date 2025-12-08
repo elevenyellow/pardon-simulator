@@ -1000,6 +1000,9 @@ DO NOT just acknowledge payment - DELIVER THE SERVICE NOW!
                 is_user_message = False
             
             if user_wallet:
+                # Set thread context for tools to access
+                from x402_payment_tools import set_thread_context
+                set_thread_context(thread_id)
                 # Clean message content
                 clean_content = re.sub(r'\[USER_WALLET:[1-9A-HJ-NP-Za-km-z]{32,44}]\s*', '', message_content)
                 mentions_data["messages"][0]["content"] = clean_content
@@ -1492,6 +1495,10 @@ Only after payment verified should you call contact_agent()!
             if not user_wallet:
                 print(f"[{pool_name}] Message from 'sbf' missing USER_WALLET marker")
                 return
+            
+            # Set thread context for tools to access
+            from x402_payment_tools import set_thread_context
+            set_thread_context(thread_id)
             
             # Clean message content
             clean_content = re.sub(r'\[USER_WALLET:[1-9A-HJ-NP-Za-km-z]{32,44}]\s*', '', message_content)

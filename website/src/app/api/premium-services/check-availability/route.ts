@@ -16,6 +16,7 @@ interface AvailabilityRequest {
   serviceType: string;
   agentId: string;
   coralSessionId?: string;
+  coralThreadId?: string;
 }
 
 export async function POST(request: NextRequest) {
@@ -53,7 +54,43 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    const { userWallet, serviceType, agentId, coralSessionId } = body;
+    let { userWallet, serviceType, agentId, coralSessionId, coralThreadId } = body;
+    
+    // SECURITY: Handle "sbf" by resolving to actual wallet from thread/session
+    // Agents pass "sbf" (the player character ID), but we need the real wallet
+    if (userWallet === 'sbf') {
+      let resolvedWallet: string | null = null;
+      
+      // Try to resolve from thread ID first (most reliable)
+      if (coralThreadId) {
+        resolvedWallet = await scoringRepository.getWalletFromThread(coralThreadId);
+        if (resolvedWallet) {
+          console.log(`[Premium Service] Resolved "sbf" to wallet via thread: ${resolvedWallet.substring(0, 8)}...`);
+          userWallet = resolvedWallet;
+        }
+      }
+      
+      // Fallback: try session ID
+      if (!resolvedWallet && coralSessionId) {
+        resolvedWallet = await scoringRepository.getWalletFromSession(coralSessionId);
+        if (resolvedWallet) {
+          console.log(`[Premium Service] Resolved "sbf" to wallet via session: ${resolvedWallet.substring(0, 8)}...`);
+          userWallet = resolvedWallet;
+        }
+      }
+      
+      // If still unresolved, return error
+      if (!resolvedWallet) {
+        console.error('[Premium Service] Cannot resolve "sbf" - no thread or session ID provided');
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Cannot verify user identity - missing context',
+          },
+          { status: 400 }
+        );
+      }
+    }
     
     // Get current week ID
     const weekId = getCurrentWeekId();
