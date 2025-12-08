@@ -8,6 +8,7 @@ Configure CDP_API_KEY_ID and CDP_API_KEY_SECRET for full functionality.
 import os
 import httpx
 from typing import Dict, Optional
+from x402_solana_adapter import PAYMENT_TOKEN_NAME
 
 # Try to import CDP SDK (required for x402 compliance)
 try:
@@ -63,7 +64,7 @@ class X402CDPClient:
                         "expectedFrom": expected_from,
                         "expectedTo": expected_to,
                         "expectedAmount": expected_amount,
-                        "expectedCurrency": "USDC"
+                        "expectedCurrency": PAYMENT_TOKEN_NAME
                     }
                 )
                 
@@ -128,7 +129,7 @@ class X402CDPClient:
                         },
                         "requirements": {
                             "network": "solana",
-                            "currency": "USDC",
+                            "currency": PAYMENT_TOKEN_NAME,
                             "recipient": to_address,
                             "amount": amount_usdc,
                             "paymentId": f"payment-{int(os.time.time())}"

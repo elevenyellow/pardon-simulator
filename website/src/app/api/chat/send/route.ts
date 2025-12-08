@@ -826,7 +826,7 @@ async function handlePOST(request: NextRequest) {
                     toWallet: to,
                     toAgent: agentId,
                     amount: paymentAmount,
-                    currency:'USDC',
+                    currency: PAYMENT_TOKEN_NAME,
                     signature,
                     serviceType: paymentServiceType,
                     verified: true,
@@ -1070,7 +1070,7 @@ async function handlePOST(request: NextRequest) {
           // Extract service info for logging and error message
           let serviceType = 'premium service';
           let paymentAmount = 0;
-          let paymentCurrency = 'USDC';
+          let paymentCurrency = PAYMENT_TOKEN_NAME;
           
           if (paymentData) {
             try {
@@ -1168,7 +1168,7 @@ async function handlePOST(request: NextRequest) {
       // Extract service info from the payment data header (already parsed earlier)
       let serviceType = 'unknown';
       let paymentAmount = 0;
-      let paymentCurrency = 'USDC';
+      let paymentCurrency = PAYMENT_TOKEN_NAME;
       let paymentId = 'unknown';
       
       if (paymentData) {

@@ -32,7 +32,7 @@ PAYMENT_TOKEN_DECIMALS = 6
 
 # Payment token name (for display)
 # Update this value when switching to production token (e.g., 'PARDON')
-PAYMENT_TOKEN_NAME = "TOKEN"
+PAYMENT_TOKEN_NAME = "FARTCOIN"
 
 # =============================================================================
 # DO NOT CHANGE BELOW
@@ -242,10 +242,10 @@ class X402SolanaAdapter:
             "from": from_address,
             "to": to_address,
             "amount": {
-                "value": str(int(amount_usdc * (10 ** USDC_DECIMALS))),
-                "currency": "USDC",
-                "decimals": USDC_DECIMALS,
-                "mint": self.usdc_mint
+                "value": str(int(amount_usdc * (10 ** PAYMENT_TOKEN_DECIMALS))),
+                "currency": PAYMENT_TOKEN_NAME,
+                "decimals": PAYMENT_TOKEN_DECIMALS,
+                "mint": self.payment_token_mint
             },
             "verified_at": int(time.time()),
             "service_delivered": True,

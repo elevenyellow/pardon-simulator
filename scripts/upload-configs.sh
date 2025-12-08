@@ -202,8 +202,26 @@ if [ -n "$MOST_RECENT_BACKUP" ] && [ -d "backups/${MOST_RECENT_BACKUP}" ]; then
     for file in "${CHANGED_FILES[@]}"; do
       # Remove " (new)" suffix if present
       clean_file="${file% (new)}"
-      backup_file="backups/${MOST_RECENT_BACKUP}/${clean_file#agents/}"
       current_file="${clean_file}"
+      
+      # Construct backup file path based on file type
+      # Check specific files first before general patterns
+      if [[ "$clean_file" == "agents/premium_services.json" ]]; then
+        # Root premium services: agents/premium_services.json -> backups/TIMESTAMP/premium_services.json
+        backup_file="backups/${MOST_RECENT_BACKUP}/premium_services.json"
+      elif [[ "$clean_file" == agents/shared/* ]]; then
+        # Shared files: agents/shared/FILE -> backups/TIMESTAMP/shared/FILE
+        backup_file="backups/${MOST_RECENT_BACKUP}/shared/${clean_file#agents/shared/}"
+      elif [[ "$clean_file" == agents/* ]]; then
+        # Agent files: agents/AGENT/FILE -> backups/TIMESTAMP/agents/AGENT/FILE
+        backup_file="backups/${MOST_RECENT_BACKUP}/${clean_file}"
+      elif [[ "$clean_file" == website/src/lib/premium-services/service-limits.json ]]; then
+        # Service limits: website/.../ -> backups/TIMESTAMP/service-limits.json
+        backup_file="backups/${MOST_RECENT_BACKUP}/service-limits.json"
+      else
+        # Other root files
+        backup_file="backups/${MOST_RECENT_BACKUP}/${clean_file##*/}"
+      fi
       
       if [[ "$file" == *"(new)"* ]]; then
         echo "📄 ${clean_file} (NEW FILE)"
@@ -235,6 +253,8 @@ if [ -n "$MOST_RECENT_BACKUP" ] && [ -d "backups/${MOST_RECENT_BACKUP}" ]; then
               echo "$line"
             fi
           done
+        else
+          echo "  ⚠️  Could not find backup file: ${backup_file}"
         fi
       fi
       echo ""

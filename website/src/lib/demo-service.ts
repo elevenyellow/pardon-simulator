@@ -3,6 +3,8 @@
  * Provides scripted conversations and mock payment functionality for demo purposes
  */
 
+import { PAYMENT_TOKEN_NAME } from'@/config/tokens';
+
 interface DemoMessage {
   id: string;
   content: string;
@@ -123,7 +125,7 @@ export function createMockX402Payload(
     from: userWallet,
     to: paymentRequest.recipient_address,
     amount: paymentRequest.amount_usdc,
-    currency:'USDC',
+    currency: PAYMENT_TOKEN_NAME,
     timestamp: Date.now(),
     message:`Payment for ${paymentRequest.reason}`  };
 }

@@ -24,7 +24,7 @@ award_points(
 IMPORTANT NOTES:
 - Premium services: When delivering a premium service, ALWAYS include premium_service_amount parameter:
   award_points(user_wallet=senderId, points=2, quality_multiplier=2.0, 
-               premium_service_amount=0.0005, reason="...", agent_id="{agent_id}")
+               premium_service_amount=0.01, reason="...", agent_id="{agent_id}")
 - Speed bonus: Backend auto-adds multiplier for faster play
 - INCLUDE the returned score_update JSON in your response!
 

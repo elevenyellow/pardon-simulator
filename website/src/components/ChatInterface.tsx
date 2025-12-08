@@ -394,8 +394,6 @@ export default function ChatInterface({
           recipient: parsed.recipient?.id || 'treasury',
           recipient_address: parsed.recipient_address || parsed.recipient?.address,
           amount: tokenAmount,
-          amount_sol: 0,  // Legacy
-          amount_usdc: 0,  // Legacy
           service_type: service_type,
           reason: parsed.reason || 'Premium service',
           timestamp: parsed.timestamp || Date.now(),

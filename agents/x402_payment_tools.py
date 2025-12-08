@@ -241,7 +241,8 @@ async def request_premium_service(
     # Handle variable-amount services (new dict format with min_amount)
     if isinstance(service_config, dict) and service_config.get("type") == "variable":
         min_amount = service_config.get("min_amount", 0.001)
-        currency = service_config.get("currency", "USDC")
+        from x402_solana_adapter import PAYMENT_TOKEN_NAME
+        currency = service_config.get("currency", PAYMENT_TOKEN_NAME)
         
         if not custom_amount or custom_amount <= 0:
             return f"""❌ Service '{service_type}' requires a custom amount.
@@ -1018,7 +1019,7 @@ async def submit_payment_via_x402_facilitator(
             "x402_scan_url": result.get("x402ScanUrl"),
             "solana_explorer": result.get("solanaExplorer"),
             "amount": amount_usdc,
-            "currency": "USDC"
+            "currency": PAYMENT_TOKEN_NAME
         }
     
     except httpx.TimeoutException:
@@ -1782,7 +1783,7 @@ Your signature contains invalid characters. Please ask the user to double-check 
     print(f"Transaction: {transaction_hash[:16]}...{transaction_hash[-16:]}")
     print(f"Expected From: {expected_from[:8]}...{expected_from[-8:]}")
     print(f"Expected To: White House Treasury")
-    print(f"Expected Amount: {expected_amount_usdc} USDC")
+    print(f"Expected Amount: {expected_amount_usdc} {PAYMENT_TOKEN_NAME}")
     print(f"Service: {service_type}")
     print(f"To Agent: {to_agent}")
     print(f"")
@@ -1799,7 +1800,7 @@ Your signature contains invalid characters. Please ask the user to double-check 
                     "expectedFrom": expected_from,
                     "expectedTo": WHITE_HOUSE_WALLET,
                     "expectedAmount": expected_amount_usdc,
-                    "expectedCurrency": "USDC",
+                    "expectedCurrency": PAYMENT_TOKEN_NAME,
                 }
             )
             
@@ -1837,12 +1838,12 @@ Error: {error}
 Expected:
   From: {details.get('from', 'N/A')[:8]}...
   To: {details.get('to', 'N/A')[:8]}...
-  Amount: {details.get('amount', 'N/A')} {details.get('currency', 'USDC')}
+  Amount: {details.get('amount', 'N/A')} {details.get('currency', PAYMENT_TOKEN_NAME)}
 
 Actual:
   From: {actual.get('from', 'N/A')[:8]}...
   To: {actual.get('to', 'N/A')[:8]}...
-  Amount: {actual.get('amount', 'N/A')} {actual.get('currency', 'USDC')}
+  Amount: {actual.get('amount', 'N/A')} {actual.get('currency', PAYMENT_TOKEN_NAME)}
 
 Please ensure you sent the correct payment."""
         

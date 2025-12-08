@@ -9,8 +9,9 @@
 
 import { Connection, PublicKey, Transaction, SystemProgram } from'@solana/web3.js';
 import { getAssociatedTokenAddress, createTransferInstruction, TOKEN_PROGRAM_ID } from'@solana/spl-token';
+import { PAYMENT_TOKEN_NAME, PAYMENT_TOKEN_MINT, PAYMENT_TOKEN_DECIMALS } from'@/config/tokens';
 
-// USDC Mint Address on Solana Mainnet
+// USDC Mint Address on Solana Mainnet (kept for backward compatibility)
 const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
 const USDC_DECIMALS = 6;
 
@@ -141,7 +142,7 @@ export class X402Facilitator {
           from: payload.from || transaction.feePayer?.toString() ||'',
           to: requirements.recipient,
           amount: requirements.amount,
-          currency:'USDC',
+          currency: PAYMENT_TOKEN_NAME,
         },
       };
 
@@ -237,7 +238,7 @@ export class X402Facilitator {
     network: string ='solana'  ): X402PaymentRequirements {
     return {
       network,
-      currency:'USDC',
+      currency: PAYMENT_TOKEN_NAME,
       recipient,
       amount,
       paymentId,
@@ -267,7 +268,7 @@ export class X402Facilitator {
       amount_usdc: amount,
       reason: reason ||'Payment required for service',
       network,
-      currency:'USDC',
+      currency: PAYMENT_TOKEN_NAME,
       expires_at: Date.now() + 600000, // 10 minutes
     };
   }
