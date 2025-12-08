@@ -38,8 +38,9 @@ export interface PaymentRequest {
   http_status: 402;  //  HTTP 402 Payment Required (x402 protocol)
   recipient: string;
   recipient_address: string;
-  amount_sol: number;
-  amount_usdc?: number;  // USDC amount (optional, fallback to amount_sol)
+  amount: number;  // Payment token amount (generic)
+  amount_sol?: number;  // Legacy field
+  amount_usdc?: number;  // Legacy field
   reason: string;
   service_type?: string;
   payment_id: string;
@@ -228,13 +229,14 @@ class APIClient {
       });
       console.log('Payment details:', data.payment);
       
-      // Backend sends PaymentRequest with: recipient_address, amount_usdc/amount_sol, payment_id, service_type
+      // Backend sends PaymentRequest with: recipient_address, amount, payment_id, service_type
       const backendPayment = data.payment;
       const paymentRequest: PaymentRequest = {
         type: backendPayment.type || 'x402_payment_required',
         http_status: 402,
         recipient: backendPayment.recipient || 'treasury',
         recipient_address: backendPayment.recipient_address,
+        amount: backendPayment.amount || backendPayment.amount_usdc || backendPayment.amount_sol || 0.01,
         amount_sol: backendPayment.amount_sol || 0,
         amount_usdc: backendPayment.amount_usdc || 0,
         reason: backendPayment.reason || 'Premium service',

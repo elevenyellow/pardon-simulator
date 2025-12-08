@@ -28,8 +28,12 @@ if (!SOLANA_RPC_URL) {
   throw new Error('SOLANA_RPC_URL environment variable is required');
 }
 
-// USDC mint address on Solana mainnet
+import { PAYMENT_TOKEN_MINT } from '@/config/tokens';
+
+// Token mint addresses on Solana mainnet
 const USDC_MINT ='EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+// Payment token mint from centralized config
+const PAYMENT_MINT = PAYMENT_TOKEN_MINT;
 
 interface VerificationRequest {
   transaction: string;
@@ -204,6 +208,7 @@ export async function POST(request: NextRequest) {
 
 /**
  * Extract transaction details from a Solana transaction
+ * All payments use the configured payment token
  */
 async function extractTransactionDetails(
   tx: any,
@@ -213,17 +218,8 @@ async function extractTransactionDetails(
   try {
     const accountKeys = tx.transaction.message.accountKeys;
     
-    // For USDC (SPL Token) transfers
-    if (expectedCurrency ==='USDC') {
-      return await extractUSDCTransferDetails(tx, connection, accountKeys);
-    }
-    
-    // For native SOL transfers
-    if (expectedCurrency ==='SOL') {
-      return await extractSOLTransferDetails(tx, accountKeys);
-    }
-
-    return null;
+    // All payments use the payment token (SPL Token)
+    return await extractPaymentTokenTransferDetails(tx, connection, accountKeys);
   } catch (error) {
     console.error('Error extracting transaction details:', error);
     return null;
@@ -293,6 +289,76 @@ async function extractUSDCTransferDetails(
 
   } catch (error) {
     console.error('Error extracting USDC transfer details:', error);
+    return null;
+  }
+}
+
+/**
+ * Extract payment token transfer details from SPL token transfer
+ * Uses centralized config for token address
+ */
+async function extractPaymentTokenTransferDetails(
+  tx: any,
+  connection: Connection,
+  accountKeys: any[]
+): Promise<TransactionDetails | null> {
+  try {
+    const { PAYMENT_TOKEN_NAME } = await import('@/config/tokens');
+    
+    // Look for token transfer in the transaction
+    const preTokenBalances = tx.meta?.preTokenBalances || [];
+    const postTokenBalances = tx.meta?.postTokenBalances || [];
+
+    // Find the payment token transfers
+    const tokenTransfers = [];
+    
+    for (let i = 0; i < preTokenBalances.length; i++) {
+      const preBalance = preTokenBalances[i];
+      const postBalance = postTokenBalances.find((p: any) => p.accountIndex === preBalance.accountIndex);
+      
+      if (!postBalance) continue;
+      
+      // Check if this is the payment token
+      if (preBalance.mint !== PAYMENT_MINT) continue;
+      
+      const preAmount = parseFloat(preBalance.uiTokenAmount.uiAmount ||'0');
+      const postAmount = parseFloat(postBalance.uiTokenAmount.uiAmount ||'0');
+      const diff = postAmount - preAmount;
+      
+      if (diff !== 0) {
+        // Get the owner of this token account
+        const tokenAccountPubkey = accountKeys[preBalance.accountIndex];
+        const owner = preBalance.owner;
+        
+        tokenTransfers.push({
+          accountIndex: preBalance.accountIndex,
+          owner,
+          diff,
+          tokenAccount: tokenAccountPubkey.toString(),
+        });
+      }
+    }
+
+    // Find sender (negative diff) and receiver (positive diff)
+    const sender = tokenTransfers.find(t => t.diff < 0);
+    const receiver = tokenTransfers.find(t => t.diff > 0);
+
+    if (!sender || !receiver) {
+      console.error('Could not identify sender and receiver in payment token transfer');
+      return null;
+    }
+
+    return {
+      from: sender.owner,
+      to: receiver.owner,
+      amount: Math.abs(sender.diff),
+      currency: PAYMENT_TOKEN_NAME,
+      timestamp: tx.blockTime || 0,
+      confirmed: true,
+    };
+
+  } catch (error) {
+    console.error('Error extracting payment token transfer details:', error);
     return null;
   }
 }

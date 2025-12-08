@@ -16,17 +16,19 @@
 import { NextResponse } from'next/server';
 import type { NextRequest } from'next/server';
 
+import { PAYMENT_TOKEN_NAME, MESSAGE_FEE_CONFIG } from '@/config/tokens';
+
 // Payment configuration
 const PAYMENT_CONFIG = {
   network:'solana',
-  currency:'USDC',  // CDP supports SPL tokens via x402 exact scheme
+  currency: PAYMENT_TOKEN_NAME,  // Payment token for all payments
   receivingAddress: process.env.WALLET_WHITE_HOUSE ||'',
   facilitatorUrl:'https://api.cdp.coinbase.com',  // Coinbase CDP facilitator
 };
 
 // Route pricing configuration
 const ROUTE_PRICING: Record<string, number> = {
-'/api/chat/send': 0.01, // $0.01 USDC per message (testing price)
+'/api/chat/send': MESSAGE_FEE_CONFIG.amount, // Message fee amount from config
 };
 
 /**
@@ -59,7 +61,8 @@ function create402Response(amount: number, paymentId: string): NextResponse {
         type: 'x402_payment_required',
         recipient: 'white-house-treasury',
         recipient_address: PAYMENT_CONFIG.receivingAddress,
-        amount_usdc: amount,
+        amount: amount,  // Payment token amount
+        amount_usdc: 0,
         amount_sol: 0,
         reason: 'Message sending fee',
         service_type: 'message_fee',
@@ -94,9 +97,8 @@ async function verifyPayment(paymentPayload: string, amount: number, recipient: 
     // Parse payment payload from client
     const payload = JSON.parse(paymentPayload);
     
-    // Convert USDC to micro-USDC (6 decimals) as string
-    const microUsdc = Math.floor(amount * 1_000_000);
-    const usdcMint ='EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'; // USDC mainnet
+    // Convert payment token to micro units
+    const microAmount = Math.floor(amount * Math.pow(10, MESSAGE_FEE_CONFIG.decimals));
     
     // Call our INTERNAL backend API (which uses Coinbase CDP facilitator)
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ||'https://pardonsimulator.com';
@@ -111,8 +113,8 @@ async function verifyPayment(paymentPayload: string, amount: number, recipient: 
           network:'solana',
           scheme:'exact',
           payTo: recipient,
-          maxAmountRequired: microUsdc.toString(),
-          asset: usdcMint,
+          maxAmountRequired: microAmount.toString(),
+          asset: MESSAGE_FEE_CONFIG.mint,  // Payment token mint from config
           resource:'pardon-simulator://api_access',
         }
       }),

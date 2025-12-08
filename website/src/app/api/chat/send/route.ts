@@ -94,6 +94,9 @@ function validatePromptStrict(content: string, isPaymentConfirmation: boolean = 
 }
 
 async function handlePOST(request: NextRequest) {
+  // Import payment token config at top of function for use throughout
+  const { PAYMENT_TOKEN_NAME, PAYMENT_TOKEN_DECIMALS, PAYMENT_TOKEN_MINT } = await import('@/config/tokens');
+  
   try {
     const rawBody = await request.json();
     
@@ -254,11 +257,17 @@ async function handlePOST(request: NextRequest) {
           }
         };
         
-        // Extract the actual payment amount from the frontend payload
-        const amountUsdc = frontendPayload.amount_usdc || 0.05; // Default to message fee if not specified
-        const amountMicroUsdc = Math.round(amountUsdc * 1_000_000).toString();
+        // Extract the actual payment amount and currency from the frontend payload
+        // All payments use the configured payment token now
+        const currency = frontendPayload.currency || PAYMENT_TOKEN_NAME;
+        const amount = frontendPayload.amount || frontendPayload.amount_usdc || frontendPayload.amount_sol || 0.01;
+        const decimals = PAYMENT_TOKEN_DECIMALS;
+        const microAmount = Math.round(amount * Math.pow(10, decimals)).toString();
         
-        console.log(`[CDP] Payment amount: ${amountUsdc} USDC (${amountMicroUsdc} micro-USDC)`);
+        console.log(`[CDP] Payment amount: ${amount} ${currency} (${microAmount} micro-units)`);
+        
+        // Keep legacy variable for backward compatibility
+        const amountUsdc = frontendPayload.amount_usdc || amount;
         
         // Extract service metadata for x402 transparency
         const serviceType = frontendPayload.service_type;
@@ -266,9 +275,9 @@ async function handlePOST(request: NextRequest) {
         // PAYMENT AMOUNT VALIDATION - Verify amount matches expected price
         // This prevents wrong transactions due to agent bugs, config mismatches, or manipulation
         if (isPremiumServicePayment && serviceType && serviceType !== 'message_fee') {
-          console.log(`[Payment Validation] Validating ${serviceType}: $${amountUsdc}`);
+          console.log(`[Payment Validation] Validating ${serviceType}: ${amount} ${currency}`);
           
-          const validation = validatePaymentAmount(serviceType, amountUsdc);
+          const validation = validatePaymentAmount(serviceType, amount);
           
           if (!validation.valid) {
             console.error(`[Payment Validation] ❌ FAILED: ${validation.error}`);
@@ -280,8 +289,8 @@ async function handlePOST(request: NextRequest) {
                   fromWallet: userWallet,
                   toWallet: process.env.WALLET_WHITE_HOUSE || '',
                   toAgent: agentId,
-                  amount: amountUsdc,
-                  currency: 'USDC',
+                  amount: amount,
+                  currency: currency,
                   signature: `validation-failed-${Date.now()}-${Math.random().toString(36).substring(7)}`,
                   serviceType: `${serviceType}_validation_failed`,
                   verified: false,
@@ -330,15 +339,19 @@ async function handlePOST(request: NextRequest) {
         }
         
         const to = process.env.WALLET_WHITE_HOUSE ||'';
-        const x402Requirements = {
+        
+        // All payments use the configured payment token
+        const assetAddress = PAYMENT_TOKEN_MINT;
+        
+        const x402Requirements: any = {
           network:'solana',
           scheme:'exact',
           payTo: to,
-          maxAmountRequired: amountMicroUsdc,
-          asset:'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
-          resource:`${process.env.NEXT_PUBLIC_BASE_URL ||'https://pardonsimulator.com'}/api/chat/send`,
+          maxAmountRequired: microAmount,
+          asset: assetAddress,  // Payment token mint from config
+          resource: `${process.env.NEXT_PUBLIC_BASE_URL ||'https://pardonsimulator.com'}/api/chat/send`,
           description: description,
-          mimeType:'application/json',
+          mimeType: 'application/json',
           outputSchema: {
             data:'string'
           },
@@ -464,8 +477,8 @@ async function handlePOST(request: NextRequest) {
                       fromWallet: userWallet,
                       toWallet: process.env.WALLET_WHITE_HOUSE || '',
                       toAgent: agentId,
-                      amount: amountUsdc,
-                      currency: 'USDC',
+                      amount: amount,
+                      currency: currency,
                       signature: `expired-${Date.now()}-${Math.random().toString(36).substring(7)}`,
                       serviceType: 'premium_service_expired',
                       verified: false,
@@ -633,7 +646,7 @@ async function handlePOST(request: NextRequest) {
               // Even though CDP co-signs and changes the signature, the transaction still appears in the user's history
               if (!signature) {
                 console.log('[CDP Fallback] No signature in error response - querying recent transactions from user wallet');
-                console.log(`[CDP Fallback] Looking for USDC transfer: ${amountUsdc} USDC from ${frontendPayload.from} to ${to}`);
+                console.log(`[CDP Fallback] Looking for ${currency} transfer: ${amount} ${currency} from ${frontendPayload.from} to ${to}`);
                 
                 const connection = new Connection(SOLANA_RPC_URL!, 'confirmed');
                 const { PublicKey } = require('@solana/web3.js');
@@ -675,12 +688,12 @@ async function handlePOST(request: NextRequest) {
                         const preBal = preBalances.find(p => p.accountIndex === postBal.accountIndex);
                         if (preBal && postBal.owner === to) {
                           const delta = postBal.uiTokenAmount.uiAmount! - preBal.uiTokenAmount.uiAmount!;
-                          // Check if the transfer amount matches (within 0.000001 USDC tolerance)
-                          if (Math.abs(delta - amountUsdc) < 0.000001) {
+                          // Check if the transfer amount matches (within 0.000001 tolerance)
+                          if (Math.abs(delta - amount) < 0.000001) {
                             signature = sigInfo.signature;
                             matchFound = true;
                             console.log(`[CDP Fallback] ✅ Found matching transaction: ${signature}`);
-                            console.log(`[CDP Fallback]    Amount: ${delta} USDC, Recipient: ${postBal.owner.substring(0, 8)}...`);
+                            console.log(`[CDP Fallback]    Amount: ${delta} ${currency}, Recipient: ${postBal.owner.substring(0, 8)}...`);
                             break;
                           }
                         }
@@ -696,7 +709,7 @@ async function handlePOST(request: NextRequest) {
                   
                   if (!signature) {
                     console.error('[CDP Fallback] No matching transaction found in recent user transactions');
-                    console.error('[CDP Fallback] Expected:', amountUsdc, 'USDC transfer to', to);
+                    console.error('[CDP Fallback] Expected:', amount, currency, 'transfer to', to);
                   }
                   
                 } catch (queryError: any) {
@@ -881,7 +894,7 @@ async function handlePOST(request: NextRequest) {
               // Query user's wallet for matching transaction via Helius RPC
               // This is the ONLY reliable source of truth
               console.log('[CDP 200-Fallback] Querying user wallet for matching transaction');
-              console.log(`[CDP 200-Fallback] Looking for: ${amountUsdc} USDC from ${frontendPayload.from} to ${to}`);
+              console.log(`[CDP 200-Fallback] Looking for: ${amount} ${currency} from ${frontendPayload.from} to ${to}`);
               
               const connection = new Connection(SOLANA_RPC_URL!, 'confirmed');
               const { PublicKey } = require('@solana/web3.js');
@@ -913,11 +926,11 @@ async function handlePOST(request: NextRequest) {
                     const preBal = preBalances.find(p => p.accountIndex === postBal.accountIndex);
                     if (preBal && postBal.owner === to) {
                       const delta = postBal.uiTokenAmount.uiAmount! - preBal.uiTokenAmount.uiAmount!;
-                      if (Math.abs(delta - amountUsdc) < 0.000001) {
+                      if (Math.abs(delta - amount) < 0.000001) {
                         signature = sigInfo.signature;
                         console.log(`[CDP 200-Fallback] ✅ FOUND IT! Transaction succeeded on-chain despite CDP error`);
                         console.log(`[CDP 200-Fallback] Signature: ${signature}`);
-                        console.log(`[CDP 200-Fallback] Amount: ${delta} USDC`);
+                        console.log(`[CDP 200-Fallback] Amount: ${delta} ${currency}`);
                         break;
                       }
                     }
@@ -992,7 +1005,7 @@ async function handlePOST(request: NextRequest) {
             
             // Store payment in database
             try {
-              const paymentAmount = amountUsdc;
+              const paymentAmount = amount;
               // Extract the ACTUAL service type from payment data for premium services
               // serviceType was extracted earlier from frontendPayload on line 260
               const paymentServiceType = isPremiumServicePayment && serviceType 
@@ -1005,7 +1018,7 @@ async function handlePOST(request: NextRequest) {
                   toWallet: to,
                   toAgent: agentId,
                   amount: paymentAmount,
-                  currency:'USDC',
+                  currency: currency,
                   signature: txSignature,
                   serviceType: paymentServiceType,
                   verified: true,
@@ -1056,13 +1069,15 @@ async function handlePOST(request: NextRequest) {
           
           // Extract service info for logging and error message
           let serviceType = 'premium service';
-          let amountUsdc = 0;
+          let paymentAmount = 0;
+          let paymentCurrency = 'USDC';
           
           if (paymentData) {
             try {
               const paymentPayload = JSON.parse(paymentData);
               serviceType = paymentPayload.service_type || 'premium service';
-              amountUsdc = paymentPayload.amount_usdc || 0;
+              paymentAmount = paymentPayload.amount || 0;
+              paymentCurrency = paymentPayload.currency || PAYMENT_TOKEN_NAME;
             } catch (e) {
               console.error('[Premium Service] Failed to parse payment data:', e);
             }
@@ -1078,8 +1093,8 @@ async function handlePOST(request: NextRequest) {
                 fromWallet: userWallet,
                 toWallet: treasuryWallet,
                 toAgent: agentId,
-                amount: amountUsdc,
-                currency: 'USDC',
+                amount: paymentAmount,
+                currency: paymentCurrency,
                 signature: `failed-${Date.now()}-${Math.random().toString(36).substring(7)}`,
                 serviceType: 'premium_service_failed',
                 verified: false,
@@ -1095,7 +1110,7 @@ async function handlePOST(request: NextRequest) {
           
           // Error message will be displayed by frontend directly (no need to store)
           // Frontend will show it as a local system message that persists across polling
-          const systemErrorMessage = `📞 The prison payphone experienced technical difficulties while processing your payment. Service requested: ${serviceType} (${amountUsdc} USDC). Your funds are safe - the transaction was not completed. Please try again in a few moments.`;
+          const systemErrorMessage = `📞 The prison payphone experienced technical difficulties while processing your payment. Service requested: ${serviceType} (${paymentAmount} ${paymentCurrency}). Your funds are safe - the transaction was not completed. Please try again in a few moments.`;
           
           console.log('[Premium Service] Error message will be displayed by frontend');
           console.log('[Premium Service] Message:', systemErrorMessage);
@@ -1152,14 +1167,16 @@ async function handlePOST(request: NextRequest) {
       
       // Extract service info from the payment data header (already parsed earlier)
       let serviceType = 'unknown';
-      let amountUsdc = 0;
+      let paymentAmount = 0;
+      let paymentCurrency = 'USDC';
       let paymentId = 'unknown';
       
       if (paymentData) {
         try {
           const paymentPayload = JSON.parse(paymentData);
           serviceType = paymentPayload.service_type || 'unknown';
-          amountUsdc = paymentPayload.amount_usdc || 0;
+          paymentAmount = paymentPayload.amount || 0;
+          paymentCurrency = paymentPayload.currency || PAYMENT_TOKEN_NAME;
           paymentId = paymentPayload.payment_id || paymentPayload.paymentId || 'unknown';
           
           // Fallback: extract service_type from payment_id if missing
@@ -1185,8 +1202,8 @@ async function handlePOST(request: NextRequest) {
       }
       
       // Enhanced marker with service_type, amount, and payment_id for agent verification
-      contentWithWallet +=`\n[PREMIUM_SERVICE_PAYMENT_COMPLETED: ${settlementResult.transaction}|${serviceType}|${amountUsdc}|${paymentId}]`;
-      console.log(`[Premium Service] Enhanced marker added: service=${serviceType}, amount=${amountUsdc} USDC, payment_id=${paymentId}`);
+      contentWithWallet +=`\n[PREMIUM_SERVICE_PAYMENT_COMPLETED: ${settlementResult.transaction}|${serviceType}|${paymentAmount}|${paymentId}]`;
+      console.log(`[Premium Service] Enhanced marker added: service=${serviceType}, amount=${paymentAmount} ${paymentCurrency}, payment_id=${paymentId}`);
     } else if (isPremiumServicePayment && !settlementResult?.success) {
       console.log('[Premium Service] Payment marker NOT added - settlement failed:', settlementResult?.error || 'unknown error');
     }
@@ -1262,7 +1279,8 @@ async function handlePOST(request: NextRequest) {
       try {
         const paymentPayload = JSON.parse(paymentData);
         const serviceType = paymentPayload.service_type || 'unknown';
-        const amountUsdc = paymentPayload.amount_usdc || 0;
+        const paymentAmount = paymentPayload.amount || 0;
+        const paymentCurrency = paymentPayload.currency || PAYMENT_TOKEN_NAME;
         const paymentId = paymentPayload.payment_id || paymentPayload.paymentId || 'unknown';
         
         paymentMetadata = {
@@ -1270,7 +1288,8 @@ async function handlePOST(request: NextRequest) {
           paymentCompleted: true,
           paymentSignature: settlementResult.transaction,
           serviceType: serviceType,
-          amountUsdc: amountUsdc,
+          amount: paymentAmount,
+          currency: paymentCurrency,
           timestamp: Date.now()
         };
         console.log('[Payment Metadata] Adding to message:', paymentMetadata);
@@ -1417,9 +1436,9 @@ function extractPaymentRequest(content: string): PaymentRequest | null {
         }
       }
       
-      // Ensure we have either amount_sol or amount_usdc
-      if (!parsed.amount_sol && !parsed.amount_usdc) {
-        parsed.amount_usdc = 0.05; // Default to USDC for message fees
+      // Ensure we have payment amount
+      if (!parsed.amount) {
+        parsed.amount = parsed.amount || 0.01; // Default to 0.01 payment token
       }
       
       return parsed;

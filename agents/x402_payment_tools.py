@@ -68,9 +68,9 @@ payment_ledger = {
     "completed": {}  # signature -> {from, to, amount, verified_at}
 }
 
-# Premium service pricing (USDC)
+# Premium service pricing (payment token from config)
 # NOTE: Prices reduced by 100x for testing purposes
-# Using same numeric values as before (e.g., 0.01 SOL → 0.01 USDC)
+# Using configured payment token for all services
 def load_premium_services() -> Dict[str, float]:
     """Load premium services pricing from JSON file"""
     try:
@@ -331,13 +331,13 @@ Would you like to use one of those instead?"""
             target_agent = agent_match.group(1).lower()
             print(f"   🎯 Extracted target agent for connection_intro: {target_agent}")
     
-    # Create x402-compliant payment request (USDC) - directed to Treasury
+    # Create x402-compliant payment request - directed to Treasury
     payment_request = adapter.create_payment_request(
         resource_url=f"pardon-simulator://{to_agent}/{service_type}",
         method="POST",
         recipient_id="white-house-treasury",  # All payments go to Treasury
         recipient_address=treasury_address,  # White House Treasury address
-        amount_usdc=amount,
+        amount=amount,
         service_type=service_type,
         details=details,
         provider_agent=to_agent,

@@ -86,8 +86,9 @@ async function checkCoralSessionExists(coralSessionId: string): Promise<boolean>
 
 /**
  * Restore a Coral session from configuration
+ * Returns the restored session ID (which may differ from requested ID in non-dev mode)
  */
-async function restoreCoralSessionInternal(coralSessionId: string): Promise<boolean> {
+async function restoreCoralSessionInternal(coralSessionId: string): Promise<string | null> {
   try {
     console.log(`[Restoration] Restoring Coral session: ${coralSessionId}`);
     
@@ -108,17 +109,47 @@ async function restoreCoralSessionInternal(coralSessionId: string): Promise<bool
     if (!response.ok) {
       const errorText = await response.text();
       console.error('[Restoration] Failed to restore session:', errorText);
-      return false;
+      return null;
     }
 
     const data = await response.json();
     const restoredSessionId = data.sessionId || data.id;
     
     console.log(`[Restoration] Session restored: ${restoredSessionId}`);
-    return restoredSessionId === coralSessionId;
+    
+    // If Coral returned a different session ID (non-dev mode), update the database
+    if (restoredSessionId !== coralSessionId) {
+      console.log(`[Restoration] Coral returned different session ID (dev mode disabled), updating database...`);
+      console.log(`[Restoration] Old ID: ${coralSessionId}, New ID: ${restoredSessionId}`);
+      
+      try {
+        // Update all sessions with the old coral session ID to the new one
+        const updateResult = await prisma.session.updateMany({
+          where: { coralSessionId },
+          data: { coralSessionId: restoredSessionId }
+        });
+        
+        console.log(`[Restoration] Updated ${updateResult.count} session(s) with new Coral session ID`);
+        
+        // If we updated the session, restoration was successful
+        if (updateResult.count > 0) {
+          console.log(`[Restoration] Database updated successfully, returning new session ID`);
+          return restoredSessionId;
+        } else {
+          console.error(`[Restoration] No sessions found to update with old session ID: ${coralSessionId}`);
+          return null;
+        }
+      } catch (dbError) {
+        console.error('[Restoration] Failed to update database with new session ID:', dbError);
+        return null;
+      }
+    }
+    
+    // Session ID matched, restoration successful
+    return restoredSessionId;
   } catch (error) {
     console.error('[Restoration] Error restoring session:', error);
-    return false;
+    return null;
   }
 }
 
@@ -294,23 +325,25 @@ export async function restoreCoralSession(coralThreadId: string): Promise<boolea
       return false;
     }
 
-    const coralSessionId = threadData.session.coralSessionId;
+    let coralSessionId = threadData.session.coralSessionId;
     
     // Check if Coral session exists in memory
     const sessionExists = await checkCoralSessionExists(coralSessionId);
     
     if (!sessionExists) {
       console.log('[Restoration] Session not in memory, restoring...');
-      const sessionRestored = await restoreCoralSessionInternal(coralSessionId);
-      if (!sessionRestored) {
+      const restoredSessionId = await restoreCoralSessionInternal(coralSessionId);
+      if (!restoredSessionId) {
         console.error('[Restoration] Failed to restore session');
         return false;
       }
+      // Use the restored session ID (may be different in non-dev mode)
+      coralSessionId = restoredSessionId;
     } else {
       console.log('[Restoration] Session already exists in memory');
     }
 
-    // Restore the thread
+    // Restore the thread (using potentially updated session ID)
     console.log('[Restoration] Restoring thread...');
     const threadRestored = await restoreThreadInternal(
       coralSessionId,

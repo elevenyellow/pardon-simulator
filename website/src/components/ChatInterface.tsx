@@ -9,6 +9,8 @@ import { Toast, ToastContainer, ToastType } from'./Toast';
 import ReactMarkdown from'react-markdown';
 import remarkGfm from'remark-gfm';
 import { USER_SENDER_ID, USER_SENDER_DISPLAY_NAME } from'@/lib/constants';
+import SwapSuggestion from'./SwapSuggestion';
+import { PAYMENT_TOKEN_NAME } from'@/config/tokens';
 
 interface Message {
   id: string;
@@ -226,6 +228,13 @@ export default function ChatInterface({
   // Fullscreen state
   const [isFullscreen, setIsFullscreen] = useState(false);
 
+  // Swap suggestion state
+  const [showSwapSuggestion, setShowSwapSuggestion] = useState<{
+    token: string;  // Token name (e.g., 'TOKEN', 'PARDON')
+    required: number;
+    balance: number;
+  } | null>(null);
+
   // Toast helper function
   const showToast = useCallback((message: string, type: ToastType ='info') => {
     const id = Date.now().toString();
@@ -377,13 +386,16 @@ export default function ChatInterface({
         }
         
         // Convert to PaymentRequest format expected by PaymentModal
+        const tokenAmount = parsed.amount || parseFloat(parsed.amount?.value || '0') / 1_000_000;
+        
         const paymentRequest: PaymentRequest = {
           type: 'x402_payment_required',
           http_status: 402,
           recipient: parsed.recipient?.id || 'treasury',
           recipient_address: parsed.recipient_address || parsed.recipient?.address,
-          amount_sol: 0,
-          amount_usdc: parsed.amount_usdc || parseFloat(parsed.amount?.value || '0') / 1_000_000,
+          amount: tokenAmount,
+          amount_sol: 0,  // Legacy
+          amount_usdc: 0,  // Legacy
           service_type: service_type,
           reason: parsed.reason || 'Premium service',
           timestamp: parsed.timestamp || Date.now(),
@@ -593,6 +605,12 @@ export default function ChatInterface({
           })
           .catch(error => {
             console.error('[Thread Load] Error fetching conversation history:', error);
+            
+            // Handle 410 session not found - just log and keep welcome message
+            if (error.code === 'SESSION_NOT_FOUND' || error.status === 410) {
+              console.log('[Thread Load] Session expired - will create new thread when user sends message');
+            }
+            
             setLoading(false);
             // Keep welcome message on error
             // Polling will be enabled when user sends a message
@@ -849,8 +867,8 @@ export default function ChatInterface({
               // Mark this message as processed
               processedMessageIdsRef.current.add(messageId);
               
-              const amount = request.amount_usdc || request.amount_sol || 0;
-              const currency = request.amount_usdc ? 'USDC' : 'SOL';
+              const amount = request.amount || 0.01;
+              const currency = PAYMENT_TOKEN_NAME;  // Actual token name from config (e.g., 'FARTCOIN', 'PARDON')
               const service = request.service_type?.replace(/_/g, ' ') || 'premium service';
               
               console.log(`[SSE Premium Service] Payment request detected: ${amount} ${currency} for ${service}`);
@@ -1425,8 +1443,8 @@ export default function ChatInterface({
           pollIntervalRef.current = null;
         }
         
-        const amount = request.amount_usdc || request.amount_sol || 0;
-        const currency = request.amount_usdc ? 'USDC' : 'SOL';
+        const amount = request.amount || 0.01;
+        const currency = PAYMENT_TOKEN_NAME;  // Actual token name from config (e.g., 'FARTCOIN', 'PARDON')
         const service = request.service_type?.replace(/_/g, ' ') || 'premium service';
         
         console.log(`[Premium Service] Payment request detected: ${amount} ${currency} for ${service}`);
@@ -1456,7 +1474,7 @@ export default function ChatInterface({
     } catch (err: any) {
       // Check if this is a session not found error (server restart)
       if (err.code === 'SESSION_NOT_FOUND' || err.status === 410) {
-        console.log('[Session Recovery] Session no longer exists, recreating...');
+        console.log('[Session Recovery] Session no longer exists');
         
         // Stop polling
         if (pollIntervalRef.current) {
@@ -1668,8 +1686,13 @@ export default function ChatInterface({
     }
 
     try {
-      const amount = paymentReq.amount_usdc || paymentReq.amount_sol || 0.05;
-      const currency = paymentReq.amount_usdc ? 'USDC' : 'SOL';
+      // Import payment token config first
+      const { PublicKey } = await import('@solana/web3.js');
+      const { PAYMENT_TOKEN_NAME, PAYMENT_TOKEN_MINT, PAYMENT_TOKEN_DECIMALS } = await import('@/config/tokens');
+      
+      // All payments use payment token
+      const amount = paymentReq.amount || 0.01;  // Default to 0.01 payment token
+      const currency = PAYMENT_TOKEN_NAME;  // Use actual token name from config (e.g., 'FARTCOIN', 'PARDON')
       const isPremiumService = paymentReq.service_type && paymentReq.service_type !== 'message_fee';
       
       console.log(`[Payment] Amount: ${amount} ${currency}`);
@@ -1680,20 +1703,61 @@ export default function ChatInterface({
 
       setLoading(true);
 
-      // All USDC payments use the same flow: sign transaction, submit to facilitator
-      if (currency === 'USDC') {
-        if (!signTransaction) {
-          throw new Error('Wallet does not support transaction signing');
+      // All payments use the same flow: sign transaction, submit to facilitator
+      if (!signTransaction) {
+        throw new Error('Wallet does not support transaction signing');
+      }
+
+      // Show single payment required toast
+      const serviceName = isPremiumService 
+        ? paymentReq.service_type?.replace(/_/g, ' ') 
+        : 'contacting agent';
+      showToast(`Payment Required: ${amount} ${currency} for ${serviceName}`,'info');
+      
+      console.log('[Payment] Using payment token for all payments:', {
+        token: PAYMENT_TOKEN_NAME,
+        service_type: paymentReq.service_type,
+        amount
+      });
+
+        // Check payment token balance before proceeding with payment
+        // Use backend API to check balance (never expose RPC to frontend)
+        try {
+          console.log('[Payment] Checking token balance via backend API...');
+          
+          const balanceResponse = await fetch('/api/solana/token-balance', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              walletAddress: publicKey.toString(),
+              tokenMint: PAYMENT_TOKEN_MINT,
+              decimals: PAYMENT_TOKEN_DECIMALS
+            })
+          });
+
+          if (!balanceResponse.ok) {
+            console.error('[Payment] Failed to check balance:', await balanceResponse.text());
+            // Continue anyway - let transaction fail if insufficient
+          } else {
+            const { balance: tokenBalance, exists } = await balanceResponse.json();
+            
+            console.log(`[Payment] Token balance: ${tokenBalance} ${PAYMENT_TOKEN_NAME}, required: ${amount}, exists: ${exists}`);
+            
+            if (tokenBalance < amount) {
+              console.log(`[Payment] Insufficient ${PAYMENT_TOKEN_NAME} balance`);
+              setShowSwapSuggestion({
+                token: PAYMENT_TOKEN_NAME,
+                required: amount,
+                balance: tokenBalance
+              });
+              setLoading(false);
+              return;
+            }
+          }
+        } catch (balanceError: any) {
+          console.error('[Payment] Error checking balance:', balanceError);
+          // Continue anyway - let the transaction fail if insufficient
         }
-
-        // Show single payment required toast
-        const serviceName = isPremiumService 
-          ? paymentReq.service_type?.replace(/_/g, ' ') 
-          : 'contacting agent';
-        showToast(`Payment Required: ${amount} ${currency} for ${serviceName}`,'info');
-
-        const { createUSDCTransaction } = await import('@/lib/x402-payload-client');
-        const { PublicKey } = await import('@solana/web3.js');
 
         let signedTx;
         try {
@@ -1701,7 +1765,12 @@ export default function ChatInterface({
           const paymentId = paymentReq.payment_id || `payment-${Date.now()}`;
           console.log('[Payment] Using payment_id:', paymentId);
           
-          signedTx = await createUSDCTransaction(
+          // Always use payment token SPL token for all payments
+          console.log('[Payment] Creating payment token transaction');
+          const { createSPLTokenTransaction } = await import('@/lib/x402-payload-client');
+          signedTx = await createSPLTokenTransaction(
+            PAYMENT_TOKEN_MINT,
+            PAYMENT_TOKEN_DECIMALS,
             paymentId,
             publicKey,
             new PublicKey(paymentReq.recipient_address),
@@ -1723,7 +1792,7 @@ export default function ChatInterface({
         // Enhanced logging for payment flow debugging
         console.log('[Payment Flow] Payment submitted successfully');
         console.log('[Payment Flow] Transaction:', signedTx.payment_id);
-        console.log('[Payment Flow] Amount:', amount, 'USDC');
+        console.log('[Payment Flow] Amount:', amount, currency);
         console.log('[Payment Flow] Service:', paymentReq.service_type);
         console.log('[Payment Flow] Agent:', originalAgentId);
         
@@ -1743,7 +1812,9 @@ export default function ChatInterface({
           paymentId: signedTx.payment_id,  // This is from the payment request
           from: signedTx.from,
           to: signedTx.to,
-          amount_usdc: amount,
+          amount_usdc: 0,
+          amount_sol: 0,
+          currency: PAYMENT_TOKEN_NAME,  // Payment token from config
           service_type: paymentReq.service_type,  // Include service type for backend marker
           payment_id: paymentReq.payment_id  // Also include original payment_id for better matching
         };
@@ -1814,6 +1885,7 @@ export default function ChatInterface({
 
       if (!retryResponse.ok && retryResponse.status !== 402) {
         const errorData = await retryResponse.json();
+        
         
         // Handle transaction expiration with user-friendly message
         if (errorData.code === 'TRANSACTION_EXPIRED') {
@@ -1910,10 +1982,6 @@ export default function ChatInterface({
           }
         }, 3000);
       }
-      } else {
-        // SOL payments (not currently supported for CDP facilitator)
-        throw new Error('SOL payments not currently supported. Please use USDC.');
-      }
 
     } catch (err: any) {
       // Enhanced error logging for payment flow
@@ -1938,8 +2006,8 @@ export default function ChatInterface({
             threadId: originalThreadId,
             serviceType: paymentReq.service_type,
             timestamp: new Date().toISOString(),
-            amount: paymentReq.amount_usdc || paymentReq.amount_sol,
-            currency: paymentReq.amount_usdc ? 'USDC' : 'SOL'
+            amount: paymentReq.amount || 0.01,
+            currency: PAYMENT_TOKEN_NAME  // Actual token name from config
           }
         })
       }).catch(console.error);
@@ -2536,6 +2604,16 @@ export default function ChatInterface({
             </button>
           </div>
         </div>
+      )}
+
+      {/* Swap Suggestion Modal */}
+      {showSwapSuggestion && (
+        <SwapSuggestion
+          requiredToken={showSwapSuggestion.token}
+          requiredAmount={showSwapSuggestion.required}
+          userBalance={showSwapSuggestion.balance}
+          onClose={() => setShowSwapSuggestion(null)}
+        />
       )}
     </>
   );

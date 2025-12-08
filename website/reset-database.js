@@ -2,7 +2,8 @@
 
 /**
  * Database Reset Script
- * Clears all data from all tables for fresh testing
+ * Clears all game data tables for fresh testing
+ * Preserves AdminUser and AdminSession tables
  * 
  * Usage: node reset-database.js
  */
@@ -13,6 +14,7 @@ const prisma = new PrismaClient();
 
 async function resetDatabase() {
   console.log('🗑️  Starting database reset...\n');
+  console.log('ℹ️  Admin tables will be preserved.\n');
 
   try {
     // Delete in order to respect foreign key constraints
@@ -30,6 +32,14 @@ async function resetDatabase() {
     const paymentsDeleted = await prisma.payment.deleteMany({});
     console.log(`✅ Deleted ${paymentsDeleted.count} payment records`);
 
+    console.log('Deleting Service Usage...');
+    const serviceUsageDeleted = await prisma.serviceUsage.deleteMany({});
+    console.log(`✅ Deleted ${serviceUsageDeleted.count} service usage records`);
+
+    console.log('Deleting Intermediary States...');
+    const intermediaryDeleted = await prisma.intermediaryState.deleteMany({});
+    console.log(`✅ Deleted ${intermediaryDeleted.count} intermediary state records`);
+
     console.log('Deleting Threads...');
     const threadsDeleted = await prisma.thread.deleteMany({});
     console.log(`✅ Deleted ${threadsDeleted.count} thread records`);
@@ -46,7 +56,12 @@ async function resetDatabase() {
     const usersDeleted = await prisma.user.deleteMany({});
     console.log(`✅ Deleted ${usersDeleted.count} user records`);
 
-    console.log('\n🎉 Database reset complete! All tables are now empty.');
+    console.log('Deleting Admin Audit Logs...');
+    const auditLogsDeleted = await prisma.adminAuditLog.deleteMany({});
+    console.log(`✅ Deleted ${auditLogsDeleted.count} admin audit log records`);
+
+    console.log('\n🎉 Database reset complete! All game tables are now empty.');
+    console.log('🔐 Admin accounts preserved.');
     console.log('✨ Ready for fresh testing!\n');
 
   } catch (error) {
@@ -58,8 +73,9 @@ async function resetDatabase() {
 }
 
 // Confirmation prompt
-console.log('⚠️  WARNING: This will DELETE ALL DATA from the database!');
-console.log('⚠️  This action cannot be undone.\n');
+console.log('⚠️  WARNING: This will DELETE ALL GAME DATA from the database!');
+console.log('⚠️  This action cannot be undone.');
+console.log('🔐 Admin accounts will be preserved.\n');
 
 if (process.argv.includes('--force')) {
   resetDatabase();

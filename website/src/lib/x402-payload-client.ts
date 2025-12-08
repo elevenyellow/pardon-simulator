@@ -13,6 +13,7 @@ import {
   ASSOCIATED_TOKEN_PROGRAM_ID
 } from'@solana/spl-token';
 import base58 from'bs58';
+import { CDP_FACILITATOR_ADDRESS } from '@/config/tokens';
 
 export interface X402PaymentPayload {
   payment_id: string;
@@ -32,7 +33,7 @@ export interface X402SolanaTransactionPayload {
   transaction_base64: string;
   from: string;
   to: string;
-  amount_usdc: number;
+  amount: number;  // Payment token amount
 }
 
 /**
@@ -84,7 +85,9 @@ export async function createPaymentPayload(
 }
 
 /**
- * Create x402 Solana USDC payment transaction for CDP facilitator
+ * Create x402 Solana SPL Token payment transaction for CDP facilitator
+ * 
+ * Generic function that supports any SPL token
  * 
  * Creates a PARTIALLY-SIGNED transaction:
  * - Fee payer: CDP facilitator (L54zkaPQFeTn1UsEqieEXBqWrPShiaZEPD7mS5WXfQg)
@@ -93,33 +96,36 @@ export async function createPaymentPayload(
  * 
  * This is the "exact_svm" scheme where CDP co-signs transactions.
  * 
+ * @param tokenMint - SPL token mint address
+ * @param tokenDecimals - Number of decimals for the token
  * @param paymentId - Unique payment identifier
  * @param fromPubkey - User's wallet (transfer authority)
  * @param toPubkey - Recipient's public key
- * @param amountUsdc - Amount in USDC (e.g., 0.01)
+ * @param amount - Amount in token units (e.g., 0.01)
  * @param signTransaction - Wallet's transaction signing function
  * @returns Base64-encoded partially-signed transaction (user signed, CDP will cosign)
  */
-export async function createUSDCTransaction(
+export async function createSPLTokenTransaction(
+  tokenMint: string,
+  tokenDecimals: number,
   paymentId: string,
   fromPubkey: PublicKey,
   toPubkey: PublicKey,
-  amountUsdc: number,
+  amount: number,
   signTransaction: (transaction: Transaction) => Promise<Transaction>
 ): Promise<X402SolanaTransactionPayload> {
-  // USDC mint address on mainnet
-  const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
-  const USDC_DECIMALS = 6;
+  // Token mint address
+  const TOKEN_MINT = new PublicKey(tokenMint);
 
   // CDP facilitator address that will cosign
-  const CDP_FACILITATOR = new PublicKey('L54zkaPQFeTn1UsEqieEXBqWrPShiaZEPD7mS5WXfQg');
+  const CDP_FACILITATOR = new PublicKey(CDP_FACILITATOR_ADDRESS);
 
-  // Convert USDC to micro-USDC (smallest unit)
-  const microUsdc = Math.floor(amountUsdc * Math.pow(10, USDC_DECIMALS));
+  // Convert token amount to smallest unit
+  const microAmount = Math.floor(amount * Math.pow(10, tokenDecimals));
 
   // Get associated token accounts
-  const fromAta = await getAssociatedTokenAddress(USDC_MINT, fromPubkey);
-  const toAta = await getAssociatedTokenAddress(USDC_MINT, toPubkey);
+  const fromAta = await getAssociatedTokenAddress(TOKEN_MINT, fromPubkey);
+  const toAta = await getAssociatedTokenAddress(TOKEN_MINT, toPubkey);
   
   // Check if recipient ATA exists BEFORE getting blockhash (do slow operations first)
   const checkResponse = await fetch('/api/solana/check-token-accounts', {
@@ -127,7 +133,7 @@ export async function createUSDCTransaction(
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({
       accounts: [{ address: toAta.toString(), owner: toPubkey.toString(), name:'recipient'}],
-      mint: USDC_MINT.toString()
+      mint: TOKEN_MINT.toString()
     })
   });
   
@@ -146,7 +152,7 @@ export async function createUSDCTransaction(
   const { blockhash, lastValidBlockHeight } = await blockhashResponse.json();
   
   console.log('[x402] Blockhash retrieved:', blockhash.substring(0, 10) + '...');
-  console.log('[x402] Building transaction immediately to minimize staleness window');
+  console.log('[x402] Building SPL token transaction immediately to minimize staleness window');
   
   // Create transaction with CDP facilitator as fee payer
   const transaction = new Transaction({
@@ -161,26 +167,26 @@ export async function createUSDCTransaction(
   
   // Create recipient ATA if it doesn't exist
   if (!recipientExists) {
-    console.log('Adding instruction to create recipient USDC account (CDP pays)');
+    console.log('Adding instruction to create recipient token account (CDP pays)');
     transaction.add(
       createAssociatedTokenAccountInstruction(
         CDP_FACILITATOR, // payer (CDP pays for ATA creation)
         toAta,           // ata address
         toPubkey,        // owner
-        USDC_MINT        // mint
+        TOKEN_MINT       // mint
       )
     );
   }
   
-  // Add USDC transfer instruction
+  // Add SPL token transfer instruction
   transaction.add(
     createTransferCheckedInstruction(
-      fromAta,      // from token account
-      USDC_MINT,    // mint
-      toAta,        // to token account
-      fromPubkey,   // owner (user signs as transfer authority)
-      microUsdc,    // amount
-      USDC_DECIMALS // decimals
+      fromAta,       // from token account
+      TOKEN_MINT,    // mint
+      toAta,         // to token account
+      fromPubkey,    // owner (user signs as transfer authority)
+      microAmount,   // amount
+      tokenDecimals  // decimals
     )
   );
   
@@ -197,12 +203,123 @@ export async function createUSDCTransaction(
   });
   const transaction_base64 = Buffer.from(serialized).toString('base64');
   
+  // All payments use the payment token
   return {
     payment_id: paymentId,
     transaction_base64,
     from: fromPubkey.toString(),
     to: toPubkey.toString(),
-    amount_usdc: amountUsdc
+    amount: amount
+  };
+}
+
+/**
+ * Legacy wrapper for USDC transactions
+ * Maintains backward compatibility with existing code
+ */
+export async function createUSDCTransaction(
+  paymentId: string,
+  fromPubkey: PublicKey,
+  toPubkey: PublicKey,
+  amountUsdc: number,
+  signTransaction: (transaction: Transaction) => Promise<Transaction>
+): Promise<X402SolanaTransactionPayload> {
+  return createSPLTokenTransaction(
+    'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+    6,
+    paymentId,
+    fromPubkey,
+    toPubkey,
+    amountUsdc,
+    signTransaction
+  );
+}
+
+/**
+ * Create x402 Solana native SOL payment transaction for CDP facilitator
+ * 
+ * Creates a PARTIALLY-SIGNED transaction:
+ * - Fee payer: CDP facilitator (L54zkaPQFeTn1UsEqieEXBqWrPShiaZEPD7mS5WXfQg)
+ * - User signs: Transfer authority
+ * - CDP cosigns: Fee payer signature when settling
+ * 
+ * This is the "exact_svm" scheme where CDP co-signs transactions.
+ * Now supports native SOL transfers as of October 2025 CDP update.
+ * 
+ * @param paymentId - Unique payment identifier
+ * @param fromPubkey - User's wallet
+ * @param toPubkey - Recipient's public key
+ * @param amountSol - Amount in SOL (e.g., 0.01)
+ * @param signTransaction - Wallet's transaction signing function
+ * @returns Base64-encoded partially-signed transaction (user signed, CDP will cosign)
+ */
+export async function createSOLTransaction(
+  paymentId: string,
+  fromPubkey: PublicKey,
+  toPubkey: PublicKey,
+  amountSol: number,
+  signTransaction: (transaction: Transaction) => Promise<Transaction>
+): Promise<X402SolanaTransactionPayload> {
+  // CDP facilitator address that will cosign
+  const CDP_FACILITATOR = new PublicKey(CDP_FACILITATOR_ADDRESS);
+
+  // Convert SOL to lamports (9 decimals)
+  const lamports = Math.floor(amountSol * Math.pow(10, 9));
+
+  console.log('[x402] ⏱️ Fetching FRESH blockhash (as late as possible to minimize staleness)');
+  
+  // Get blockhash as LATE as possible - right before building transaction
+  const blockhashResponse = await fetch('/api/solana/blockhash');
+  if (!blockhashResponse.ok) {
+    throw new Error('Failed to get blockhash from backend');
+  }
+  const { blockhash, lastValidBlockHeight } = await blockhashResponse.json();
+  
+  console.log('[x402] Blockhash retrieved:', blockhash.substring(0, 10) + '...');
+  console.log('[x402] Building SOL transaction immediately to minimize staleness window');
+  
+  // Create transaction with CDP facilitator as fee payer
+  const transaction = new Transaction({
+    feePayer: CDP_FACILITATOR,  // ← CDP pays fees and will cosign
+    blockhash,
+    lastValidBlockHeight
+  });
+  
+  // CDP x402 exact_svm requires exactly 3 instructions:
+  // 1. setComputeUnitLimit
+  transaction.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }));
+  
+  // 2. setComputeUnitPrice
+  transaction.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1 }));
+  
+  // 3. Transfer instruction (SystemProgram.transfer for native SOL)
+  transaction.add(
+    SystemProgram.transfer({
+      fromPubkey,   // user's wallet
+      toPubkey,     // recipient
+      lamports,     // amount in lamports
+    })
+  );
+  
+  console.log('✍️ Requesting user signature for SOL transfer...');
+  console.log('User signs partially (transfer only), CDP will cosign as fee payer');
+  
+  // User signs the transaction (partial signature)
+  const signedTransaction = await signTransaction(transaction);
+  
+  // Serialize with PARTIAL signatures (user signed, CDP will cosign)
+  const serialized = signedTransaction.serialize({ 
+    requireAllSignatures: false,  // ← PARTIAL signing
+    verifySignatures: false       // ← Don't verify yet (CDP hasn't signed)
+  });
+  const transaction_base64 = Buffer.from(serialized).toString('base64');
+  
+  return {
+    payment_id: paymentId,
+    transaction_base64,
+    from: fromPubkey.toString(),
+    to: toPubkey.toString(),
+    amount: amountSol  // All payments use payment token
   };
 }
 

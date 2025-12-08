@@ -77,7 +77,7 @@ echo "Stopping any existing Gradle daemons..."
 # Set JVM args for Java 21 compatibility
 export GRADLE_OPTS="--add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED"
 
-# Set config path and run gradlew
-echo "Starting Coral Server..."
+# Set config path and run gradlew (production mode - matches ECS deployment)
+echo "Starting Coral Server (production mode)..."
 REGISTRY_FILE_PATH="/Users/al/apps/pardon-simulator/coral-server/src/main/resources/registry.toml" ./gradlew run
 

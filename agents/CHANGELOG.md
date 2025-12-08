@@ -128,3 +128,21 @@ This file tracks when agent configurations are uploaded to S3. It's updated auto
 - Backup: `backups/2025-12-04_23-27-18/`
 - Changed files (1):
   - `agents/premium_services.json`
+
+### 2025-12-08 11:37:46
+- Configurations uploaded to S3
+- Backup: `backups/2025-12-08_11-37-45/`
+- Changed files (7):
+  - `agents/cz/tool-definitions.json`
+  - `agents/sbf/tool-definitions.json`
+  - `agents/trump-donald/tool-definitions.json`
+  - `agents/trump-melania/tool-definitions.json`
+  - `agents/trump-eric/tool-definitions.json`
+  - `agents/trump-donjr/tool-definitions.json`
+  - `agents/trump-barron/tool-definitions.json`
+
+### 2025-12-08 13:41:03
+- Configurations uploaded to S3
+- Backup: `backups/2025-12-08_13-41-01/`
+- Changed files (1):
+  - `agents/premium_services.json`

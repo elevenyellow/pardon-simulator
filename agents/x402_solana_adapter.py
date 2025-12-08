@@ -1,11 +1,11 @@
 """
-x402 Solana Adapter - USDC Edition
+x402 Solana Adapter - Payment Token Edition
 
-Adapter to make Solana USDC payments work with x402 protocol standard.
+Adapter to make Solana SPL token payments work with x402 protocol standard.
 This bridges the gap between Solana's blockchain and the x402 payment protocol,
 ensuring compliance with x402scan.com and the broader x402 community.
 
-⚠️ IMPORTANT: Uses USDC (SPL Token) for full x402 compliance!
+All payments use SPL Token for full x402 compliance.
 The x402 SDK only supports SPL Token transfers, not native SOL.
 
 Reference: https://github.com/coinbase/x402
@@ -16,17 +16,34 @@ from typing import Dict, Optional, Any
 import time
 import json
 
-# USDC Mint Addresses
-USDC_MINT_MAINNET = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
-USDC_MINT_DEVNET = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
-USDC_DECIMALS = 6  # USDC uses 6 decimals
+# =============================================================================
+# PAYMENT TOKEN CONFIGURATION
+# =============================================================================
+# 🔄 CHANGE ONLY THESE 3 VALUES TO REPLACE THE TOKEN:
+# =============================================================================
+
+# Payment token mint address (Solana SPL token)
+# Update this value when switching to production token
+PAYMENT_TOKEN_MINT = "9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump"
+
+# Payment token decimals
+# Update this value if production token uses different decimals
+PAYMENT_TOKEN_DECIMALS = 6
+
+# Payment token name (for display)
+# Update this value when switching to production token (e.g., 'PARDON')
+PAYMENT_TOKEN_NAME = "TOKEN"
+
+# =============================================================================
+# DO NOT CHANGE BELOW
+# =============================================================================
 
 
 class X402SolanaAdapter:
     """
-    Adapts x402 protocol for Solana blockchain using USDC.
+    Adapts x402 protocol for Solana blockchain using configured payment token.
     
-    Converts Solana-specific USDC payment details into x402-compliant format
+    Converts Solana-specific payment token details into x402-compliant format
     that can be recognized by x402scan.com and other x402 tools.
     """
     
@@ -40,12 +57,9 @@ class X402SolanaAdapter:
         self.chain = "solana"
         self.network = network
         self.protocol_version = "1.0"
-        
-        # Set USDC mint based on network
-        if network == "devnet" or network == "testnet":
-            self.usdc_mint = USDC_MINT_DEVNET
-        else:
-            self.usdc_mint = USDC_MINT_MAINNET
+        self.payment_token_mint = PAYMENT_TOKEN_MINT
+        self.payment_token_decimals = PAYMENT_TOKEN_DECIMALS
+        self.payment_token_name = PAYMENT_TOKEN_NAME
     
     def create_payment_request(
         self,
@@ -53,14 +67,14 @@ class X402SolanaAdapter:
         method: str,
         recipient_id: str,
         recipient_address: str,
-        amount_usdc: float,
-        service_type: str,
+        amount: float,
+        service_type: str = "",
         details: str = "",
         provider_agent: str = None,
         target_agent: str = None
     ) -> Dict[str, Any]:
         """
-        Create x402-compliant payment request for Solana using USDC.
+        Create x402-compliant payment request for Solana using configured payment token.
         
         This format follows the x402 protocol standard and includes
         all necessary fields for x402scan.com recognition.
@@ -70,7 +84,7 @@ class X402SolanaAdapter:
             method: HTTP method (POST, GET, etc.)
             recipient_id: Human-readable recipient identifier (agent name)
             recipient_address: Solana wallet address
-            amount_usdc: Amount in USDC (e.g., 0.5 for 0.5 USDC)
+            amount: Amount in payment token (e.g., 0.01)
             service_type: Type of service (e.g., "insider_info")
             details: Additional details about the service
             provider_agent: Agent providing the service (e.g., "trump-donald")
@@ -97,6 +111,13 @@ class X402SolanaAdapter:
             recipient_normalized = recipient_id.replace("-", "_")
             payment_id = f"{recipient_normalized}-{service_type}-{int(time.time())}"
         
+        # All payments use the configured payment token
+        currency = self.payment_token_name
+        mint_address = self.payment_token_mint
+        decimals = self.payment_token_decimals
+        micro_amount = str(int(amount * (10 ** decimals)))
+        human_readable = f"{amount} {currency}"
+        
         return {
             # Core x402 protocol fields
             "type": "x402_payment_required",
@@ -105,7 +126,7 @@ class X402SolanaAdapter:
             # Blockchain-specific fields
             "chain": self.chain,
             "network": self.network,
-            "payment_method": "spl_token",  # SPL Token (USDC), not native SOL
+            "payment_method": "spl_token",  # SPL Token payment
             
             # Recipient information (nested object per x402 standard)
             "recipient": {
@@ -116,11 +137,11 @@ class X402SolanaAdapter:
             
             # Amount information (nested object with proper decimals)
             "amount": {
-                "value": str(int(amount_usdc * (10 ** USDC_DECIMALS))),  # Convert to micro-USDC
-                "currency": "USDC",
-                "decimals": USDC_DECIMALS,
-                "human_readable": f"{amount_usdc} USDC",
-                "mint": self.usdc_mint  # USDC mint address (required for x402!)
+                "value": micro_amount,
+                "currency": currency,
+                "decimals": decimals,
+                "human_readable": human_readable,
+                "mint": mint_address  # Token mint address (required for x402!)
             },
             
             # Resource information (what's being paid for)
@@ -136,7 +157,8 @@ class X402SolanaAdapter:
             
             # Legacy fields for backward compatibility
             "recipient_address": recipient_address,  # Flat field for easy access
-            "amount_usdc": amount_usdc,  # Flat field for easy access
+            "amount": amount,  # Payment token amount
+            "currency": currency,  # Current currency being used
             "reason": f"{service_type.replace('_', ' ').title()} - {details}",
             "service_type": service_type,
             "timestamp": time.time(),
@@ -148,8 +170,8 @@ class X402SolanaAdapter:
                 "agent": recipient_id,
                 "provider_agent": provider_agent,
                 "target_agent": target_agent,
-                "token": "USDC",
-                "mint": self.usdc_mint
+                "token": currency,
+                "mint": mint_address
             }
         }
     
@@ -157,16 +179,16 @@ class X402SolanaAdapter:
         self,
         signature: str,
         expected_recipient: str,
-        expected_amount_usdc: float,
+        expected_amount: float,
         payment_id: str
     ) -> Dict[str, Any]:
         """
-        Create verification request for a Solana USDC transaction.
+        Create verification request for a Solana payment token transaction.
         
         Args:
             signature: Solana transaction signature
             expected_recipient: Expected recipient wallet address
-            expected_amount_usdc: Expected amount in USDC
+            expected_amount: Expected amount in payment token
             payment_id: Payment ID from the original request
         
         Returns:
@@ -178,10 +200,10 @@ class X402SolanaAdapter:
             "network": self.network,
             "expected_recipient": expected_recipient,
             "expected_amount": {
-                "value": str(int(expected_amount_usdc * (10 ** USDC_DECIMALS))),
-                "currency": "USDC",
-                "decimals": USDC_DECIMALS,
-                "mint": self.usdc_mint
+                "value": str(int(expected_amount * (10 ** self.payment_token_decimals))),
+                "currency": self.payment_token_name,
+                "decimals": self.payment_token_decimals,
+                "mint": self.payment_token_mint
             },
             "payment_id": payment_id,
             "protocol_version": self.protocol_version

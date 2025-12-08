@@ -8,8 +8,9 @@ cd "$(dirname "$0")/website"
 echo "🗑️  Database Reset Tool"
 echo "====================="
 echo ""
-echo "⚠️  WARNING: This will DELETE ALL DATA from the database!"
+echo "⚠️  WARNING: This will DELETE ALL GAME DATA from the database!"
 echo "⚠️  All users, sessions, messages, scores, and payments will be removed."
+echo "🔐 Admin accounts will be preserved."
 echo ""
 read -p "Are you sure you want to continue? (yes/no): " confirmation
 

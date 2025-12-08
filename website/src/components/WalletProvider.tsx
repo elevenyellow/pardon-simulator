@@ -21,6 +21,8 @@ import'@solana/wallet-adapter-react-ui/styles.css';
 export const WalletProvider: FC<{ children: ReactNode }> = ({ children }) => {
   // Using mainnet-beta - REAL SOL with actual value!
   const network = WalletAdapterNetwork.Mainnet;
+  // Use public RPC for wallet adapter (only for wallet connection, not for queries)
+  // All blockchain queries should go through our backend API
   const endpoint = useMemo(() => clusterApiUrl(network), [network]);
 
   //  IMPORTANT: Only Solana wallets here!
