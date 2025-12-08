@@ -389,16 +389,14 @@ async def provide_premium_service_with_payment(
     service_content: str
 ) -> str:
     """
-    Provide premium service after verifying payment.
-    Use this when someone has paid you for a premium service.
+    DEPRECATED: Use verify_payment_transaction() instead.
     
-    Args:
-        payment_id: The payment ID from the request
-        transaction_signature: The Solana transaction signature as proof of payment
-        service_content: The actual service/information you're providing
+    This tool is from the old payment flow and should not be used.
+    The new x402-compliant flow is:
+    1. Call verify_payment_transaction() to verify the payment
+    2. Deliver service directly via coral_send_message
     
-    Returns:
-        Confirmation that service was delivered
+    This tool is kept for backward compatibility only.
     """
     if payment_id not in payment_ledger["pending"]:
         return f"❌ Unknown payment ID: {payment_id}"
@@ -2229,7 +2227,7 @@ async def update_payment_x402_data(
 # Export basic tools (without process_payment_payload - that needs wallet)
 X402_TOOLS = [
     request_premium_service,
-    provide_premium_service_with_payment,
+    # provide_premium_service_with_payment,  # DEPRECATED: Removed - use verify_payment_transaction instead
     check_payment_history,
     verify_solana_transaction,
     verify_payment_transaction,  # NEW: Verify payments via backend (x402 compliant)

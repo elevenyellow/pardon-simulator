@@ -272,7 +272,7 @@ class X402SolanaAdapter:
         if amount is None:
             amount_obj = payment_request.get("amount", {})
             if isinstance(amount_obj, dict):
-                amount = float(amount_obj.get("value", 0)) / (10 ** USDC_DECIMALS)
+                amount = float(amount_obj.get("value", 0)) / (10 ** PAYMENT_TOKEN_DECIMALS)
             else:
                 amount = 0
         
