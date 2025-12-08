@@ -1444,7 +1444,7 @@ export default function ChatInterface({
         }
         
         const amount = request.amount || 0.01;
-        const currency = PAYMENT_TOKEN_NAME;  // Actual token name from config (e.g., 'FARTCOIN', 'PARDON')
+        const currency = PAYMENT_TOKEN_NAME;
         const service = request.service_type?.replace(/_/g, ' ') || 'premium service';
         
         console.log(`[Premium Service] Payment request detected: ${amount} ${currency} for ${service}`);
@@ -1812,8 +1812,7 @@ export default function ChatInterface({
           paymentId: signedTx.payment_id,  // This is from the payment request
           from: signedTx.from,
           to: signedTx.to,
-          amount_usdc: 0,
-          amount_sol: 0,
+          amount: amount,
           currency: PAYMENT_TOKEN_NAME,  // Payment token from config
           service_type: paymentReq.service_type,  // Include service type for backend marker
           payment_id: paymentReq.payment_id  // Also include original payment_id for better matching
