@@ -458,7 +458,6 @@ export default function Home() {
 
             {/* Copyright */}
             <div className="font-pixel text-xs text-white bg-black/50 px-3 py-1.5 rounded-lg backdrop-blur-sm">
-              © 2025, ELEVEN YELLOW CORP.
             </div>
           </div>
         </div>
