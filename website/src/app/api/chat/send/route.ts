@@ -549,6 +549,7 @@ async function handlePOST(request: NextRequest) {
           
           console.log('[CDP] Transaction that will be sent to CDP:');
           console.log(`[CDP]   Instructions count: ${decodedTx.instructions.length}`);
+          console.log(`[CDP]   Fee payer: ${decodedTx.feePayer?.toString()}`);
           console.log('[CDP]   Instructions:');
           for (let i = 0; i < decodedTx.instructions.length; i++) {
             const ix = decodedTx.instructions[i];
@@ -568,6 +569,28 @@ async function handlePOST(request: NextRequest) {
         } catch (decodeError: any) {
           console.error('[CDP] Failed to decode transaction:', decodeError.message);
         }
+        
+        // 🧪 DEBUG MODE: Set to true to analyze without submitting
+        const DEBUG_MODE = true;
+        
+        if (DEBUG_MODE) {
+          console.log('[DEBUG] 🛑 STOPPING - Transaction analysis complete');
+          console.log('[DEBUG] NO submission to CDP or Solana blockchain');
+          console.log('[DEBUG] Transaction structure logged above');
+          console.log('[DEBUG] Check browser console for frontend signing details');
+          
+          // Return fake success
+          const txSignature = 'DEBUG-NO-SUBMIT-' + Date.now();
+          
+          settlementResult = {
+            success: true,
+            transaction: txSignature,
+            network: 'solana',
+            payer: userWallet,
+            solanaExplorer: `https://explorer.solana.com/tx/${txSignature}`,
+            note: 'DEBUG MODE: Not submitted'
+          };
+        } else {
         
         const settleUrl =`${facilitator.url}/settle`;
         
@@ -998,6 +1021,8 @@ async function handlePOST(request: NextRequest) {
           if (!txSignature) {
             throw new Error('No transaction signature returned from CDP settle');
           }
+        }
+        // END DEBUG MODE block
 
           // CHECK IF THIS TRANSACTION WAS ALREADY PROCESSED (DUPLICATE DETECTION)
           const existingPayment = await prisma.payment.findFirst({

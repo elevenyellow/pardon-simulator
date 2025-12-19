@@ -195,17 +195,33 @@ export async function createSPLTokenTransaction(
   console.log('✍️ Requesting user signature for transfer authority...');
   console.log('User signs partially (transfer only), CDP will cosign as fee payer');
   console.log(`[x402] Transaction has ${transaction.instructions.length} instructions BEFORE signing`);
-  console.log(`[x402] Instructions BEFORE signing:`, transaction.instructions.map((ix, i) => 
-    `[${i}] ${ix.programId.toString()}`
-  ));
+  console.log(`[x402] Fee payer: ${transaction.feePayer?.toString()}`);
+  console.log(`[x402] Instructions BEFORE signing:`);
+  transaction.instructions.forEach((ix, i) => {
+    const programId = ix.programId.toString();
+    let type = 'Unknown';
+    if (programId === 'ComputeBudget111111111111111111111111111111') type = 'ComputeBudget';
+    else if (programId === 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA') type = 'SPL Token Transfer';
+    console.log(`[x402]   [${i}] ${type} - ${programId}`);
+  });
   
   // User signs the transaction (partial signature - only transfer authority)
+  console.log('[x402] 🔐 Calling wallet.signTransaction()...');
   const signedTransaction = await signTransaction(transaction);
+  console.log('[x402] ✅ Wallet returned signed transaction');
   
   console.log(`[x402] Transaction has ${signedTransaction.instructions.length} instructions AFTER signing`);
-  console.log(`[x402] Instructions AFTER signing:`, signedTransaction.instructions.map((ix, i) => 
-    `[${i}] ${ix.programId.toString()}`
-  ));
+  console.log(`[x402] Fee payer AFTER signing: ${signedTransaction.feePayer?.toString()}`);
+  console.log(`[x402] Instructions AFTER signing:`);
+  signedTransaction.instructions.forEach((ix, i) => {
+    const programId = ix.programId.toString();
+    let type = 'Unknown';
+    if (programId === 'ComputeBudget111111111111111111111111111111') type = 'ComputeBudget';
+    else if (programId === 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA') type = 'SPL Token Transfer';
+    else if (programId === 'L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95') type = '⚠️ PHANTOM LIGHTHOUSE';
+    else if (programId === 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL') type = 'ATA Creation';
+    console.log(`[x402]   [${i}] ${type} - ${programId}`);
+  });
   
   // CRITICAL: Check if wallet/middleware added extra instructions
   // CDP's exact_svm scheme only supports compute budget + transfer instructions
