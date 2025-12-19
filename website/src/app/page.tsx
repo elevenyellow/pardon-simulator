@@ -380,39 +380,53 @@ export default function Home() {
             />
           </div>
 
-          {/* START Button - shows wallet connect when not connected */}
+          {/* START Button - TEMPORARILY DISABLED */}
           <div className="flex-shrink-0">
-            <div className={!connected ?'wallet-start-button':''}>
-              {!connected ? (
-                <WalletMultiButton 
-                  style={{
-                    padding:'16px 40px',
-                    fontFamily:"'Press Start 2P', monospace",
-                    fontSize:'14px',
-                    color:'white',
-                    background:'#66b680',
-                    border:'3px solid #4a8c60',
-                    borderRadius:'0',
-                    textTransform:'uppercase',
-                    letterSpacing:'2px',
-                    boxShadow:'0 6px 0 #3a6c48, 0 6px 16px rgba(0, 0, 0, 0.5), 0 0 16px rgba(102, 182, 128, 0.5), 0 0 32px rgba(102, 182, 128, 0.3)',
-                    textShadow:'2px 2px 0 #3a6c48, 0 0 10px rgba(102, 182, 128, 0.8)',
-                    imageRendering:'pixelated',
-                    transition:'all 0.1s ease'                  }}
-                >
-                  START
-                </WalletMultiButton>
-              ) : (
-                <button
-                  onClick={handleStartClick}
-                  disabled={verifyingWallet}
-                  className="px-10 py-4 font-pixel text-sm text-white bg-[#66b680] border-[3px] border-[#4a8c60] uppercase tracking-wider transition-all hover:bg-[#7ac694] active:translate-y-1 pixel-art disabled:opacity-50 disabled:cursor-not-allowed"                  style={{
-                    boxShadow:'0 6px 0 #3a6c48, 0 6px 16px rgba(0, 0, 0, 0.5), 0 0 16px rgba(102, 182, 128, 0.5), 0 0 32px rgba(102, 182, 128, 0.3)',
-                    textShadow:'2px 2px 0 #3a6c48, 0 0 10px rgba(102, 182, 128, 0.8)'                  }}
-                >
-                  {verifyingWallet ? 'Verifying...' : 'Start'}
-                </button>
-              )}
+            {/* Coming Soon Button */}
+            <button
+              disabled
+              className="px-10 py-4 font-pixel text-sm text-gray-400 bg-gray-600 border-[3px] border-gray-500 uppercase tracking-wider cursor-not-allowed pixel-art"
+              style={{
+                boxShadow:'0 6px 0 #444, 0 6px 16px rgba(0, 0, 0, 0.5)',
+                textShadow:'2px 2px 0 #333'
+              }}
+            >
+              Coming Soon
+            </button>
+            {/* Original START button - hidden but preserved */}
+            <div style={{ display: 'none' }}>
+              <div className={!connected ?'wallet-start-button':''}>
+                {!connected ? (
+                  <WalletMultiButton 
+                    style={{
+                      padding:'16px 40px',
+                      fontFamily:"'Press Start 2P', monospace",
+                      fontSize:'14px',
+                      color:'white',
+                      background:'#66b680',
+                      border:'3px solid #4a8c60',
+                      borderRadius:'0',
+                      textTransform:'uppercase',
+                      letterSpacing:'2px',
+                      boxShadow:'0 6px 0 #3a6c48, 0 6px 16px rgba(0, 0, 0, 0.5), 0 0 16px rgba(102, 182, 128, 0.5), 0 0 32px rgba(102, 182, 128, 0.3)',
+                      textShadow:'2px 2px 0 #3a6c48, 0 0 10px rgba(102, 182, 128, 0.8)',
+                      imageRendering:'pixelated',
+                      transition:'all 0.1s ease'                  }}
+                  >
+                    START
+                  </WalletMultiButton>
+                ) : (
+                  <button
+                    onClick={handleStartClick}
+                    disabled={verifyingWallet}
+                    className="px-10 py-4 font-pixel text-sm text-white bg-[#66b680] border-[3px] border-[#4a8c60] uppercase tracking-wider transition-all hover:bg-[#7ac694] active:translate-y-1 pixel-art disabled:opacity-50 disabled:cursor-not-allowed"                  style={{
+                      boxShadow:'0 6px 0 #3a6c48, 0 6px 16px rgba(0, 0, 0, 0.5), 0 0 16px rgba(102, 182, 128, 0.5), 0 0 32px rgba(102, 182, 128, 0.3)',
+                      textShadow:'2px 2px 0 #3a6c48, 0 0 10px rgba(102, 182, 128, 0.8)'                  }}
+                  >
+                    {verifyingWallet ? 'Verifying...' : 'Start'}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -587,16 +601,29 @@ export default function Home() {
         )}
 
         {!connected ? (
-          /* Wallet Connect Screen */
+          /* Wallet Connect Screen - TEMPORARILY DISABLED */
           <div className="max-w-4xl mx-auto mt-20">
             <div className="bg-black/85 border-4 border-[#66b680] p-12 text-center pixel-art"              style={{
                 boxShadow:'0 0 20px rgba(102, 182, 128, 0.5), 0 0 40px rgba(102, 182, 128, 0.3), inset 0 0 30px rgba(0, 0, 0, 0.5)'              }}
             >
-              <h2 className="font-pixel text-[#FFD700] text-2xl mb-6">CONNECT WALLET</h2>
+              <h2 className="font-pixel text-[#FFD700] text-2xl mb-6">PARDON SIMULATOR</h2>
               <p className="font-pixel text-white text-[10px] mb-8 leading-relaxed uppercase">
-                Connect your Solana wallet to begin your mission
+                Coming Soon
               </p>
-              <WalletMultiButton className="!font-pixel !text-sm"/>
+              <button
+                disabled
+                className="!font-pixel !text-sm px-8 py-4 bg-gray-600 text-gray-400 border-2 border-gray-500 cursor-not-allowed uppercase tracking-wider"
+                style={{
+                  boxShadow: '0 4px 0 #444, 0 4px 10px rgba(0, 0, 0, 0.5)',
+                  textShadow: '1px 1px 0 #333'
+                }}
+              >
+                Coming Soon
+              </button>
+              {/* Original wallet button - hidden but preserved */}
+              <div style={{ display: 'none' }}>
+                <WalletMultiButton className="!font-pixel !text-sm"/>
+              </div>
             </div>
           </div>
         ) : (
