@@ -1034,102 +1034,104 @@ async function handlePOST(request: NextRequest) {
           txSignature = settleResult.transaction;
           
         } // End of if/else for fully signed vs partially signed
-          
-          // At this point, txSignature MUST be set from either direct submission or CDP
-          if (!txSignature) {
-            throw new Error('No transaction signature available - internal error');
+        
+        // At this point, txSignature MUST be set from either direct submission or CDP
+        if (!txSignature) {
+          throw new Error('No transaction signature available - internal error');
+        }
+        
+        console.log('[x402] Settlement successful! Transaction:', txSignature);
+
+        // CHECK IF THIS TRANSACTION WAS ALREADY PROCESSED (DUPLICATE DETECTION)
+        const existingPayment = await prisma.payment.findFirst({
+          where: {
+            signature: txSignature,
+            verified: true
           }
+        });
+
+        if (existingPayment) {
+          console.log('[CDP] ✅ Transaction already processed:', txSignature);
+          console.log('[CDP] Existing payment ID:', existingPayment.id, 'Amount:', existingPayment.amount);
           
-          console.log('[x402] Settlement successful! Transaction:', txSignature);
-
-          // CHECK IF THIS TRANSACTION WAS ALREADY PROCESSED (DUPLICATE DETECTION)
-          const existingPayment = await prisma.payment.findFirst({
-            where: {
-              signature: txSignature,
-              verified: true
-            }
-          });
-
-          if (existingPayment) {
-            console.log('[CDP] ✅ Transaction already processed:', txSignature);
-            console.log('[CDP] Existing payment ID:', existingPayment.id, 'Amount:', existingPayment.amount);
+          settlementResult = {
+            success: true,
+            transaction: txSignature,
+            network: 'solana',
+            payer: existingPayment.fromWallet,
+            solanaExplorer: `https://explorer.solana.com/tx/${txSignature}`,
+            note: 'Transaction already processed (duplicate request prevented)',
+            isDuplicate: true
+          };
+        } else {
+          // NEW TRANSACTION - store in database
+          console.log('[x402] NEW TRANSACTION - preparing to store in database');
+          console.log(`[x402] Transaction: ${txSignature}`);
+          console.log(`[x402] From: ${userWallet}, To: ${to}, Amount: ${amount} ${currency}`);
+          
+          settlementResult = {
+            success: true,
+            transaction: txSignature,
+            network:'solana',
+            payer: userWallet,
+            solanaExplorer:`https://explorer.solana.com/tx/${txSignature}`,
+          };
+          
+          console.log('[x402] Settlement result:', settlementResult);
+          
+          // Store payment in database
+          try {
+            const paymentAmount = amount;
+            const paymentServiceType = isPremiumServicePayment && serviceType 
+              ? serviceType
+              : (isPremiumServicePayment ? 'premium_service' : 'message_fee');
             
-            settlementResult = {
-              success: true,
-              transaction: txSignature,
-              network: 'solana',
-              payer: existingPayment.fromWallet,
-              solanaExplorer: `https://explorer.solana.com/tx/${txSignature}`,
-              note: 'Transaction already processed (duplicate request prevented)',
-              isDuplicate: true
-            };
-          } else {
-            // NEW TRANSACTION - store in database
-            settlementResult = {
-              success: true,
-              transaction: txSignature,
-              network:'solana',
-              payer: userWallet, // Use actual user wallet, not facilitator address
-              solanaExplorer:`https://explorer.solana.com/tx/${txSignature}`,
-            };
+            console.log(`[x402] Creating payment record: ${paymentServiceType}`);
             
-            console.log('[CDP] Settlement result:', settlementResult);
-            
-            // Store payment in database
-            try {
-              const paymentAmount = amount;
-              // Extract the ACTUAL service type from payment data for premium services
-              // serviceType was extracted earlier from frontendPayload on line 260
-              const paymentServiceType = isPremiumServicePayment && serviceType 
-                ? serviceType  // Use the actual service type (e.g., "insider_info", "connection_intro")
-                : (isPremiumServicePayment ? 'premium_service' : 'message_fee');
-              
-              const payment = await prisma.payment.create({
-                data: {
-                  fromWallet: userWallet, // Use actual user wallet, not CDP facilitator address
-                  toWallet: to,
-                  toAgent: agentId,
-                  amount: paymentAmount,
-                  currency: currency,
-                  signature: txSignature,
-                  serviceType: paymentServiceType,
-                  verified: true,
-                  verifiedAt: new Date(),
-                  isAgentToAgent: false,
-                  initiatedBy: userWallet
-                }
-              });
-              console.log('[CDP] Payment stored in database:', txSignature, 'ID:', payment.id);
-              
-              // Record ServiceUsage immediately for premium services
-              if (isPremiumServicePayment && serviceType && serviceType !== 'premium_service') {
-                try {
-                  // Get user and session info for ServiceUsage
-                  const user = await prisma.user.findUnique({
-                    where: { walletAddress: userWallet },
-                    select: { id: true }
-                  });
-                  
-                  if (user && thread && thread.session) {
-                    await serviceUsageRepository.recordServiceUsage(
-                      user.id,
-                      thread.session.id,
-                      getCurrentWeekId(),
-                      serviceType,
-                      agentId,
-                      0 // Score bonus will be calculated when agent awards points
-                    );
-                    console.log(`[Service Usage] Recorded ${serviceType} usage for ${userWallet.slice(0, 8)}... immediately after payment`);
-                  }
-                } catch (usageError: any) {
-                  console.error('[Service Usage] Failed to record usage after payment:', usageError.message);
-                  // Don't fail payment if usage recording fails
-                }
+            const payment = await prisma.payment.create({
+              data: {
+                fromWallet: userWallet,
+                toWallet: to,
+                toAgent: agentId,
+                amount: paymentAmount,
+                currency: currency,
+                signature: txSignature,
+                serviceType: paymentServiceType,
+                verified: true,
+                verifiedAt: new Date(),
+                isAgentToAgent: false,
+                initiatedBy: userWallet
               }
-            } catch (storeError: any) {
-              console.error('[CDP] Failed to store payment in database:', storeError.message);
-              // Don't fail the whole request if storage fails
+            });
+            console.log('[x402] ✅ Payment stored in database:', txSignature, 'ID:', payment.id);
+            console.log(`[x402] Payment amount: ${paymentAmount} ${currency}, serviceType: ${paymentServiceType}`);
+            
+            // Record ServiceUsage immediately for premium services
+            if (isPremiumServicePayment && serviceType && serviceType !== 'premium_service') {
+              try {
+                const user = await prisma.user.findUnique({
+                  where: { walletAddress: userWallet },
+                  select: { id: true }
+                });
+                
+                if (user && thread && thread.session) {
+                  await serviceUsageRepository.recordServiceUsage(
+                    user.id,
+                    thread.session.id,
+                    getCurrentWeekId(),
+                    serviceType,
+                    agentId,
+                    0
+                  );
+                  console.log(`[Service Usage] Recorded ${serviceType} usage for ${userWallet.slice(0, 8)}... immediately after payment`);
+                }
+              } catch (usageError: any) {
+                console.error('[Service Usage] Failed to record usage after payment:', usageError.message);
+              }
             }
+          } catch (storeError: any) {
+            console.error('[x402] ❌ Failed to store payment in database:', storeError.message);
+            console.error('[x402] Error stack:', storeError.stack);
           }
         }
       } catch (error: any) {
