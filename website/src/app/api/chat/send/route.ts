@@ -540,6 +540,35 @@ async function handlePOST(request: NextRequest) {
         
         console.log('[CDP] Settle request body:', JSON.stringify(settleRequestBody, null, 2));
         
+        // DEBUGGING: Decode the transaction to see what instructions CDP will see
+        try {
+          const { Transaction: SolanaTransaction } = await import('@solana/web3.js');
+          const txBase64 = x402Payload.payload.transaction;
+          const txBuffer = Buffer.from(txBase64, 'base64');
+          const decodedTx = SolanaTransaction.from(txBuffer);
+          
+          console.log('[CDP] Transaction that will be sent to CDP:');
+          console.log(`[CDP]   Instructions count: ${decodedTx.instructions.length}`);
+          console.log('[CDP]   Instructions:');
+          for (let i = 0; i < decodedTx.instructions.length; i++) {
+            const ix = decodedTx.instructions[i];
+            const programId = ix.programId.toString();
+            let type = 'Unknown';
+            if (programId === 'ComputeBudget111111111111111111111111111111') {
+              type = 'ComputeBudget';
+            } else if (programId === 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA') {
+              type = 'SPL Token Transfer';
+            } else if (programId === 'L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95') {
+              type = '⚠️ LIGHTHOUSE ASSERTION (causes CDP error)';
+            } else if (programId === 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL') {
+              type = '⚠️ ATA CREATION (causes CDP error)';
+            }
+            console.log(`[CDP]     [${i}] ${type} - Program: ${programId}`);
+          }
+        } catch (decodeError: any) {
+          console.error('[CDP] Failed to decode transaction:', decodeError.message);
+        }
+        
         const settleUrl =`${facilitator.url}/settle`;
         
         console.log('[CDP] Sending settle request to:', settleUrl);

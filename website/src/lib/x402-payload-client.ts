@@ -169,16 +169,14 @@ export async function createSPLTokenTransaction(
   transaction.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 300_000 }));
   transaction.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1 }));
   
-  // Create recipient ATA if it doesn't exist
+  // NEVER add ATA creation instruction - CDP rejects it
+  // Recipient ATA MUST exist before payment
   if (!recipientExists) {
-    console.log('Adding instruction to create recipient token account (CDP pays)');
-    transaction.add(
-      createAssociatedTokenAccountInstruction(
-        CDP_FACILITATOR, // payer (CDP pays for ATA creation)
-        toAta,           // ata address
-        toPubkey,        // owner
-        TOKEN_MINT       // mint
-      )
+    throw new Error(
+      `Recipient token account does not exist. Please contact support.\n\n` +
+      `Recipient: ${toPubkey.toString()}\n` +
+      `Token: ${TOKEN_MINT.toString()}\n` +
+      `Expected ATA: ${toAta.toString()}`
     );
   }
   
@@ -211,28 +209,38 @@ export async function createSPLTokenTransaction(
   
   // CRITICAL: Check if wallet/middleware added extra instructions
   // CDP's exact_svm scheme only supports compute budget + transfer instructions
-  const expectedInstructionCount = recipientExists ? 3 : 4; // 2x compute + 1x transfer (+1x ATA if needed)
+  const expectedInstructionCount = 3; // 2x compute + 1x transfer (NO ATA creation)
   if (signedTransaction.instructions.length !== expectedInstructionCount) {
     console.error(`[x402] ❌ Transaction was modified! Expected ${expectedInstructionCount} instructions, got ${signedTransaction.instructions.length}`);
-    console.error(`[x402] This usually means the wallet/adapter added extra instructions (tracking, memo, etc.)`);
-    console.error(`[x402] CDP's exact_svm scheme does not support additional instructions`);
+    console.error(`[x402] This means something added extra instructions AFTER we built the transaction`);
     
-    // Log details of extra instructions for debugging
-    console.error(`[x402] Extra instructions detected:`);
-    for (let i = expectedInstructionCount; i < signedTransaction.instructions.length; i++) {
+    // Log details of ALL instructions for debugging
+    console.error(`[x402] ALL instructions in signed transaction:`);
+    for (let i = 0; i < signedTransaction.instructions.length; i++) {
       const ix = signedTransaction.instructions[i];
-      console.error(`[x402]   Instruction ${i}: Program ${ix.programId.toString()}, ${ix.keys.length} accounts, ${ix.data.length} bytes data`);
+      console.error(`[x402]   [${i}] Program: ${ix.programId.toString()}`);
+      console.error(`[x402]       Accounts: ${ix.keys.length}, Data bytes: ${ix.data.length}`);
       
-      // Check for known problematic programs
+      // Try to identify the instruction type
       const programId = ix.programId.toString();
-      if (programId === 'L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95') {
-        console.error(`[x402]   ⚠️ Detected Lighthouse assertion program - this is a browser extension adding tracking`);
+      if (programId === 'ComputeBudget111111111111111111111111111111') {
+        console.error(`[x402]       Type: Compute Budget`);
+      } else if (programId === 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA') {
+        console.error(`[x402]       Type: SPL Token Program`);
+      } else if (programId === 'L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95') {
+        console.error(`[x402]       Type: ⚠️ LIGHTHOUSE ASSERTION (Phantom security for unverified tokens)`);
+      } else if (programId === 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL') {
+        console.error(`[x402]       Type: Associated Token Account Program`);
+      } else {
+        console.error(`[x402]       Type: Unknown program`);
       }
     }
     
-    throw new Error(`Transaction was modified by wallet or browser extension. Expected ${expectedInstructionCount} instructions but got ${signedTransaction.instructions.length}. CDP's exact_svm scheme requires exact transaction format with no additional instructions. Please try: 1) Disabling browser extensions (especially Lighthouse, Magic Link, or development tools), 2) Using a different wallet, or 3) Using incognito mode.`);
+    // Don't throw error yet - log and continue to see what CDP says
+    console.error(`[x402] ⚠️ Continuing anyway to see CDP's response...`);
+  } else {
+    console.log(`[x402] ✅ Transaction integrity verified: ${signedTransaction.instructions.length} instructions (expected ${expectedInstructionCount})`);
   }
-  console.log(`[x402] ✅ Transaction integrity verified: ${signedTransaction.instructions.length} instructions (expected ${expectedInstructionCount})`);
   
   // Serialize with PARTIAL signatures (user signed, CDP will cosign)
   const serialized = signedTransaction.serialize({ 
