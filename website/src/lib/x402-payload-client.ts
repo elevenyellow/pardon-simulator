@@ -140,6 +140,10 @@ export async function createSPLTokenTransaction(
   const { accounts } = await checkResponse.json();
   const recipientExists = accounts[0]?.exists;
   
+  console.log(`[x402] Recipient token account check: ${recipientExists ? 'EXISTS' : 'DOES NOT EXIST'}`);
+  console.log(`[x402] Recipient ATA address: ${toAta.toString()}`);
+  console.log(`[x402] Token mint: ${TOKEN_MINT.toString()}`);
+  
   console.log('[x402] ⏱️ Fetching FRESH blockhash (as late as possible to minimize staleness)');
   
   // Get blockhash as LATE as possible - right before building transaction
@@ -192,9 +196,43 @@ export async function createSPLTokenTransaction(
   
   console.log('✍️ Requesting user signature for transfer authority...');
   console.log('User signs partially (transfer only), CDP will cosign as fee payer');
+  console.log(`[x402] Transaction has ${transaction.instructions.length} instructions BEFORE signing`);
+  console.log(`[x402] Instructions BEFORE signing:`, transaction.instructions.map((ix, i) => 
+    `[${i}] ${ix.programId.toString()}`
+  ));
   
   // User signs the transaction (partial signature - only transfer authority)
   const signedTransaction = await signTransaction(transaction);
+  
+  console.log(`[x402] Transaction has ${signedTransaction.instructions.length} instructions AFTER signing`);
+  console.log(`[x402] Instructions AFTER signing:`, signedTransaction.instructions.map((ix, i) => 
+    `[${i}] ${ix.programId.toString()}`
+  ));
+  
+  // CRITICAL: Check if wallet/middleware added extra instructions
+  // CDP's exact_svm scheme only supports compute budget + transfer instructions
+  const expectedInstructionCount = recipientExists ? 3 : 4; // 2x compute + 1x transfer (+1x ATA if needed)
+  if (signedTransaction.instructions.length !== expectedInstructionCount) {
+    console.error(`[x402] ❌ Transaction was modified! Expected ${expectedInstructionCount} instructions, got ${signedTransaction.instructions.length}`);
+    console.error(`[x402] This usually means the wallet/adapter added extra instructions (tracking, memo, etc.)`);
+    console.error(`[x402] CDP's exact_svm scheme does not support additional instructions`);
+    
+    // Log details of extra instructions for debugging
+    console.error(`[x402] Extra instructions detected:`);
+    for (let i = expectedInstructionCount; i < signedTransaction.instructions.length; i++) {
+      const ix = signedTransaction.instructions[i];
+      console.error(`[x402]   Instruction ${i}: Program ${ix.programId.toString()}, ${ix.keys.length} accounts, ${ix.data.length} bytes data`);
+      
+      // Check for known problematic programs
+      const programId = ix.programId.toString();
+      if (programId === 'L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95') {
+        console.error(`[x402]   ⚠️ Detected Lighthouse assertion program - this is a browser extension adding tracking`);
+      }
+    }
+    
+    throw new Error(`Transaction was modified by wallet or browser extension. Expected ${expectedInstructionCount} instructions but got ${signedTransaction.instructions.length}. CDP's exact_svm scheme requires exact transaction format with no additional instructions. Please try: 1) Disabling browser extensions (especially Lighthouse, Magic Link, or development tools), 2) Using a different wallet, or 3) Using incognito mode.`);
+  }
+  console.log(`[x402] ✅ Transaction integrity verified: ${signedTransaction.instructions.length} instructions (expected ${expectedInstructionCount})`);
   
   // Serialize with PARTIAL signatures (user signed, CDP will cosign)
   const serialized = signedTransaction.serialize({ 

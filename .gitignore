@@ -241,3 +241,5 @@ uv.lock
 registry.local.toml
 application.local.yaml
 backups/
+.vercel
+.env*.local
