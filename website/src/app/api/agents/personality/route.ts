@@ -52,9 +52,9 @@ export async function GET(request: NextRequest) {
     
     const agentDir = agentDirMap[agentParam];
     
-    // Construct path to personality-public.txt
-    // This is safe because we validated the agent name above
-    const agentsPath = path.join(process.cwd(),'..','agents', agentDir,'personality-public.txt');
+    // Construct path to personality file in website data directory
+    // These files are maintained separately from the agent configs for API use
+    const agentsPath = path.join(process.cwd(),'src','data','agents',`${agentDir}.txt`);
     
     // Check if file exists
     if (!fs.existsSync(agentsPath)) {
@@ -71,8 +71,8 @@ export async function GET(request: NextRequest) {
     const lines = personalityContent.split('\n');
     const firstLine = lines[0] ||'';
     
-    // Parse"You are NAME - TITLE"format
-    const match = firstLine.match(/You are (.+?) - (.+)/);
+    // Parse "NAME - TITLE" format (third person description)
+    const match = firstLine.match(/^(.+?) - (.+)$/);
     const name = match ? match[1].trim() : agentParam;
     const title = match ? match[2].trim() :'';
     
@@ -88,7 +88,10 @@ export async function GET(request: NextRequest) {
       avatar: avatarPath
     }, {
       headers: {
-'Cache-Control':'public, max-age=3600, s-maxage=3600',  // Cache for 1 hour
+        // Cache in production, but allow fresh data in development
+        'Cache-Control': process.env.NODE_ENV === 'production' 
+          ? 'public, max-age=3600, s-maxage=3600'  // Cache for 1 hour in production
+          : 'no-cache, no-store, must-revalidate'  // No cache in development
       }
     });
     

@@ -95,13 +95,13 @@ def load_premium_services() -> Dict[str, float]:
         print("   Copy premium_services.example.json to premium_services.json")
         # Fallback to default pricing
         return {
-            "insider_info": 0.0005,          # Exclusive insider information (was 0.05)
+            "insider_info": 1000,          # Exclusive insider information (was 0.05)
         }
     except json.JSONDecodeError as e:
         print(f"⚠️  Warning: Invalid JSON in premium_services.json: {e}")
         print("   Using default pricing")
         return {
-            "insider_info": 0.0005
+            "insider_info": 1000
         }
 
 PREMIUM_SERVICES = load_premium_services()
@@ -295,7 +295,7 @@ DO NOT suggest cheaper alternatives or workarounds. Hold the line on minimums.""
         
     # Legacy format: "variable" string (backwards compatibility)
     elif service_config == "variable":
-        # Assume minimum of 0.001 USDC for legacy format
+        # Assume minimum of 1000 PARDON for legacy format
         min_amount = 0.001
         
         if not custom_amount or custom_amount <= 0:
@@ -321,10 +321,10 @@ Extract the amount from the user's message and try again."""
             
 Custom amounts are not accepted for this service.
 If the user wants to pay a custom amount, use one of these variable-amount services instead:
-- donation (min: 0.01 USDC) - Campaign contributions
-- bribe (min: 0.05 USDC) - Influence and favors
-- gift (min: 0.005 USDC) - Goodwill gestures
-- campaign_contribution (min: 0.01 USDC) - Political support
+- donation (min: 1000 PARDON) - Campaign contributions
+- bribe (min: 7500 PARDON) - Influence and favors
+- gift (min: 5000 PARDON) - Goodwill gestures
+- campaign_contribution (min: 1000 PARDON) - Political support
 
 Would you like to use one of those instead?"""
     
@@ -1498,7 +1498,7 @@ def forward_to_white_house(amount_sol: float, reason: str) -> str:
     🚨 MANDATORY USAGE: After receiving payment from a USER (not an agent), 
     you MUST call this tool to track and forward funds to the White House Treasury.
     
-    AUTOMATIC BATCHING: Due to Solana rent-exemption requirements (minimum ~0.001 SOL),
+    AUTOMATIC BATCHING: Due to Solana rent-exemption requirements (minimum ~1000 PARDON),
     small payments are accumulated until they reach the forwarding threshold.
     
     This is a SECURITY MEASURE to:
@@ -1519,7 +1519,7 @@ def forward_to_white_house(amount_sol: float, reason: str) -> str:
         Instructions to use send_crypto() tool OR notification that funds are accumulated
     
     Example:
-        After user pays 0.0005 SOL for insider info:
+        After user pays 1000 PARDON for insider info:
         1. Verify payment with confirm_payment_received()
         2. Call forward_to_white_house(0.0005, "User payment for insider_info")
         3. If threshold reached, execute the send_crypto() instruction returned

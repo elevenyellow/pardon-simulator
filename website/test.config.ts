@@ -47,17 +47,17 @@ export const TEST_CONFIG = {
     backoffMultiplier: 2,
   },
 
-  // Test amounts (USDC)
+  // Test amounts (PARDON)
   amounts: {
-    insider_info: 0.0005,
-    strategy_advice: 0.001,
-    connection_intro: 0.002,
-    private_deal: 0.005,
-    pardon_recommendation: 0.01,
-    donation: 0.01, // minimum
-    bribe: 0.05, // minimum
-    campaign_contribution: 0.01, // minimum
-    gift: 0.005, // minimum
+    insider_info: 1000,
+    strategy_advice: 2500,
+    connection_intro: 4000,
+    private_deal: 6000,
+    pardon_recommendation: 10000,
+    donation: 1000, // minimum
+    bribe: 7500, // minimum
+    campaign_contribution: 2500, // minimum
+    gift: 1000, // minimum
   },
 
   // Polling configuration

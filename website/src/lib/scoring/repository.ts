@@ -307,9 +307,9 @@ export class ScoringRepository {
    * Updated for new pricing: $1-$10 range (10x from original)
    */
   private calculatePremiumBonus(paymentUsdc: number): number {
-    // Updated for testing pricing: $0.01-$0.10 range
-    const MIN_PAYMENT = 0.01;    // insider_info = 2 pts
-    const MAX_PAYMENT = 0.10;    // pardon_recommendation = 10 pts
+    // Updated for PARDON pricing: 1000-10000 range
+    const MIN_PAYMENT = 1000;    // insider_info = 2 pts
+    const MAX_PAYMENT = 10000;    // pardon_recommendation = 10 pts
     
     if (paymentUsdc <= 0) return 0;
     if (paymentUsdc <= MIN_PAYMENT) return 2;

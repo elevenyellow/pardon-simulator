@@ -193,6 +193,7 @@ website/.env.development
 # Agent session configuration with API keys and private keys
 agents-session-configuration.json
 trump-game-frontend/public/agents-session-configuration.json
+website/public/agents-session-configuration.json
 
 # Agent wallet addresses (generated from private keys - now redundant but kept for safety)
 agent_wallets.json

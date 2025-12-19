@@ -1530,7 +1530,7 @@ DETECTION PATTERNS - If user message contains ANY of:
 - "Reach out to [agent]..."
 - "Ping [agent]..."
 
-→ THIS IS A connection_intro REQUEST (0.002 USDC)
+→ THIS IS A connection_intro REQUEST (2000 PARDON)
 → YOU MUST CHARGE BEFORE CONTACTING ANYONE!
 
 MANDATORY WORKFLOW if connection_intro detected:

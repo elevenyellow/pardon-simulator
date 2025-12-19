@@ -1,28 +1,27 @@
 {
-  "insider_info": 0.10,
-  "strategy_advice": 0.25,
-  "connection_intro": 0.40,
-  "private_deal": 0.60,
-  "pardon_recommendation": 1.00,
+  "insider_info": 1000,
+  "strategy_advice": 2500,
+  "connection_intro": 4000,
+  "private_deal": 6000,
+  "pardon_recommendation": 10000,
   "donation": {
     "type": "variable",
-    "min_amount": 0.10,
-    "currency": "USDC"
+    "min_amount": 1000,
+    "currency": "PARDON"
   },
   "bribe": {
     "type": "variable",
-    "min_amount": 0.75,
-    "currency": "USDC"
+    "min_amount": 7500,
+    "currency": "PARDON"
   },
   "campaign_contribution": {
     "type": "variable",
-    "min_amount": 0.25,
-    "currency": "USDC"
+    "min_amount": 2500,
+    "currency": "PARDON"
   },
   "gift": {
     "type": "variable",
-    "min_amount": 0.10,
-    "currency": "USDC"
+    "min_amount": 1000,
+    "currency": "PARDON"
   }
 }
-

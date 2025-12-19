@@ -454,10 +454,42 @@ export default function Home() {
               <p className="font-pixel text-xs leading-relaxed text-white uppercase">
                 PLAY SMART, PLAY SLY — AND DON'T GET SENTIMENTAL. YOUR LAST SHOT'S ON THE LINE.
               </p>
+              <p className="font-pixel text-xs leading-relaxed text-white/70 uppercase mt-4 pt-4 border-t border-[#66b680]/30">
+                $PARDON IS A COIN WITH NO INTRINSIC VALUE OR EXPECTATION OF FINANCIAL RETURN. THE COIN IS FOR ENTERTAINMENT PURPOSES ONLY.
+              </p>
             </div>
 
-            {/* Copyright */}
-            <div className="font-pixel text-xs text-white bg-black/50 px-3 py-1.5 rounded-lg backdrop-blur-sm">
+            {/* Token Contract */}
+            <div className="flex items-center gap-3">
+              <div className="font-pixel text-[10px] text-white/90 bg-black/50 px-3 py-1.5 rounded-lg backdrop-blur-sm hover:bg-black/70 transition-all">
+                <a 
+                  href="https://solscan.io/token/A38LewMbt9t9HvNUrsPtHQPHLfEPVT5rfadN4VqBbonk"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-[#66b680] transition-colors"
+                >
+                  A38LewMbt9t9HvNUrsPtHQPHLfEPVT5rfadN4VqBbonk
+                </a>
+              </div>
+              
+              {/* Twitter/X Link */}
+              <a
+                href="http://x.com/pardonsimulator"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-black/50 p-2 rounded-lg backdrop-blur-sm hover:bg-black/70 transition-all hover:scale-110"
+                aria-label="Follow on X/Twitter"
+              >
+                <svg 
+                  width="20" 
+                  height="20" 
+                  viewBox="0 0 24 24" 
+                  fill="white"
+                  className="opacity-70 hover:opacity-100 transition-opacity"
+                >
+                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                </svg>
+              </a>
             </div>
           </div>
         </div>

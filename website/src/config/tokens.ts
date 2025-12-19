@@ -17,7 +17,7 @@ import { PublicKey } from '@solana/web3.js';
  * Payment token mint address (Solana SPL token)
  * Update this value when switching to production token
  */
-export const PAYMENT_TOKEN_MINT = '9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump';
+export const PAYMENT_TOKEN_MINT = 'A38LewMbt9t9HvNUrsPtHQPHLfEPVT5rfadN4VqBbonk';
 
 /**
  * Payment token decimals
@@ -29,7 +29,7 @@ export const PAYMENT_TOKEN_DECIMALS = 6;
  * Payment token name (for display in UI)
  * Update this value when switching to production token (e.g., 'PARDON')
  */
-export const PAYMENT_TOKEN_NAME = 'FARTCOIN';
+export const PAYMENT_TOKEN_NAME = 'PARDON';
 
 // =============================================================================
 // DO NOT CHANGE BELOW - Everything else uses the values above
@@ -45,7 +45,7 @@ export const USDC_DECIMALS = 6;
 
 // Message Fee Configuration (uses payment token)
 export const MESSAGE_FEE_CONFIG = {
-  amount: 0.01,
+  amount: 1000,
   currency: PAYMENT_TOKEN_NAME,
   mint: PAYMENT_TOKEN_MINT,
   decimals: PAYMENT_TOKEN_DECIMALS,

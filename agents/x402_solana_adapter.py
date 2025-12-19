@@ -24,7 +24,7 @@ import json
 
 # Payment token mint address (Solana SPL token)
 # Update this value when switching to production token
-PAYMENT_TOKEN_MINT = "9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump"
+PAYMENT_TOKEN_MINT = "A38LewMbt9t9HvNUrsPtHQPHLfEPVT5rfadN4VqBbonk"
 
 # Payment token decimals
 # Update this value if production token uses different decimals
@@ -32,7 +32,7 @@ PAYMENT_TOKEN_DECIMALS = 6
 
 # Payment token name (for display)
 # Update this value when switching to production token (e.g., 'PARDON')
-PAYMENT_TOKEN_NAME = "FARTCOIN"
+PAYMENT_TOKEN_NAME = "PARDON"
 
 # =============================================================================
 # DO NOT CHANGE BELOW

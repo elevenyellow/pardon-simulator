@@ -25,13 +25,13 @@ def load_premium_services() -> Dict[str, Union[float, Dict]]:
         print("   Copy premium_services.example.json to premium_services.json")
         # Fallback to default pricing
         return {
-            "insider_info": 0.0005,  # Exclusive insider information
+            "insider_info": 1000,  # Exclusive insider information
         }
     except json.JSONDecodeError as e:
         print(f"⚠️  Warning: Invalid JSON in premium_services.json: {e}")
         print("   Using default pricing")
         return {
-            "insider_info": 0.0005
+            "insider_info": 1000
         }
 
 

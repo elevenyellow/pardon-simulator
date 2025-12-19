@@ -866,7 +866,7 @@ export default function ChatInterface({
               processedMessageIdsRef.current.add(messageId);
               
               const amount = request.amount || 0.01;
-              const currency = PAYMENT_TOKEN_NAME;  // Actual token name from config (e.g., 'FARTCOIN', 'PARDON')
+              const currency = PAYMENT_TOKEN_NAME;  // Actual token name from config (e.g., 'PARDON')
               const service = request.service_type?.replace(/_/g, ' ') || 'premium service';
               
               console.log(`[SSE Premium Service] Payment request detected: ${amount} ${currency} for ${service}`);
@@ -1690,7 +1690,7 @@ export default function ChatInterface({
       
       // All payments use payment token
       const amount = paymentReq.amount || 0.01;  // Default to 0.01 payment token
-      const currency = PAYMENT_TOKEN_NAME;  // Use actual token name from config (e.g., 'FARTCOIN', 'PARDON')
+      const currency = PAYMENT_TOKEN_NAME;  // Use actual token name from config (e.g., 'PARDON')
       const isPremiumService = paymentReq.service_type && paymentReq.service_type !== 'message_fee';
       
       console.log(`[Payment] Amount: ${amount} ${currency}`);

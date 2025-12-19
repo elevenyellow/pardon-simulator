@@ -166,3 +166,30 @@ This file tracks when agent configurations are uploaded to S3. It's updated auto
   - `agents/trump-barron/tool-descriptions.txt`
   - `agents/shared/operational-template.txt`
   - `agents/shared/scoring-mandate.txt`
+
+### 2025-12-19 17:15:54
+- Configurations uploaded to S3
+- Backup: `backups/2025-12-19_17-15-52/`
+- Changed files (22):
+  - `agents/cz/operational-private.txt`
+  - `agents/cz/tool-descriptions.txt`
+  - `agents/cz/tool-definitions.json`
+  - `agents/sbf/operational-private.txt`
+  - `agents/sbf/tool-definitions.json`
+  - `agents/trump-donald/operational-private.txt`
+  - `agents/trump-donald/tool-descriptions.txt`
+  - `agents/trump-donald/tool-definitions.json`
+  - `agents/trump-melania/operational-private.txt`
+  - `agents/trump-melania/tool-descriptions.txt`
+  - `agents/trump-melania/tool-definitions.json`
+  - `agents/trump-eric/operational-private.txt`
+  - `agents/trump-eric/tool-descriptions.txt`
+  - `agents/trump-eric/tool-definitions.json`
+  - `agents/trump-donjr/operational-private.txt`
+  - `agents/trump-donjr/tool-descriptions.txt`
+  - `agents/trump-donjr/tool-definitions.json`
+  - `agents/trump-barron/operational-private.txt`
+  - `agents/trump-barron/tool-descriptions.txt`
+  - `agents/trump-barron/tool-definitions.json`
+  - `agents/shared/operational-template.txt`
+  - `agents/premium_services.json`
