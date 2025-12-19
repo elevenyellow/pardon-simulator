@@ -117,9 +117,6 @@ export async function createSPLTokenTransaction(
   // Token mint address
   const TOKEN_MINT = new PublicKey(tokenMint);
 
-  // CDP facilitator address that will cosign
-  const CDP_FACILITATOR = new PublicKey(CDP_FACILITATOR_ADDRESS);
-
   // Convert token amount to smallest unit
   const microAmount = Math.floor(amount * Math.pow(10, tokenDecimals));
 
@@ -144,32 +141,6 @@ export async function createSPLTokenTransaction(
   console.log(`[x402] Recipient ATA address: ${toAta.toString()}`);
   console.log(`[x402] Token mint: ${TOKEN_MINT.toString()}`);
   
-  console.log('[x402] ⏱️ Fetching FRESH blockhash (as late as possible to minimize staleness)');
-  
-  // Get blockhash as LATE as possible - right before building transaction
-  // This minimizes the time window between blockhash retrieval and CDP settlement
-  // Blockhashes are valid for ~60-90 seconds (150 slots), so every second counts
-  const blockhashResponse = await fetch('/api/solana/blockhash');
-  if (!blockhashResponse.ok) {
-    throw new Error('Failed to get blockhash from backend');
-  }
-  const { blockhash, lastValidBlockHeight } = await blockhashResponse.json();
-  
-  console.log('[x402] Blockhash retrieved:', blockhash.substring(0, 10) + '...');
-  console.log('[x402] Building SPL token transaction immediately to minimize staleness window');
-  
-  // Create transaction with CDP facilitator as fee payer
-  const transaction = new Transaction({
-    feePayer: CDP_FACILITATOR,  // ← CDP pays fees and will cosign
-    blockhash,
-    lastValidBlockHeight
-  });
-  
-  // Add compute budget
-  transaction.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 300_000 }));
-  transaction.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1 }));
-  
-  // NEVER add ATA creation instruction - CDP rejects it
   // Recipient ATA MUST exist before payment
   if (!recipientExists) {
     throw new Error(
@@ -179,6 +150,31 @@ export async function createSPLTokenTransaction(
       `Expected ATA: ${toAta.toString()}`
     );
   }
+  
+  console.log('[x402] ⏱️ Fetching FRESH blockhash (as late as possible to minimize staleness)');
+  
+  // Get blockhash as LATE as possible - right before building transaction
+  const blockhashResponse = await fetch('/api/solana/blockhash');
+  if (!blockhashResponse.ok) {
+    throw new Error('Failed to get blockhash from backend');
+  }
+  const { blockhash, lastValidBlockHeight } = await blockhashResponse.json();
+  
+  console.log('[x402] Blockhash retrieved:', blockhash.substring(0, 10) + '...');
+  console.log('[x402] Building SPL token transaction (USER PAYS FEES - bypasses CDP facilitator)');
+  
+  // Create transaction with USER as fee payer (NOT CDP)
+  // This allows Phantom to add Lighthouse without CDP rejecting it
+  // We'll submit directly to Solana, bypassing CDP's strict validation
+  const transaction = new Transaction({
+    feePayer: fromPubkey,  // ← User pays their own fees
+    blockhash,
+    lastValidBlockHeight
+  });
+  
+  // Add compute budget
+  transaction.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 300_000 }));
+  transaction.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1 }));
   
   // Add SPL token transfer instruction
   transaction.add(
@@ -192,14 +188,13 @@ export async function createSPLTokenTransaction(
     )
   );
   
-  console.log('✍️ Requesting user signature for transfer authority...');
-  console.log('User signs partially (transfer only), CDP will cosign as fee payer');
+  console.log('✍️ Requesting user signature (FULL transaction - user pays fees)...');
   console.log(`[x402] Transaction has ${transaction.instructions.length} instructions BEFORE signing`);
   console.log(`[x402] Instructions BEFORE signing:`, transaction.instructions.map((ix, i) => 
     `[${i}] ${ix.programId.toString()}`
   ));
   
-  // User signs the transaction (partial signature - only transfer authority)
+  // User signs the transaction (FULL signature - user is fee payer)
   const signedTransaction = await signTransaction(transaction);
   
   console.log(`[x402] Transaction has ${signedTransaction.instructions.length} instructions AFTER signing`);
@@ -207,49 +202,33 @@ export async function createSPLTokenTransaction(
     `[${i}] ${ix.programId.toString()}`
   ));
   
-  // CRITICAL: Check if wallet/middleware added extra instructions
-  // CDP's exact_svm scheme only supports compute budget + transfer instructions
-  const expectedInstructionCount = 3; // 2x compute + 1x transfer (NO ATA creation)
-  if (signedTransaction.instructions.length !== expectedInstructionCount) {
-    console.error(`[x402] ❌ Transaction was modified! Expected ${expectedInstructionCount} instructions, got ${signedTransaction.instructions.length}`);
-    console.error(`[x402] This means something added extra instructions AFTER we built the transaction`);
-    
-    // Log details of ALL instructions for debugging
-    console.error(`[x402] ALL instructions in signed transaction:`);
-    for (let i = 0; i < signedTransaction.instructions.length; i++) {
+  // Log if wallet added extra instructions (expected for Phantom with unverified tokens)
+  const expectedInstructionCount = 3; // 2x compute + 1x transfer
+  const hasExtraInstructions = signedTransaction.instructions.length > expectedInstructionCount;
+  
+  if (hasExtraInstructions) {
+    console.log(`[x402] ℹ️ Wallet added ${signedTransaction.instructions.length - expectedInstructionCount} extra instruction(s)`);
+    console.log(`[x402] This is OK - we'll submit directly to Solana (not via CDP)`);
+    for (let i = expectedInstructionCount; i < signedTransaction.instructions.length; i++) {
       const ix = signedTransaction.instructions[i];
-      console.error(`[x402]   [${i}] Program: ${ix.programId.toString()}`);
-      console.error(`[x402]       Accounts: ${ix.keys.length}, Data bytes: ${ix.data.length}`);
-      
-      // Try to identify the instruction type
       const programId = ix.programId.toString();
-      if (programId === 'ComputeBudget111111111111111111111111111111') {
-        console.error(`[x402]       Type: Compute Budget`);
-      } else if (programId === 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA') {
-        console.error(`[x402]       Type: SPL Token Program`);
-      } else if (programId === 'L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95') {
-        console.error(`[x402]       Type: ⚠️ LIGHTHOUSE ASSERTION (Phantom security for unverified tokens)`);
-      } else if (programId === 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL') {
-        console.error(`[x402]       Type: Associated Token Account Program`);
+      if (programId === 'L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95') {
+        console.log(`[x402]   [${i}] Phantom Lighthouse assertion (for unverified token security)`);
       } else {
-        console.error(`[x402]       Type: Unknown program`);
+        console.log(`[x402]   [${i}] ${programId}`);
       }
     }
-    
-    // Don't throw error yet - log and continue to see what CDP says
-    console.error(`[x402] ⚠️ Continuing anyway to see CDP's response...`);
   } else {
-    console.log(`[x402] ✅ Transaction integrity verified: ${signedTransaction.instructions.length} instructions (expected ${expectedInstructionCount})`);
+    console.log(`[x402] ✅ Transaction integrity: ${signedTransaction.instructions.length} instructions (expected ${expectedInstructionCount})`);
   }
   
-  // Serialize with PARTIAL signatures (user signed, CDP will cosign)
+  // Serialize the FULLY SIGNED transaction
   const serialized = signedTransaction.serialize({ 
-    requireAllSignatures: false,  // ← PARTIAL signing
-    verifySignatures: false       // ← Don't verify yet (CDP hasn't signed)
+    requireAllSignatures: true,  // ← FULL signing (user is fee payer)
+    verifySignatures: true       // ← Verify signatures
   });
   const transaction_base64 = Buffer.from(serialized).toString('base64');
   
-  // All payments use the payment token
   return {
     payment_id: paymentId,
     transaction_base64,

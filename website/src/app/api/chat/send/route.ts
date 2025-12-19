@@ -513,7 +513,7 @@ async function handlePOST(request: NextRequest) {
               );
             }
             
-            console.log('[Blockhash Check] ✅ Blockhash is still valid, proceeding with CDP settlement');
+            console.log('[Blockhash Check] ✅ Blockhash is still valid, proceeding with settlement');
           }
         } catch (blockhashError: any) {
           console.error('[Blockhash Check] Validation error:', blockhashError.message);
@@ -522,8 +522,48 @@ async function handlePOST(request: NextRequest) {
             throw blockhashError;
           }
           // Otherwise, just warn and continue (don't block payment if validation fails)
-          console.warn('[Blockhash Check] Skipping validation, continuing with CDP settlement');
+          console.warn('[Blockhash Check] Skipping validation, continuing with settlement');
         }
+        
+        // Check if transaction is fully signed (user paying fees) vs partially signed (CDP paying fees)
+        const { Transaction: SolTransaction } = require('@solana/web3.js');
+        const txBuffer = Buffer.from(x402Payload.payload.transaction, 'base64');
+        const transaction = SolTransaction.from(txBuffer);
+        
+        const isFullySigned = transaction.signatures.every((sig: any) => 
+          sig.signature !== null && sig.signature.some((b: number) => b !== 0)
+        );
+        
+        let txSignature: string | undefined;
+        
+        if (isFullySigned) {
+          console.log('[x402] Transaction is FULLY SIGNED (user pays fees) - submitting directly to Solana');
+          console.log(`[x402] This bypasses CDP facilitator (avoids Phantom Lighthouse incompatibility)`);
+          console.log(`[x402] Instructions count: ${transaction.instructions.length}`);
+          
+          // Submit transaction directly to Solana
+          const connection = new Connection(SOLANA_RPC_URL!, 'confirmed');
+          txSignature = await connection.sendRawTransaction(txBuffer, {
+            skipPreflight: false,
+            maxRetries: 3
+          });
+          
+          console.log('[x402] ✅ Transaction submitted to Solana:', txSignature);
+          console.log('[x402] Waiting for confirmation...');
+          
+          // Wait for confirmation (max 60 seconds)
+          const confirmation = await connection.confirmTransaction(txSignature, 'confirmed');
+          
+          if (confirmation.value.err) {
+            throw new Error(`Transaction failed on-chain: ${JSON.stringify(confirmation.value.err)}`);
+          }
+          
+          console.log('[x402] ✅ Transaction confirmed on-chain!');
+          
+        } else {
+          console.log('[x402] Transaction is PARTIALLY SIGNED - using CDP facilitator');
+          
+          // Original CDP facilitator flow
         
         const facilitator = createFacilitatorConfig(cdpKeyId, cdpKeySecret);
         const authHeaders = await facilitator.createAuthHeaders?.();
@@ -991,13 +1031,16 @@ async function handlePOST(request: NextRequest) {
             }
           }
           
-          const txSignature = settleResult.transaction;
+          txSignature = settleResult.transaction;
           
-          console.log('[CDP] Settlement successful! Transaction:', txSignature);
+        } // End of if/else for fully signed vs partially signed
           
+          // At this point, txSignature MUST be set from either direct submission or CDP
           if (!txSignature) {
-            throw new Error('No transaction signature returned from CDP settle');
+            throw new Error('No transaction signature available - internal error');
           }
+          
+          console.log('[x402] Settlement successful! Transaction:', txSignature);
 
           // CHECK IF THIS TRANSACTION WAS ALREADY PROCESSED (DUPLICATE DETECTION)
           const existingPayment = await prisma.payment.findFirst({
