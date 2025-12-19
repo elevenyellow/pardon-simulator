@@ -380,9 +380,9 @@ export default function Home() {
             />
           </div>
 
-          {/* START Button - TEMPORARILY DISABLED */}
-          <div className="flex-shrink-0">
-            {/* Coming Soon Button */}
+          {/* START Button - TEMPORARILY REMOVED */}
+          <div className="flex-shrink-0" style={{ display: 'none' }}>
+            {/* Coming Soon Button - Hidden */}
             <button
               disabled
               className="px-10 py-4 font-pixel text-sm text-gray-400 bg-gray-600 border-[3px] border-gray-500 uppercase tracking-wider cursor-not-allowed pixel-art"
@@ -430,13 +430,17 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Bottom Section */}
-          <div className="flex-shrink-1 min-h-0 w-full max-w-[75vw] flex flex-col items-center gap-4">
-            {/* Rules Container */}
+          {/* Bottom Section - TEMPORARILY HIDDEN */}
+          <div className="flex-shrink-0 w-full max-w-[75vw] flex flex-col items-center gap-4" style={{ display: 'none' }}>
+            {/* Rules Container - Fixed scroll for desktop */}
             <div 
-              className="w-full max-h-[30vh] overflow-y-auto p-8 bg-black/85 border-4 border-[#66b680] pixel-art"              style={{
+              className="w-full overflow-y-scroll p-8 bg-black/85 border-4 border-[#66b680] pixel-art"
+              style={{
+                maxHeight: 'min(400px, 30vh)', // Explicit max height for desktop
                 boxShadow:'0 0 20px rgba(102, 182, 128, 0.5), 0 0 40px rgba(102, 182, 128, 0.3), inset 0 0 30px rgba(0, 0, 0, 0.5), 8px 8px 0 rgba(0, 0, 0, 0.3)',
-                background:'repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.85) 0px, rgba(0, 0, 0, 0.85) 2px, rgba(0, 0, 0, 0.88) 2px, rgba(0, 0, 0, 0.88) 4px)'              }}
+                background:'repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.85) 0px, rgba(0, 0, 0, 0.85) 2px, rgba(0, 0, 0, 0.88) 2px, rgba(0, 0, 0, 0.88) 4px)',
+                WebkitOverflowScrolling: 'touch' // Smooth scroll on mobile
+              }}
             >
               <p className="font-pixel text-xs leading-relaxed mb-2 text-white uppercase">
                 <strong className="text-[#66b680]">IT'S 2025. CRIME IS LEGAL.</strong>
@@ -472,39 +476,39 @@ export default function Home() {
                 $PARDON IS A COIN WITH NO INTRINSIC VALUE OR EXPECTATION OF FINANCIAL RETURN. THE COIN IS FOR ENTERTAINMENT PURPOSES ONLY.
               </p>
             </div>
+          </div>
 
-            {/* Token Contract */}
-            <div className="flex items-center gap-3">
-              <div className="font-pixel text-[10px] text-white/90 bg-black/50 px-3 py-1.5 rounded-lg backdrop-blur-sm hover:bg-black/70 transition-all">
-                <a 
-                  href="https://solscan.io/token/A38LewMbt9t9HvNUrsPtHQPHLfEPVT5rfadN4VqBbonk"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-[#66b680] transition-colors"
-                >
-                  A38LewMbt9t9HvNUrsPtHQPHLfEPVT5rfadN4VqBbonk
-                </a>
-              </div>
-              
-              {/* Twitter/X Link */}
-              <a
-                href="http://x.com/pardonsimulator"
+          {/* Token Contract & Social Links - Always Visible */}
+          <div className="flex-shrink-0 flex items-center gap-3">
+            <div className="font-pixel text-[10px] text-white/90 bg-black/50 px-3 py-1.5 rounded-lg backdrop-blur-sm hover:bg-black/70 transition-all">
+              <a 
+                href="https://solscan.io/token/A38LewMbt9t9HvNUrsPtHQPHLfEPVT5rfadN4VqBbonk"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="bg-black/50 p-2 rounded-lg backdrop-blur-sm hover:bg-black/70 transition-all hover:scale-110"
-                aria-label="Follow on X/Twitter"
+                className="hover:text-[#66b680] transition-colors"
               >
-                <svg 
-                  width="20" 
-                  height="20" 
-                  viewBox="0 0 24 24" 
-                  fill="white"
-                  className="opacity-70 hover:opacity-100 transition-opacity"
-                >
-                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                </svg>
+                A38LewMbt9t9HvNUrsPtHQPHLfEPVT5rfadN4VqBbonk
               </a>
             </div>
+            
+            {/* Twitter/X Link */}
+            <a
+              href="http://x.com/pardonsimulator"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-black/50 p-2 rounded-lg backdrop-blur-sm hover:bg-black/70 transition-all hover:scale-110"
+              aria-label="Follow on X/Twitter"
+            >
+              <svg 
+                width="20" 
+                height="20" 
+                viewBox="0 0 24 24" 
+                fill="white"
+                className="opacity-70 hover:opacity-100 transition-opacity"
+              >
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+              </svg>
+            </a>
           </div>
         </div>
       </div>
