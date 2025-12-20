@@ -98,6 +98,12 @@ async function handlePOST(request: NextRequest) {
   const { PAYMENT_TOKEN_NAME, PAYMENT_TOKEN_DECIMALS, PAYMENT_TOKEN_MINT } = await import('@/config/tokens');
   
   try {
+    // Declare variables that will be used across payment processing and error handling
+    let txSignature: string | undefined;
+    let usedFallback = false;
+    let txBuffer: Buffer | undefined;
+    let transaction: any;
+    
     const rawBody = await request.json();
     
     const sessionId = rawBody.sessionId ? sanitizeText(rawBody.sessionId) :'';
@@ -570,27 +576,69 @@ async function handlePOST(request: NextRequest) {
           console.error('[CDP] Failed to decode transaction:', decodeError.message);
         }
         
-        // 🧪 DEBUG MODE: Set to true to analyze without submitting
-        const DEBUG_MODE = true;
+        // Detect if transaction has Lighthouse instruction (Phantom security for unverified tokens)
+        const { Transaction: SolTransaction } = require('@solana/web3.js');
+        txBuffer = Buffer.from(x402Payload.payload.transaction, 'base64');
+        transaction = SolTransaction.from(txBuffer);
         
-        if (DEBUG_MODE) {
-          console.log('[DEBUG] 🛑 STOPPING - Transaction analysis complete');
-          console.log('[DEBUG] NO submission to CDP or Solana blockchain');
-          console.log('[DEBUG] Transaction structure logged above');
-          console.log('[DEBUG] Check browser console for frontend signing details');
+        const LIGHTHOUSE_PROGRAM = 'L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95';
+        const hasLighthouse = transaction.instructions.some((ix: any) => 
+          ix.programId.toString() === LIGHTHOUSE_PROGRAM
+        );
+        
+        const isFullySigned = transaction.signatures.every((sig: any) => 
+          sig.signature !== null && sig.signature.some((b: number) => b !== 0)
+        );
+        
+        // If Lighthouse detected or transaction is fully signed, use direct Solana submission
+        if (hasLighthouse || isFullySigned) {
+          if (hasLighthouse) {
+            console.log('[x402] ⚠️ Lighthouse instruction detected - using direct Solana submission');
+            console.log('[x402] (CDP would reject this. Will auto-switch to CDP when token is verified)');
+          }
+          if (isFullySigned) {
+            console.log('[x402] Transaction is FULLY SIGNED (user pays fees)');
+          }
           
-          // Return fake success
-          const txSignature = 'DEBUG-NO-SUBMIT-' + Date.now();
+          console.log('[x402] FALLBACK MODE: Submitting directly to Solana via Helius');
+          console.log(`[x402] Instructions count: ${transaction.instructions.length}`);
           
-          settlementResult = {
-            success: true,
-            transaction: txSignature,
-            network: 'solana',
-            payer: userWallet,
-            solanaExplorer: `https://explorer.solana.com/tx/${txSignature}`,
-            note: 'DEBUG MODE: Not submitted'
-          };
+          // Validate transaction instructions
+          const ALLOWED_PROGRAMS = [
+            'ComputeBudget111111111111111111111111111111',
+            'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+            'L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95', // Lighthouse (Phantom)
+          ];
+          
+          for (let i = 0; i < transaction.instructions.length; i++) {
+            const ix = transaction.instructions[i];
+            const programId = ix.programId.toString();
+            
+            if (!ALLOWED_PROGRAMS.includes(programId)) {
+              throw new Error(`Unauthorized program in transaction: ${programId}`);
+            }
+          }
+          
+          // Submit to Solana
+          const connection = new Connection(SOLANA_RPC_URL!, 'confirmed');
+          txSignature = await connection.sendRawTransaction(txBuffer, {
+            skipPreflight: false,
+            maxRetries: 3
+          });
+          
+          console.log('[x402] ✅ Transaction submitted to Solana:', txSignature);
+          
+          const confirmation = await connection.confirmTransaction(txSignature, 'confirmed');
+          if (confirmation.value.err) {
+            throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+          }
+          
+          console.log('[x402] ✅ Transaction confirmed on-chain!');
+          usedFallback = true;
+          
         } else {
+          // Try CDP first (preferred method when Lighthouse not present)
+          console.log('[x402] No Lighthouse detected - attempting CDP settlement (preferred method)');
         
         const settleUrl =`${facilitator.url}/settle`;
         
@@ -1014,7 +1062,7 @@ async function handlePOST(request: NextRequest) {
             }
           }
           
-          const txSignature = settleResult.transaction;
+          txSignature = settleResult.transaction;
           
           console.log('[CDP] Settlement successful! Transaction:', txSignature);
           
@@ -1023,6 +1071,12 @@ async function handlePOST(request: NextRequest) {
           }
         }
         // END DEBUG MODE block
+        
+        // At this point, txSignature is guaranteed to be defined due to checks above
+        // TypeScript needs help with type narrowing across scopes, so we assert it here
+        if (!txSignature) {
+          throw new Error('Transaction signature is missing after settlement');
+        }
 
           // CHECK IF THIS TRANSACTION WAS ALREADY PROCESSED (DUPLICATE DETECTION)
           const existingPayment = await prisma.payment.findFirst({
@@ -1117,6 +1171,53 @@ async function handlePOST(request: NextRequest) {
       } catch (error: any) {
         console.error('CDP settlement error:', error.message);
         
+        // FALLBACK: If CDP fails, try direct Solana submission
+        if (!usedFallback && txBuffer) {
+          console.log('[CDP FALLBACK] CDP settlement failed - attempting direct Solana submission');
+          
+          try {
+            // Validate transaction instructions
+            const ALLOWED_PROGRAMS = [
+              'ComputeBudget111111111111111111111111111111',
+              'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+              'L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95',
+            ];
+            
+            for (let i = 0; i < transaction.instructions.length; i++) {
+              const ix = transaction.instructions[i];
+              const programId = ix.programId.toString();
+              
+              if (!ALLOWED_PROGRAMS.includes(programId)) {
+                throw new Error(`Unauthorized program: ${programId}`);
+              }
+            }
+            
+            const connection = new Connection(SOLANA_RPC_URL!, 'confirmed');
+            txSignature = await connection.sendRawTransaction(txBuffer, {
+              skipPreflight: false,
+              maxRetries: 3
+            });
+            
+            console.log('[CDP FALLBACK] ✅ Transaction submitted to Solana:', txSignature);
+            
+            const confirmation = await connection.confirmTransaction(txSignature, 'confirmed');
+            if (confirmation.value.err) {
+              throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+            }
+            
+            console.log('[CDP FALLBACK] ✅ Transaction confirmed! Continuing with message flow...');
+            usedFallback = true;
+            
+            // Success - don't throw the original CDP error
+          } catch (fallbackError: any) {
+            console.error('[CDP FALLBACK] ❌ Direct submission also failed:', fallbackError.message);
+            // Fall through to original error handling
+          }
+        }
+        
+        // If fallback didn't work, handle original error
+        if (!usedFallback) {
+        
         // For premium service payments, handle failure gracefully
         if (isPremiumServicePayment) {
           console.log('[Premium Service] Payment failed - handling gracefully');
@@ -1188,6 +1289,8 @@ async function handlePOST(request: NextRequest) {
           success: false,
           error: error.message ||'CDP settlement failed',
         };
+        }
+        // END if (!usedFallback) block
       }
     }
 
