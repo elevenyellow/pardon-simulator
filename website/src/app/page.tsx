@@ -36,6 +36,23 @@ export default function Home() {
   // Wallet verification state
   const [walletVerified, setWalletVerified] = useState(false);
   const [verifyingWallet, setVerifyingWallet] = useState(false);
+  
+  // Check for enable hash in URL
+  const [isEnabled, setIsEnabled] = useState(false);
+  
+  useEffect(() => {
+    // Check initial hash
+    const checkHash = () => {
+      const hash = window.location.hash.toLowerCase();
+      setIsEnabled(hash === '#start' || hash === '#enable');
+    };
+    
+    checkHash();
+    
+    // Listen for hash changes
+    window.addEventListener('hashchange', checkHash);
+    return () => window.removeEventListener('hashchange', checkHash);
+  }, []);
 
   // Load existing threads when wallet connects
   useEffect(() => {
@@ -380,24 +397,14 @@ export default function Home() {
             />
           </div>
 
-          {/* START Button - TEMPORARILY REMOVED */}
-          <div className="flex-shrink-0" style={{ display: 'none' }}>
-            {/* Coming Soon Button - Hidden */}
-            <button
-              disabled
-              className="px-10 py-4 font-pixel text-sm text-gray-400 bg-gray-600 border-[3px] border-gray-500 uppercase tracking-wider cursor-not-allowed pixel-art"
-              style={{
-                boxShadow:'0 6px 0 #444, 0 6px 16px rgba(0, 0, 0, 0.5)',
-                textShadow:'2px 2px 0 #333'
-              }}
-            >
-              Coming Soon
-            </button>
-            {/* Original START button - hidden but preserved */}
-            <div style={{ display: 'none' }}>
-              <div className={!connected ?'wallet-start-button':''}>
-                {!connected ? (
-                  <WalletMultiButton 
+          {/* START Button - Show when enabled via hash */}
+          <div className="flex-shrink-0">
+            {isEnabled && (
+              /* Original START button when enabled */
+              <div>
+                <div className={!connected ? 'wallet-start-button' : ''}>
+                  {!connected ? (
+                    <WalletMultiButton 
                     style={{
                       padding:'16px 40px',
                       fontFamily:"'Press Start 2P', monospace",
@@ -428,10 +435,11 @@ export default function Home() {
                 )}
               </div>
             </div>
+            )}
           </div>
 
-          {/* Bottom Section - TEMPORARILY HIDDEN */}
-          <div className="flex-shrink-0 w-full max-w-[75vw] flex flex-col items-center gap-4" style={{ display: 'none' }}>
+          {/* Bottom Section - Show rules when enabled via hash */}
+          <div className="flex-shrink-0 w-full max-w-[75vw] flex flex-col items-center gap-4" style={{ display: isEnabled ? 'flex' : 'none' }}>
             {/* Rules Container - Fixed scroll for desktop */}
             <div 
               className="w-full overflow-y-scroll p-8 bg-black/85 border-4 border-[#66b680] pixel-art"
