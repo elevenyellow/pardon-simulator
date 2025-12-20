@@ -636,6 +636,93 @@ async function handlePOST(request: NextRequest) {
           console.log('[x402] ✅ Transaction confirmed on-chain!');
           usedFallback = true;
           
+          // Store payment in database for direct Solana submission
+          if (txSignature) {
+            try {
+              const paymentAmount = amount;
+              const paymentServiceType = isPremiumServicePayment && serviceType 
+                ? serviceType 
+                : (isPremiumServicePayment ? 'premium_service' : 'message_fee');
+              
+              console.log('[x402] Storing payment in database:', txSignature);
+              
+              // Check for duplicate before creating
+              const existingPayment = await prisma.payment.findFirst({
+                where: {
+                  signature: txSignature,
+                  verified: true
+                }
+              });
+              
+              if (existingPayment) {
+                console.log('[x402] Payment already exists in database, ID:', existingPayment.id);
+                settlementResult = {
+                  success: true,
+                  transaction: txSignature,
+                  network: 'solana',
+                  payer: existingPayment.fromWallet,
+                  solanaExplorer: `https://explorer.solana.com/tx/${txSignature}`,
+                  isDuplicate: true
+                };
+              } else {
+                const payment = await prisma.payment.create({
+                  data: {
+                    fromWallet: userWallet,
+                    toWallet: to,
+                    toAgent: agentId,
+                    amount: paymentAmount,
+                    currency: currency,
+                    signature: txSignature,
+                    serviceType: paymentServiceType,
+                    verified: true,
+                    verifiedAt: new Date(),
+                    isAgentToAgent: false,
+                    initiatedBy: userWallet
+                  }
+                });
+                
+                console.log('[x402] Payment stored in database, ID:', payment.id);
+                
+                // Record ServiceUsage immediately for premium services
+                if (isPremiumServicePayment && serviceType && serviceType !== 'premium_service') {
+                  try {
+                    const user = await prisma.user.findUnique({
+                      where: { walletAddress: userWallet },
+                      select: { id: true }
+                    });
+                    
+                    if (user && thread && thread.session) {
+                      await serviceUsageRepository.recordServiceUsage(
+                        user.id,
+                        thread.session.id,
+                        getCurrentWeekId(),
+                        serviceType,
+                        agentId,
+                        0
+                      );
+                      console.log(`[Service Usage] Recorded ${serviceType} usage for ${userWallet.slice(0, 8)}... (direct Solana path)`);
+                    }
+                  } catch (serviceError: any) {
+                    console.error('[x402] Failed to record service usage:', serviceError.message);
+                    // Don't fail the whole request
+                  }
+                }
+                
+                // Set settlement result
+                settlementResult = {
+                  success: true,
+                  transaction: txSignature,
+                  network: 'solana',
+                  payer: userWallet,
+                  solanaExplorer: `https://explorer.solana.com/tx/${txSignature}`
+                };
+              }
+            } catch (storeError: any) {
+              console.error('[x402] Failed to store payment in database:', storeError.message);
+              // Don't fail the request - transaction already went through
+            }
+          }
+          
         } else {
           // Try CDP first (preferred method when Lighthouse not present)
           console.log('[x402] No Lighthouse detected - attempting CDP settlement (preferred method)');
@@ -1207,6 +1294,97 @@ async function handlePOST(request: NextRequest) {
             
             console.log('[CDP FALLBACK] ✅ Transaction confirmed! Continuing with message flow...');
             usedFallback = true;
+            
+            // Store payment in database for CDP fallback path
+            if (txSignature && paymentData) {
+              try {
+                // Re-extract payment info from paymentData since we're in a different scope
+                const fallbackPayload = JSON.parse(paymentData);
+                const paymentAmount = fallbackPayload.amount || fallbackPayload.amount_usdc || fallbackPayload.amount_sol || 0.01;
+                const paymentCurrency = fallbackPayload.currency || PAYMENT_TOKEN_NAME;
+                const paymentTo = process.env.WALLET_WHITE_HOUSE || '';
+                const paymentServiceType = isPremiumServicePayment && fallbackPayload.service_type 
+                  ? fallbackPayload.service_type 
+                  : (isPremiumServicePayment ? 'premium_service' : 'message_fee');
+                
+                console.log('[CDP FALLBACK] Storing payment in database:', txSignature);
+                
+                // Check for duplicate before creating
+                const existingPayment = await prisma.payment.findFirst({
+                  where: {
+                    signature: txSignature,
+                    verified: true
+                  }
+                });
+                
+                if (existingPayment) {
+                  console.log('[CDP FALLBACK] Payment already exists in database, ID:', existingPayment.id);
+                  settlementResult = {
+                    success: true,
+                    transaction: txSignature,
+                    network: 'solana',
+                    payer: existingPayment.fromWallet,
+                    solanaExplorer: `https://explorer.solana.com/tx/${txSignature}`,
+                    isDuplicate: true
+                  };
+                } else {
+                  const payment = await prisma.payment.create({
+                    data: {
+                      fromWallet: userWallet,
+                      toWallet: paymentTo,
+                      toAgent: agentId,
+                      amount: paymentAmount,
+                      currency: paymentCurrency,
+                      signature: txSignature,
+                      serviceType: paymentServiceType,
+                      verified: true,
+                      verifiedAt: new Date(),
+                      isAgentToAgent: false,
+                      initiatedBy: userWallet
+                    }
+                  });
+                  
+                  console.log('[CDP FALLBACK] Payment stored in database, ID:', payment.id);
+                  
+                  // Record ServiceUsage immediately for premium services
+                  if (isPremiumServicePayment && fallbackPayload.service_type && fallbackPayload.service_type !== 'premium_service') {
+                    try {
+                      const user = await prisma.user.findUnique({
+                        where: { walletAddress: userWallet },
+                        select: { id: true }
+                      });
+                      
+                      if (user && thread && thread.session) {
+                        await serviceUsageRepository.recordServiceUsage(
+                          user.id,
+                          thread.session.id,
+                          getCurrentWeekId(),
+                          fallbackPayload.service_type,
+                          agentId,
+                          0
+                        );
+                        console.log(`[Service Usage] Recorded ${fallbackPayload.service_type} usage for ${userWallet.slice(0, 8)}... (CDP fallback path)`);
+                      }
+                    } catch (serviceError: any) {
+                      console.error('[CDP FALLBACK] Failed to record service usage:', serviceError.message);
+                      // Don't fail the whole request
+                    }
+                  }
+                  
+                  // Set settlement result
+                  settlementResult = {
+                    success: true,
+                    transaction: txSignature,
+                    network: 'solana',
+                    payer: userWallet,
+                    solanaExplorer: `https://explorer.solana.com/tx/${txSignature}`
+                  };
+                }
+              } catch (storeError: any) {
+                console.error('[CDP FALLBACK] Failed to store payment in database:', storeError.message);
+                // Don't fail the request - transaction already went through
+              }
+            }
             
             // Success - don't throw the original CDP error
           } catch (fallbackError: any) {
