@@ -3,15 +3,15 @@ import type { Metadata } from'next';
 import { WalletProvider } from'@/components/WalletProvider';
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://pardonsimulator.com'),
   title:'Pardon Simulator',
-  description:'You are SBF - Negotiate with the Trump family using crypto to secure your presidential pardon!',
+  description:'You\'re SBF. You\'re facing serious time. But there\'s a chance, a presidential pardon. The catch? You need to navigate a complex web of relationships, power dynamics, and cold hard crypto to make it happen. Good luck',
   icons: {
     icon: '/assets/favicon.png',
   },
   openGraph: {
     title: 'Pardon Simulator',
-    description: 'You are SBF - Negotiate with the Trump family using crypto to secure your presidential pardon!',
+    description: 'You\'re SBF. You\'re facing serious time. But there\'s a chance, a presidential pardon. The catch? You need to navigate a complex web of relationships, power dynamics, and cold hard crypto to make it happen. Good luck',
     images: [
       {
         url: '/assets/cover.jpg',
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Pardon Simulator',
-    description: 'You are SBF - Negotiate with the Trump family using crypto to secure your presidential pardon!',
+    description: 'You\'re SBF. You\'re facing serious time. But there\'s a chance, a presidential pardon. The catch? You need to navigate a complex web of relationships, power dynamics, and cold hard crypto to make it happen. Good luck',
     images: ['/assets/cover.jpg'],
   },
 };
