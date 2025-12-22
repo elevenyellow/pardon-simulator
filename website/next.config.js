@@ -49,11 +49,11 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "img-src 'self' data: https: blob:",
               "font-src 'self' data: https://fonts.gstatic.com",
-              "connect-src 'self' https://api.mainnet-beta.solana.com https://*.solana.com https://*.helius-rpc.com https://mainnet.helius-rpc.com wss://*.solana.com http://localhost:* ws://localhost:*",
+              "connect-src 'self' https://api.mainnet-beta.solana.com https://*.solana.com https://*.helius-rpc.com https://mainnet.helius-rpc.com wss://*.solana.com https://www.google-analytics.com https://analytics.google.com http://localhost:* ws://localhost:*",
               "frame-ancestors 'self'",
               "base-uri 'self'",
               "form-action 'self'"
