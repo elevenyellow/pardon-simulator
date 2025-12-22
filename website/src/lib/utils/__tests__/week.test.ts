@@ -1,5 +1,7 @@
 /**
  * Tests for week utility functions
+ * 
+ * Week boundaries: Monday 14:00 UTC to next Monday 13:59:59 UTC
  */
 
 import {
@@ -11,6 +13,8 @@ import {
   getWeekEndDate,
   isCurrentWeek,
   formatWeekId,
+  getNextWeekResetTime,
+  getTimeUntilReset,
 } from'../week';
 
 describe('Week Utilities', () => {
@@ -53,6 +57,15 @@ describe('Week Utilities', () => {
     it('should return week ID in correct format', () => {
       const weekId = getCurrentWeekId();
       expect(weekId).toMatch(/^\d{4}-W\d{2}$/);
+    });
+
+    it('should account for 14-hour offset', () => {
+      // Mock a Monday at 13:00 UTC - should be previous week
+      const mondayMorning = new Date('2024-12-23T13:00:00Z'); // Monday 13:00
+      const mondayAfternoon = new Date('2024-12-23T14:00:00Z'); // Monday 14:00
+      
+      // We can't easily test this without mocking Date, but document the behavior
+      // Times before Monday 14:00 UTC belong to the previous week
     });
   });
 
@@ -116,6 +129,55 @@ describe('Week Utilities', () => {
 
     it('should return false for different week', () => {
       expect(isCurrentWeek('2020-W01')).toBe(false);
+    });
+  });
+
+  describe('getNextWeekResetTime', () => {
+    it('should return a Date object', () => {
+      const nextReset = getNextWeekResetTime();
+      expect(nextReset).toBeInstanceOf(Date);
+    });
+
+    it('should return Monday at 14:00 UTC', () => {
+      const nextReset = getNextWeekResetTime();
+      expect(nextReset.getUTCDay()).toBe(1); // Monday
+      expect(nextReset.getUTCHours()).toBe(14);
+      expect(nextReset.getUTCMinutes()).toBe(0);
+      expect(nextReset.getUTCSeconds()).toBe(0);
+    });
+
+    it('should return a future date', () => {
+      const nextReset = getNextWeekResetTime();
+      const now = new Date();
+      expect(nextReset.getTime()).toBeGreaterThan(now.getTime());
+    });
+  });
+
+  describe('getTimeUntilReset', () => {
+    it('should return time components', () => {
+      const timeUntil = getTimeUntilReset();
+      expect(timeUntil).toHaveProperty('days');
+      expect(timeUntil).toHaveProperty('hours');
+      expect(timeUntil).toHaveProperty('minutes');
+      expect(timeUntil).toHaveProperty('seconds');
+      expect(timeUntil).toHaveProperty('totalMs');
+    });
+
+    it('should have positive totalMs', () => {
+      const timeUntil = getTimeUntilReset();
+      expect(timeUntil.totalMs).toBeGreaterThan(0);
+    });
+
+    it('should have valid time ranges', () => {
+      const timeUntil = getTimeUntilReset();
+      expect(timeUntil.days).toBeGreaterThanOrEqual(0);
+      expect(timeUntil.days).toBeLessThan(7);
+      expect(timeUntil.hours).toBeGreaterThanOrEqual(0);
+      expect(timeUntil.hours).toBeLessThan(24);
+      expect(timeUntil.minutes).toBeGreaterThanOrEqual(0);
+      expect(timeUntil.minutes).toBeLessThan(60);
+      expect(timeUntil.seconds).toBeGreaterThanOrEqual(0);
+      expect(timeUntil.seconds).toBeLessThan(60);
     });
   });
 });

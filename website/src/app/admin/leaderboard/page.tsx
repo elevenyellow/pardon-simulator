@@ -22,10 +22,51 @@ export default function LeaderboardPage() {
   const [loading, setLoading] = useState(true);
   const [weekId, setWeekId] = useState(getCurrentWeekId());
   const [stats, setStats] = useState({ totalPlayers: 0, prizeEligible: 0 });
+  const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
 
   useEffect(() => {
     fetchLeaderboard();
   }, [weekId]);
+
+  // Countdown timer
+  useEffect(() => {
+    const updateCountdown = () => {
+      const now = new Date();
+      const currentDay = now.getUTCDay();
+      const currentHour = now.getUTCHours();
+      
+      let daysUntilMonday: number;
+      
+      if (currentDay === 1) {
+        if (currentHour < 14) {
+          daysUntilMonday = 0;
+        } else {
+          daysUntilMonday = 7;
+        }
+      } else if (currentDay === 0) {
+        daysUntilMonday = 1;
+      } else {
+        daysUntilMonday = (8 - currentDay) % 7;
+      }
+      
+      const nextReset = new Date(now);
+      nextReset.setUTCDate(now.getUTCDate() + daysUntilMonday);
+      nextReset.setUTCHours(14, 0, 0, 0);
+      
+      const totalMs = nextReset.getTime() - now.getTime();
+      
+      const days = Math.floor(totalMs / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((totalMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((totalMs % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((totalMs % (1000 * 60)) / 1000);
+      
+      setCountdown({ days, hours, minutes, seconds });
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const fetchLeaderboard = async () => {
     setLoading(true);
@@ -101,6 +142,32 @@ export default function LeaderboardPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold text-gray-900">Leaderboard</h1>
+        
+        {/* Countdown Timer */}
+        <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-lg shadow-lg">
+          <div className="text-xs font-medium mb-1 text-center">Week Resets In</div>
+          <div className="flex gap-2 text-center">
+            <div>
+              <div className="text-2xl font-bold">{countdown.days.toString().padStart(2, '0')}</div>
+              <div className="text-[10px] opacity-80">DAYS</div>
+            </div>
+            <div className="text-2xl font-bold">:</div>
+            <div>
+              <div className="text-2xl font-bold">{countdown.hours.toString().padStart(2, '0')}</div>
+              <div className="text-[10px] opacity-80">HRS</div>
+            </div>
+            <div className="text-2xl font-bold">:</div>
+            <div>
+              <div className="text-2xl font-bold">{countdown.minutes.toString().padStart(2, '0')}</div>
+              <div className="text-[10px] opacity-80">MIN</div>
+            </div>
+            <div className="text-2xl font-bold">:</div>
+            <div>
+              <div className="text-2xl font-bold">{countdown.seconds.toString().padStart(2, '0')}</div>
+              <div className="text-[10px] opacity-80">SEC</div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">

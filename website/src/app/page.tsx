@@ -716,10 +716,56 @@ export default function Home() {
 function LeaderboardOverlay({ onClose }: { onClose: () => void }) {
   const [leaderboardData, setLeaderboardData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
   const { publicKey } = useWallet();
 
   useEffect(() => {
     fetchLeaderboard();
+  }, []);
+
+  // Countdown timer
+  useEffect(() => {
+    const updateCountdown = () => {
+      // Import the function inline to avoid build issues
+      const getTimeUntilReset = () => {
+        const now = new Date();
+        const currentDay = now.getUTCDay();
+        const currentHour = now.getUTCHours();
+        
+        let daysUntilMonday: number;
+        
+        if (currentDay === 1) {
+          if (currentHour < 14) {
+            daysUntilMonday = 0;
+          } else {
+            daysUntilMonday = 7;
+          }
+        } else if (currentDay === 0) {
+          daysUntilMonday = 1;
+        } else {
+          daysUntilMonday = (8 - currentDay) % 7;
+        }
+        
+        const nextReset = new Date(now);
+        nextReset.setUTCDate(now.getUTCDate() + daysUntilMonday);
+        nextReset.setUTCHours(14, 0, 0, 0);
+        
+        const totalMs = nextReset.getTime() - now.getTime();
+        
+        const days = Math.floor(totalMs / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((totalMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((totalMs % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((totalMs % (1000 * 60)) / 1000);
+        
+        return { days, hours, minutes, seconds };
+      };
+
+      setCountdown(getTimeUntilReset());
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
   }, []);
 
   // Handle ESC key
@@ -772,10 +818,58 @@ function LeaderboardOverlay({ onClose }: { onClose: () => void }) {
 
         {/* Title */}
         <div 
-          className="font-pixel text-[#FFD700] text-2xl text-center mb-8"          style={{
+          className="font-pixel text-[#FFD700] text-2xl text-center mb-2"          style={{
             textShadow:'0 0 10px #FFD700, 0 0 20px #FFD700, 0 0 30px #FF8C00, 2px 2px 4px rgba(0, 0, 0, 0.8)'          }}
         >
           LEADERBOARD
+        </div>
+
+        {/* Countdown Timer */}
+        <div className="text-center mb-6">
+          <div 
+            className="font-pixel text-white text-[10px] mb-2"
+            style={{ textShadow: '1px 1px 2px rgba(0, 0, 0, 0.8)' }}
+          >
+            WEEK RESETS IN
+          </div>
+          <div className="flex justify-center gap-4">
+            <div className="flex flex-col items-center">
+              <div 
+                className="font-pixel text-[#FFD700] text-xl px-3 py-1 bg-black/60 border-2 border-[#66b680] min-w-[3rem]"
+                style={{ textShadow: '0 0 10px #FFD700, 1px 1px 2px rgba(0, 0, 0, 0.8)' }}
+              >
+                {countdown.days.toString().padStart(2, '0')}
+              </div>
+              <span className="font-pixel text-[8px] text-white/70 mt-1">DAYS</span>
+            </div>
+            <div className="flex flex-col items-center">
+              <div 
+                className="font-pixel text-[#FFD700] text-xl px-3 py-1 bg-black/60 border-2 border-[#66b680] min-w-[3rem]"
+                style={{ textShadow: '0 0 10px #FFD700, 1px 1px 2px rgba(0, 0, 0, 0.8)' }}
+              >
+                {countdown.hours.toString().padStart(2, '0')}
+              </div>
+              <span className="font-pixel text-[8px] text-white/70 mt-1">HRS</span>
+            </div>
+            <div className="flex flex-col items-center">
+              <div 
+                className="font-pixel text-[#FFD700] text-xl px-3 py-1 bg-black/60 border-2 border-[#66b680] min-w-[3rem]"
+                style={{ textShadow: '0 0 10px #FFD700, 1px 1px 2px rgba(0, 0, 0, 0.8)' }}
+              >
+                {countdown.minutes.toString().padStart(2, '0')}
+              </div>
+              <span className="font-pixel text-[8px] text-white/70 mt-1">MIN</span>
+            </div>
+            <div className="flex flex-col items-center">
+              <div 
+                className="font-pixel text-[#FFD700] text-xl px-3 py-1 bg-black/60 border-2 border-[#66b680] min-w-[3rem]"
+                style={{ textShadow: '0 0 10px #FFD700, 1px 1px 2px rgba(0, 0, 0, 0.8)' }}
+              >
+                {countdown.seconds.toString().padStart(2, '0')}
+              </div>
+              <span className="font-pixel text-[8px] text-white/70 mt-1">SEC</span>
+            </div>
+          </div>
         </div>
 
         {/* Table */}

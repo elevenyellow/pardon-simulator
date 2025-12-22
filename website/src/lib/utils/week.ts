@@ -1,13 +1,21 @@
 /**
  * Utility functions for week ID generation and manipulation
+ * 
+ * Week boundaries: Monday 14:00 UTC to next Monday 13:59:59 UTC
+ * This aligns with the weekly reset cron job schedule
  */
 
 /**
- * Get current week ID in format"YYYY-Www" * Example:"2024-W45" */
+ * Get current week ID in format"YYYY-Www" * Example:"2024-W45" * 
+ * Week boundaries are Monday 14:00 UTC to next Monday 13:59:59 UTC
+ */
 export function getCurrentWeekId(): string {
   const now = new Date();
-  const year = now.getFullYear();
-  const week = getWeekNumber(now);
+  // Subtract 14 hours to align week boundaries to Monday 14:00 UTC
+  // This means times before 14:00 on Monday are still part of the previous week
+  const adjustedDate = new Date(now.getTime() - (14 * 60 * 60 * 1000));
+  const year = adjustedDate.getFullYear();
+  const week = getWeekNumber(adjustedDate);
   return`${year}-W${week.toString().padStart(2,'0')}`;
 }
 
@@ -16,10 +24,10 @@ export function getCurrentWeekId(): string {
  */
 export function getLastWeekId(): string {
   const now = new Date();
-  // Subtract 7 days
-  now.setDate(now.getDate() - 7);
-  const year = now.getFullYear();
-  const week = getWeekNumber(now);
+  // Subtract 14 hours for week boundary, then subtract 7 days
+  const adjustedDate = new Date(now.getTime() - (14 * 60 * 60 * 1000) - (7 * 24 * 60 * 60 * 1000));
+  const year = adjustedDate.getFullYear();
+  const week = getWeekNumber(adjustedDate);
   return`${year}-W${week.toString().padStart(2,'0')}`;
 }
 
@@ -88,5 +96,62 @@ export function isCurrentWeek(weekId: string): boolean {
 export function formatWeekId(weekId: string): string {
   const { year, week } = parseWeekId(weekId);
   return`Week ${week}, ${year}`;
+}
+
+/**
+ * Get the next Monday 14:00 UTC (when the week resets)
+ */
+export function getNextWeekResetTime(): Date {
+  const now = new Date();
+  const currentDay = now.getUTCDay(); // 0 = Sunday, 1 = Monday, etc.
+  const currentHour = now.getUTCHours();
+  
+  let daysUntilMonday: number;
+  
+  if (currentDay === 1) {
+    // It's Monday
+    if (currentHour < 14) {
+      // Before 14:00, reset is today
+      daysUntilMonday = 0;
+    } else {
+      // After 14:00, reset is next Monday
+      daysUntilMonday = 7;
+    }
+  } else if (currentDay === 0) {
+    // Sunday, reset is tomorrow (Monday)
+    daysUntilMonday = 1;
+  } else {
+    // Tuesday-Saturday
+    daysUntilMonday = (8 - currentDay) % 7;
+  }
+  
+  const nextReset = new Date(now);
+  nextReset.setUTCDate(now.getUTCDate() + daysUntilMonday);
+  nextReset.setUTCHours(14, 0, 0, 0);
+  
+  return nextReset;
+}
+
+/**
+ * Get time remaining until next week reset
+ * Returns object with days, hours, minutes, seconds
+ */
+export function getTimeUntilReset(): {
+  days: number;
+  hours: number;
+  minutes: number;
+  seconds: number;
+  totalMs: number;
+} {
+  const now = new Date();
+  const nextReset = getNextWeekResetTime();
+  const totalMs = nextReset.getTime() - now.getTime();
+  
+  const days = Math.floor(totalMs / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((totalMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  const minutes = Math.floor((totalMs % (1000 * 60 * 60)) / (1000 * 60));
+  const seconds = Math.floor((totalMs % (1000 * 60)) / 1000);
+  
+  return { days, hours, minutes, seconds, totalMs };
 }
 
