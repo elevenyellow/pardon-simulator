@@ -48,9 +48,7 @@ export const WalletProvider: FC<{ children: ReactNode }> = ({ children }) => {
           uninstall MetaMask or other Ethereum wallets, OR we can
           customize the modal UI to filter them out.
         */}
-        <WalletModalProvider
-          featuredWallets={2}
-        >
+        <WalletModalProvider>
           {children}
         </WalletModalProvider>
       </SolanaWalletProvider>
