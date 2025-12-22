@@ -397,49 +397,46 @@ export default function Home() {
             />
           </div>
 
-          {/* START Button - Show when enabled via hash */}
+          {/* START Button - Always visible */}
           <div className="flex-shrink-0">
-            {isEnabled && (
-              /* Original START button when enabled */
-              <div>
-                <div className={!connected ? 'wallet-start-button' : ''}>
-                  {!connected ? (
-                    <WalletMultiButton 
-                    style={{
-                      padding:'16px 40px',
-                      fontFamily:"'Press Start 2P', monospace",
-                      fontSize:'14px',
-                      color:'white',
-                      background:'#66b680',
-                      border:'3px solid #4a8c60',
-                      borderRadius:'0',
-                      textTransform:'uppercase',
-                      letterSpacing:'2px',
-                      boxShadow:'0 6px 0 #3a6c48, 0 6px 16px rgba(0, 0, 0, 0.5), 0 0 16px rgba(102, 182, 128, 0.5), 0 0 32px rgba(102, 182, 128, 0.3)',
-                      textShadow:'2px 2px 0 #3a6c48, 0 0 10px rgba(102, 182, 128, 0.8)',
-                      imageRendering:'pixelated',
-                      transition:'all 0.1s ease'                  }}
-                  >
-                    START
-                  </WalletMultiButton>
-                ) : (
-                  <button
-                    onClick={handleStartClick}
-                    disabled={verifyingWallet}
-                    className="px-10 py-4 font-pixel text-sm text-white bg-[#66b680] border-[3px] border-[#4a8c60] uppercase tracking-wider transition-all hover:bg-[#7ac694] active:translate-y-1 pixel-art disabled:opacity-50 disabled:cursor-not-allowed"                  style={{
-                      boxShadow:'0 6px 0 #3a6c48, 0 6px 16px rgba(0, 0, 0, 0.5), 0 0 16px rgba(102, 182, 128, 0.5), 0 0 32px rgba(102, 182, 128, 0.3)',
-                      textShadow:'2px 2px 0 #3a6c48, 0 0 10px rgba(102, 182, 128, 0.8)'                  }}
-                  >
-                    {verifyingWallet ? 'Verifying...' : 'Start'}
-                  </button>
-                )}
-              </div>
+            <div>
+              <div className={!connected ? 'wallet-start-button' : ''}>
+                {!connected ? (
+                  <WalletMultiButton 
+                  style={{
+                    padding:'16px 40px',
+                    fontFamily:"'Press Start 2P', monospace",
+                    fontSize:'14px',
+                    color:'white',
+                    background:'#66b680',
+                    border:'3px solid #4a8c60',
+                    borderRadius:'0',
+                    textTransform:'uppercase',
+                    letterSpacing:'2px',
+                    boxShadow:'0 6px 0 #3a6c48, 0 6px 16px rgba(0, 0, 0, 0.5), 0 0 16px rgba(102, 182, 128, 0.5), 0 0 32px rgba(102, 182, 128, 0.3)',
+                    textShadow:'2px 2px 0 #3a6c48, 0 0 10px rgba(102, 182, 128, 0.8)',
+                    imageRendering:'pixelated',
+                    transition:'all 0.1s ease'                  }}
+                >
+                  START
+                </WalletMultiButton>
+              ) : (
+                <button
+                  onClick={handleStartClick}
+                  disabled={verifyingWallet}
+                  className="px-10 py-4 font-pixel text-sm text-white bg-[#66b680] border-[3px] border-[#4a8c60] uppercase tracking-wider transition-all hover:bg-[#7ac694] active:translate-y-1 pixel-art disabled:opacity-50 disabled:cursor-not-allowed"                  style={{
+                    boxShadow:'0 6px 0 #3a6c48, 0 6px 16px rgba(0, 0, 0, 0.5), 0 0 16px rgba(102, 182, 128, 0.5), 0 0 32px rgba(102, 182, 128, 0.3)',
+                    textShadow:'2px 2px 0 #3a6c48, 0 0 10px rgba(102, 182, 128, 0.8)'                  }}
+                >
+                  {verifyingWallet ? 'Verifying...' : 'Start'}
+                </button>
+              )}
             </div>
-            )}
+          </div>
           </div>
 
-          {/* Bottom Section - Show rules when enabled via hash */}
-          <div className="flex-shrink-0 w-full max-w-[75vw] flex flex-col items-center gap-4" style={{ display: isEnabled ? 'flex' : 'none' }}>
+          {/* Bottom Section - Rules always visible */}
+          <div className="flex-shrink-0 w-full max-w-[75vw] flex flex-col items-center gap-4">
             {/* Rules Container - Fixed scroll for desktop */}
             <div 
               className="w-full overflow-y-scroll p-8 bg-black/85 border-4 border-[#66b680] pixel-art"
