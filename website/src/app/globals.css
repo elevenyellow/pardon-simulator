@@ -201,7 +201,9 @@ button, a, .clickable, [role="button"] {
 /* Hide non-Solana wallets (MetaMask, etc.) from wallet selector */
 /* MetaMask is for Ethereum, NOT Solana! */
 .wallet-adapter-modal-list li:has(button img[alt*="MetaMask"]),
-.wallet-adapter-modal-list li:has(button img[alt*="metamask" i]) {
+.wallet-adapter-modal-list li:has(button img[alt*="metamask" i]),
+.wallet-adapter-modal-list li:has(button[title*="MetaMask"]),
+.wallet-adapter-modal-list li:has(button[title*="metamask" i]) {
   display: none !important;
 }
 

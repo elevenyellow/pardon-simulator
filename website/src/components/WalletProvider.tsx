@@ -38,14 +38,19 @@ export const WalletProvider: FC<{ children: ReactNode }> = ({ children }) => {
 
   return (
     <ConnectionProvider endpoint={endpoint}>
-      <SolanaWalletProvider wallets={wallets} autoConnect>
+      <SolanaWalletProvider 
+        wallets={wallets} 
+        autoConnect
+      >
         {/* 
           WalletModalProvider auto-detects browser extensions.
           To prevent non-Solana wallets from appearing, users should
           uninstall MetaMask or other Ethereum wallets, OR we can
           customize the modal UI to filter them out.
         */}
-        <WalletModalProvider>
+        <WalletModalProvider
+          featuredWallets={2}
+        >
           {children}
         </WalletModalProvider>
       </SolanaWalletProvider>
