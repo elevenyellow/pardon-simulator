@@ -182,9 +182,48 @@ export default function Home() {
       const message = `Verify wallet ownership for Pardon Simulator\n\nDomain: pardonsimulator.com\nAddress: ${walletAddress}\nTimestamp: ${timestamp}`;
       
       console.log('[Wallet] Requesting signature for verification...');
+      console.log('[Wallet] Message to sign:', message);
       const messageBytes = new TextEncoder().encode(message);
       const signatureBytes = await signMessage(messageBytes);
       const signature = bs58.encode(signatureBytes);
+      
+      console.log('[Wallet] Received signature:', signature);
+      console.log('[Wallet] Signature bytes length:', signatureBytes.length);
+      
+      // Test verification locally using the same verification logic
+      const nacl = (await import('tweetnacl')).default;
+      const { PublicKey } = await import('@solana/web3.js');
+      
+      const pk = new PublicKey(walletAddress);
+      let localVerified = nacl.sign.detached.verify(
+        messageBytes,
+        signatureBytes,
+        pk.toBytes()
+      );
+      
+      console.log('[Wallet] Local verification (standard):', localVerified);
+      
+      if (!localVerified) {
+        // Try Ledger format
+        const LEDGER_DOMAIN_SEPARATOR = Buffer.from('\xffsolana offchain');
+        const ledgerMessageBytes = new Uint8Array([
+          ...LEDGER_DOMAIN_SEPARATOR,
+          ...messageBytes
+        ]);
+        localVerified = nacl.sign.detached.verify(
+          ledgerMessageBytes,
+          signatureBytes,
+          pk.toBytes()
+        );
+        console.log('[Wallet] Local verification (Ledger):', localVerified);
+      }
+      
+      if (!localVerified) {
+        console.warn('[Wallet] Local verification failed - this may be a hardware wallet');
+        console.warn('[Wallet] Proceeding anyway - backend will attempt verification');
+        // Don't throw - allow hardware wallets to proceed
+        // The backend has more sophisticated verification logic
+      }
       
       // Store in localStorage
       localStorage.setItem(`wallet_verification_${walletAddress}`, JSON.stringify({

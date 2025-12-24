@@ -6,6 +6,9 @@
 
 set -e
 
+# Use pardon-production AWS profile
+export AWS_PROFILE="${AWS_PROFILE:-pardon-production}"
+
 CLUSTER_NAME="${CLUSTER_NAME:-pardon-production-cluster}"
 SERVICE_NAME="${SERVICE_NAME:-pardon-production-service}"
 LOG_GROUP="${LOG_GROUP:-/ecs/pardon-production}"

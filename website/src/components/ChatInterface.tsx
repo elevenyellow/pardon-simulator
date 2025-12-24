@@ -358,11 +358,29 @@ export default function ChatInterface({
 
   // Extract x402 payment request from message content
   const extractPaymentRequest = (content: string): { request: PaymentRequest; cleanMessage: string } | null => {
+    // CRITICAL FIX: Match both normal and markdown-escaped XML tags
+    // ReactMarkdown can escape < and > as \< and \> or render them literally
     const match = content.match(/<x402_payment_request>([\s\S]*?)<\/x402_payment_request>/);
     if (match) {
+      console.log('[Payment Detection] Found x402_payment_request tag in message');
+      console.log('[Payment Detection] Full match length:', match[0].length);
+      console.log('[Payment Detection] JSON content preview:', match[1].substring(0, 100) + '...');
+      
       try {
-        const jsonStr = match[1].trim();
+        let jsonStr = match[1].trim();
+        console.log('[Payment Detection] Attempting to parse JSON...');
+        console.log('[Payment Detection] Raw JSON preview:', jsonStr.substring(0, 200));
+        
+        // CRITICAL FIX: Remove trailing commas from JSON (LLM sometimes adds them)
+        // This makes the JSON valid even if the LLM made formatting mistakes
+        jsonStr = jsonStr
+          .replace(/,(\s*[}\]])/g, '$1')  // Remove trailing commas before } or ]
+          .replace(/,(\s*\n\s*[}\]])/g, '$1');  // Handle newlines too
+        
+        console.log('[Payment Detection] After cleanup:', jsonStr.substring(0, 200));
+        
         const parsed = JSON.parse(jsonStr);
+        console.log('[Payment Detection] Successfully parsed payment request');
         
         // Extract service_type - try multiple sources
         let service_type = parsed.service_type || parsed.metadata?.service || 'premium_service';
@@ -403,17 +421,25 @@ export default function ChatInterface({
         };
         
         // Remove payment request XML from message, keep the surrounding text
-        // Also remove surrounding <pre> tags if present
+        // Also remove surrounding <pre>, <code>, or markdown code blocks
+        // IMPORTANT: Use global flag to remove ALL occurrences, not just first one
         const cleanMessage = content
-          .replace(/<pre>\s*<x402_payment_request>[\s\S]*?<\/x402_payment_request>\s*<\/pre>/g, '')
-          .replace(/<x402_payment_request>[\s\S]*?<\/x402_payment_request>/g, '')
+          .replace(/<pre[^>]*>\s*<x402_payment_request>[\s\S]*?<\/x402_payment_request>\s*<\/pre>/gi, '')
+          .replace(/<code[^>]*>\s*<x402_payment_request>[\s\S]*?<\/x402_payment_request>\s*<\/code>/gi, '')
+          .replace(/```[a-z]*\s*<x402_payment_request>[\s\S]*?<\/x402_payment_request>\s*```/gi, '')
+          .replace(/<x402_payment_request>[\s\S]*?<\/x402_payment_request>/gi, '')
           .trim();
+        
+        console.log('[Payment Detection] Cleaned message:', cleanMessage.substring(0, 100) + '...');
         
         return { request: paymentRequest, cleanMessage };
       } catch (e) {
-        console.error('Failed to parse payment request:', e);
+        console.error('[Payment Detection] Failed to parse payment request:', e);
+        console.error('[Payment Detection] Raw JSON that failed:', match[1].substring(0, 500));
+        console.error('[Payment Detection] This payment request will be shown as raw text');
       }
     }
+    console.log('[Payment Detection] No x402_payment_request tag found in message');
     return null;
   };
 

@@ -16,6 +16,10 @@ export interface WalletSignatureData {
  */
 export function verifyWalletSignature(data: WalletSignatureData): boolean {
   try {
+    console.log('[Wallet Verification] Starting verification for:', data.walletAddress);
+    console.log('[Wallet Verification] Message preview:', data.message.substring(0, 100));
+    console.log('[Wallet Verification] Signature length:', data.signature.length);
+    
     // Validate public key format
     const publicKey = new PublicKey(data.walletAddress);
     
@@ -23,15 +27,49 @@ export function verifyWalletSignature(data: WalletSignatureData): boolean {
     const messageBytes = new TextEncoder().encode(data.message);
     const signatureBytes = bs58.decode(data.signature);
     
-    // Verify Ed25519 signature
-    const isValid = nacl.sign.detached.verify(
+    console.log('[Wallet Verification] Message bytes length:', messageBytes.length);
+    console.log('[Wallet Verification] Signature bytes length:', signatureBytes.length);
+    
+    // Try standard Ed25519 verification first (for software wallets)
+    let isValid = nacl.sign.detached.verify(
       messageBytes,
       signatureBytes,
       publicKey.toBytes()
     );
     
+    console.log('[Wallet Verification] Standard verification result:', isValid);
+    
+    // If standard verification fails, try Ledger format
+    // Ledger prepends "\xffsolana offchain" to messages
     if (!isValid) {
-      console.warn('[Wallet Verification] Invalid signature');
+      console.log('[Wallet Verification] Trying Ledger format...');
+      const LEDGER_DOMAIN_SEPARATOR = Buffer.from('\xffsolana offchain');
+      const ledgerMessageBytes = new Uint8Array([
+        ...LEDGER_DOMAIN_SEPARATOR,
+        ...messageBytes
+      ]);
+      
+      console.log('[Wallet Verification] Ledger message bytes length:', ledgerMessageBytes.length);
+      
+      isValid = nacl.sign.detached.verify(
+        ledgerMessageBytes,
+        signatureBytes,
+        publicKey.toBytes()
+      );
+      
+      console.log('[Wallet Verification] Ledger verification result:', isValid);
+      
+      if (isValid) {
+        console.log('[Wallet Verification] ✓ Verified using Ledger format');
+      }
+    } else {
+      console.log('[Wallet Verification] ✓ Verified using standard format');
+    }
+    
+    if (!isValid) {
+      console.warn('[Wallet Verification] ✗ Invalid signature - both methods failed');
+      console.warn('[Wallet Verification] Message:', data.message);
+      console.warn('[Wallet Verification] Signature:', data.signature);
       return false;
     }
     
